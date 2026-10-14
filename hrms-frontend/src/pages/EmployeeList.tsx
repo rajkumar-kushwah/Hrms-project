@@ -878,12 +878,7 @@ const EmployeeList = () => {
                                 <>
                                   <DropdownMenuItem
                                     onClick={() => {
-                                      setSelectedOnboardingEmployee(
-                                        emp
-                                      );
-
-                                      // Resume API yahan
-                                      // call kar sakte hain
+                                      navigate(`/onboarding/${emp.id}`);
                                     }}
                                   >
                                     Resume Onboarding
@@ -977,7 +972,7 @@ const EmployeeList = () => {
         </div>
       </div>
 
-    </div>
+    </div >
   );
 };
 

@@ -73,6 +73,13 @@ const OnboardingChecklistSettings = () => {
     const [newRequiresDoc, setNewRequiresDoc] = React.useState(false);
     const [adding, setAdding] = React.useState(false);
 
+    const [editingId, setEditingId] = React.useState<string | null>(null);
+    const [editTitle, setEditTitle] = React.useState("");
+    const [editDescription, setEditDescription] = React.useState("");
+    const [editRequired, setEditRequired] = React.useState(true);
+    const [editRequiresDoc, setEditRequiresDoc] = React.useState(false);
+    const [savingEdit, setSavingEdit] = React.useState(false);
+
     // ─────────────────────────────────────
     // Load
     // ─────────────────────────────────────
@@ -132,17 +139,58 @@ const OnboardingChecklistSettings = () => {
     // Toggle required / requiresDocument
     // ─────────────────────────────────────
 
-    const handleToggle = async (
-        item: ChecklistItem,
-        field: "isRequired" | "requiresDocument"
-    ) => {
+    // const handleToggle = async (
+    //     item: ChecklistItem,
+    //     field: "isRequired" | "requiresDocument"
+    // ) => {
+    //     try {
+    //         await updateChecklistItem(item.id, { [field]: !item[field] });
+    //         await loadTemplates();
+    //     } catch (error: any) {
+    //         toast.error(error?.message || "Could not update item");
+    //     }
+    // };
+
+    // update item 
+    const handleEdit = (item: ChecklistItem) => {
+        setEditingId(item.id);
+        setEditTitle(item.title);
+        setEditDescription(item.description ?? "");
+        setEditRequired(item.isRequired);
+        setEditRequiresDoc(item.requiresDocument);
+    };
+
+    const handleUpdate = async (item: ChecklistItem) => {
+        if (!editTitle.trim()) {
+            toast.error("Title is required");
+            return;
+        }
+
+        setSavingEdit(true);
+
         try {
-            await updateChecklistItem(item.id, { [field]: !item[field] });
+            await updateChecklistItem(item.id, {
+                title: editTitle.trim(),
+                description: editDescription.trim() || null,
+                isRequired: editRequired,
+                requiresDocument: editRequiresDoc,
+            });
+
+            toast.success("Checklist item updated");
+            setEditingId(null);
             await loadTemplates();
-        } catch (error: any) {
-            toast.error(error?.message || "Could not update item");
+        } catch (error: unknown) {
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : "Could not update checklist item"
+            );
+        } finally {
+            setSavingEdit(false);
         }
     };
+
+   
 
     // ─────────────────────────────────────
     // Delete
@@ -262,6 +310,11 @@ const OnboardingChecklistSettings = () => {
                                 </Button>
                             </div>
 
+
+
+
+
+
                             {/* EXISTING ITEMS */}
                             <div className="space-y-2">
                                 {currentItems.length === 0 ? (
@@ -270,79 +323,138 @@ const OnboardingChecklistSettings = () => {
                                     </p>
                                 ) : (
                                     currentItems.map((item, index) => (
+
                                         <div
                                             key={item.id}
-                                            className="p-3 flex items-start justify-between gap-3"
+                                            className="p-3 flex items-start justify-between gap-3 border rounded-lg"
                                         >
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-2">
-                                                    <p className="font-medium text-sm">{item.title}</p>
-                                                    {item.isRequired && (
-                                                        <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">
-                                                            Required
-                                                        </span>
-                                                    )}
-                                                    {item.requiresDocument && (
-                                                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                                            <FileText className="h-3 w-3" />
-                                                            Document
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                {item.description && (
-                                                    <p className="text-xs text-muted-foreground mt-1">
-                                                        {item.description}
-                                                    </p>
-                                                )}
+                                            <div className="flex-1 space-y-3">
+                                                {editingId === item.id ? (
+                                                    <>
+                                                        <Input
+                                                            value={editTitle}
+                                                            onChange={(e) => setEditTitle(e.target.value)}
+                                                            placeholder="Checklist item title"
+                                                        />
 
-                                                <div className="flex items-center gap-4 mt-2">
-                                                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                                        <Checkbox
-                                                            checked={item.isRequired}
-                                                            onCheckedChange={() => handleToggle(item, "isRequired")}
+                                                        <Textarea
+                                                            value={editDescription}
+                                                            onChange={(e) => setEditDescription(e.target.value)}
+                                                            placeholder="Description (optional)"
+                                                            rows={2}
                                                         />
-                                                        Required
-                                                    </label>
-                                                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                                        <Checkbox
-                                                            checked={item.requiresDocument}
-                                                            onCheckedChange={() => handleToggle(item, "requiresDocument")}
-                                                        />
-                                                        Needs document
-                                                    </label>
-                                                </div>
+
+                                                        <div className="flex flex-wrap items-center gap-4">
+                                                            <label className="flex items-center gap-2 text-sm">
+                                                                <Checkbox
+                                                                    checked={editRequired}
+                                                                    onCheckedChange={(v) => setEditRequired(v === true)}
+                                                                />
+                                                                Required
+                                                            </label>
+
+                                                            <label className="flex items-center gap-2 text-sm">
+                                                                <Checkbox
+                                                                    checked={editRequiresDoc}
+                                                                    onCheckedChange={(v) => setEditRequiresDoc(v === true)}
+                                                                />
+                                                                Needs document
+                                                            </label>
+                                                        </div>
+
+                                                        <div className="flex gap-2">
+                                                            <Button className="cursor-pointer"
+                                                                size="sm"
+                                                                disabled={savingEdit}
+                                                                onClick={() => handleUpdate(item)}
+                                                            >
+                                                                {savingEdit ? "Saving..." : "Save Changes"}
+                                                            </Button>
+
+                                                            <Button className="cursor-pointer"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                disabled={savingEdit}
+                                                                onClick={() => setEditingId(null)}
+                                                            >
+                                                                Cancel
+                                                            </Button>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <p className="font-medium text-sm">{item.title}</p>
+
+                                                            {item.isRequired && (
+                                                                <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">
+                                                                    Required
+                                                                </span>
+                                                            )}
+
+                                                            {item.requiresDocument && (
+                                                                <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                                                    <FileText className="h-3 w-3" />
+                                                                    Document
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {item.description && (
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {item.description}
+                                                            </p>
+                                                        )}
+                                                    </>
+                                                )}
                                             </div>
 
                                             <div className="flex items-center gap-1">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    disabled={index === 0}
-                                                    onClick={() => handleMove(index, "up")}
-                                                >
-                                                    <ArrowUp className="h-4 w-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    disabled={index === currentItems.length - 1}
-                                                    onClick={() => handleMove(index, "down")}
-                                                >
-                                                    <ArrowDown className="h-4 w-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => handleDelete(item)}
-                                                    className="text-red-600 hover:text-red-700"
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
+                                                {editingId !== item.id && (
+                                                    <>
+                                                        <Button className="cursor-pointer"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => handleEdit(item)}
+                                                        >
+                                                            Edit
+                                                        </Button>
+
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            disabled={index === 0}
+                                                            onClick={() => handleMove(index, "up")}
+                                                        >
+                                                            <ArrowUp className="h-4 w-4" />
+                                                        </Button>
+
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            disabled={index === currentItems.length - 1}
+                                                            onClick={() => handleMove(index, "down")}
+                                                        >
+                                                            <ArrowDown className="h-4 w-4" />
+                                                        </Button>
+
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => handleDelete(item)}
+                                                            className="text-red-600 hover:text-red-700"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
+
                                     ))
                                 )}
                             </div>
+
                         </TabsContent>
                     ))}
                 </Tabs>
