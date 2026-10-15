@@ -160,36 +160,35 @@ const OnboardingChecklistSettings = () => {
         setEditRequiresDoc(item.requiresDocument);
     };
 
-    const handleUpdate = async (item: ChecklistItem) => {
-        if (!editTitle.trim()) {
-            toast.error("Title is required");
-            return;
-        }
+   const handleUpdate = async (item: ChecklistItem) => {
+    if (!editTitle.trim()) {
+        toast.error("Title is required");
+        return;
+    }
 
-        setSavingEdit(true);
+    setSavingEdit(true);
 
-        try {
-            await updateChecklistItem(item.id, {
-                title: editTitle.trim(),
-                description: editDescription.trim() || null,
-                isRequired: editRequired,
-                requiresDocument: editRequiresDoc,
-            });
+    try {
+        await updateChecklistItem(item.id, {
+            title: editTitle.trim(),
+            description: editDescription.trim() || undefined,
+            isRequired: editRequired,
+            requiresDocument: editRequiresDoc,
+        });
 
-            toast.success("Checklist item updated");
-            setEditingId(null);
-            await loadTemplates();
-        } catch (error: unknown) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : "Could not update checklist item"
-            );
-        } finally {
-            setSavingEdit(false);
-        }
-    };
-
+        toast.success("Checklist item updated");
+        setEditingId(null);
+        await loadTemplates();
+    } catch (error: unknown) {
+        toast.error(
+            error instanceof Error
+                ? error.message
+                : "Could not update checklist item"
+        );
+    } finally {
+        setSavingEdit(false);
+    }
+};
    
 
     // ─────────────────────────────────────
