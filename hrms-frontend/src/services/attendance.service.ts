@@ -22,3 +22,9 @@ export const getLiveAttendance = () => api.get("/attendance/live");
 //  monthly attendance
 export const getEmployeeAttendance = (userId: string, month?: number, year?: number) =>
     api.get(`/attendance/employee/${userId}`, { params: { month, year } });
+
+export const getMonthlyAttendanceSheet = (month: number, year: number) =>
+    api.get("/attendance/monthly-sheet", { params: { month, year } });
+
+export const getEmployeeBasicInfo = (userId: string) =>
+    api.get(`/employees/${userId}/basic-info`);

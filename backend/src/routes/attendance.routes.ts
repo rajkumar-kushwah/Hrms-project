@@ -6,7 +6,8 @@ import {
     getMyAttendance,
     getAllAttendance,
     getLiveAttendance,
-    getEmployeeAttendance
+    getEmployeeAttendance,
+    getMonthlySheet,
 } from "../controllers/attendance.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 import { authorize } from "../middleware/role.middleware.js";
@@ -23,6 +24,8 @@ router.get("/all", protect, authorize("attendance", "canView"), getAllAttendance
 router.get("/live", protect, authorize("attendance_live", "canView"), getLiveAttendance);
 // monthly attendance
 router.get("/employee/:userId", protect, authorize("attendance_list", "canView"), getEmployeeAttendance);
+
+router.get("/monthly-sheet", protect,  getMonthlySheet);
 
 export default router;
 

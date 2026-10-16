@@ -1431,6 +1431,14 @@ export const getEmployeeAttendance = async (
         where: { id: userId },
         select: {
             id: true,
+            name: true,
+            employeeCode: true,
+            branch: {
+                select: {
+                    id: true,
+                    name: true,
+                },
+            },
             companyId: true,
         },
     });
@@ -1473,4 +1481,281 @@ export const getEmployeeBasicInfo = async (userId: string) => {
     });
     if (!employee) throw new Error("Employee not found");
     return employee;
+};
+
+
+
+export type DayStatus =
+    | "Present"
+    | "Late"
+    | "Half-day"
+    | "Absent"
+    | "Week Off"
+    | "Unpaid Week Off"
+    | "Holiday"
+    | "Paid Leave"
+    | "Unpaid Leave"
+    | "Future";
+
+const getDateKey = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+        date.getDate()
+    ).padStart(2, "0")}`;
+
+// const normalizeName = (value?: string | null) =>
+//     value?.trim().toLowerCase().replace(/\s+/g, "_").replace(/_+/g, "_");
+
+const isAdminRoleName = (value?: string | null) => {
+    const name = normalizeName(value);
+    return name === "company_admin" || name === "super_admin";
+};
+
+interface DayRules {
+    year: number;
+    month: number;
+    weekOffDays: number[];
+    holidayKeys: Set<string>;
+    todayKey: string;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Resolve every day of the month for ONE employee.
+//
+// Order of checks is the same as calculateEmployeePayroll:
+//   future -> week off (paid/unpaid) -> holiday -> attendance -> leave -> absent
+//
+// Week off is paid only if the employee attended at least one working day
+// earlier in that Monday-based week (same rule payroll uses).
+// ─────────────────────────────────────────────────────────────
+
+export const resolveMonthDays = (
+    rules: DayRules,
+    attendanceByKey: Map<string, string>,
+    leaveByKey: Map<string, boolean>
+): DayStatus[] => {
+    const { year, month, weekOffDays, holidayKeys, todayKey } = rules;
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    const hasAttendanceInWeek = (weekOffDate: Date) => {
+        const dayOfWeek = weekOffDate.getDay();
+        const daysBackToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+        const monday = new Date(weekOffDate);
+        monday.setDate(monday.getDate() - daysBackToMonday);
+
+        const lastCheckedDay = new Date(weekOffDate);
+        lastCheckedDay.setDate(lastCheckedDay.getDate() - 1);
+
+        for (
+            let cursor = new Date(monday);
+            cursor <= lastCheckedDay;
+            cursor.setDate(cursor.getDate() + 1)
+        ) {
+            if (weekOffDays.includes(cursor.getDay())) continue;
+
+            const key = getDateKey(cursor);
+            if (holidayKeys.has(key)) continue;
+
+            const status = attendanceByKey.get(key);
+            if (status === "Present" || status === "Late" || status === "Half-day") {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    const days: DayStatus[] = [];
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month - 1, day);
+        const key = getDateKey(date);
+
+        if (key > todayKey) {
+            days.push("Future");
+            continue;
+        }
+
+        if (weekOffDays.includes(date.getDay())) {
+            days.push(hasAttendanceInWeek(date) ? "Week Off" : "Unpaid Week Off");
+            continue;
+        }
+
+        if (holidayKeys.has(key)) {
+            days.push("Holiday");
+            continue;
+        }
+
+        const attendanceStatus = attendanceByKey.get(key);
+
+        if (attendanceStatus !== undefined) {
+            if (
+                attendanceStatus === "Present" ||
+                attendanceStatus === "Late" ||
+                attendanceStatus === "Half-day"
+            ) {
+                days.push(attendanceStatus);
+            } else {
+                days.push("Absent");
+            }
+            continue;
+        }
+
+        const leaveIsPaid = leaveByKey.get(key);
+
+        if (leaveIsPaid !== undefined) {
+            days.push(leaveIsPaid ? "Paid Leave" : "Unpaid Leave");
+            continue;
+        }
+
+        days.push("Absent");
+    }
+
+    return days;
+};
+
+// ─────────────────────────────────────────────────────────────
+// Monthly sheet for the whole company.
+// Everything is loaded in bulk (4 queries), not one query set per employee.
+// ─────────────────────────────────────────────────────────────
+
+export const getMonthlySheet = async (
+    companyId: string,
+    month: number,
+    year: number
+) => {
+    if (!Number.isInteger(month) || month < 1 || month > 12) {
+        throw new Error("Invalid month");
+    }
+
+    if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+        throw new Error("Invalid year");
+    }
+
+    const monthStart = new Date(year, month - 1, 1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    const monthEnd = new Date(year, month, 0);
+    monthEnd.setHours(23, 59, 59, 999);
+
+    // Week-off paid/unpaid check looks back to the Monday of the week that
+    // contains the 1st, so attendance is loaded from that Monday
+    const firstDayIndex = monthStart.getDay();
+    const lookbackStart = new Date(monthStart);
+    lookbackStart.setDate(
+        lookbackStart.getDate() - (firstDayIndex === 0 ? 6 : firstDayIndex - 1)
+    );
+    lookbackStart.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayKey = getDateKey(today);
+
+    const settings = await prisma.companySettings.findUnique({
+        where: { companyId },
+    });
+
+    const weekOffDays = settings?.weekOffDays ?? [0];
+
+    const users = await prisma.user.findMany({
+        where: { companyId, isActive: true },
+        select: {
+            id: true,
+            name: true,
+            employeeCode: true,
+            role: { select: { name: true } },
+            branch: { select: { name: true } },
+        },
+        orderBy: { name: "asc" },
+    });
+
+    const employees = users.filter((user) => !isAdminRoleName(user.role?.name));
+
+    if (employees.length === 0) {
+        return { month, year, employees: [] };
+    }
+
+    const employeeIds = employees.map((employee) => employee.id);
+
+    const [holidays, attendance, leaves] = await Promise.all([
+        prisma.holiday.findMany({
+            where: {
+                companyId,
+                isActive: true,
+                date: { gte: monthStart, lte: monthEnd },
+            },
+            select: { date: true },
+        }),
+
+        prisma.attendance.findMany({
+            where: {
+                companyId,
+                userId: { in: employeeIds },
+                date: { gte: lookbackStart, lte: monthEnd },
+                punchInTime: { not: null },
+            },
+            select: { userId: true, date: true, status: true },
+        }),
+
+        prisma.leaveRequest.findMany({
+            where: {
+                companyId,
+                userId: { in: employeeIds },
+                status: "Approved",
+                startDate: { lte: monthEnd },
+                endDate: { gte: monthStart },
+            },
+            include: { leaveType: { select: { isPaid: true } } },
+        }),
+    ]);
+
+    const holidayKeys = new Set(
+        holidays.map((holiday) => getDateKey(new Date(holiday.date)))
+    );
+
+    const attendanceByUser = new Map<string, Map<string, string>>();
+
+    for (const record of attendance) {
+        const key = getDateKey(new Date(record.date));
+        const perUser = attendanceByUser.get(record.userId) ?? new Map<string, string>();
+
+        if (!perUser.has(key)) {
+            perUser.set(key, record.status);
+        }
+
+        attendanceByUser.set(record.userId, perUser);
+    }
+
+    const leavesByUser = new Map<string, Map<string, boolean>>();
+
+    for (const leave of leaves) {
+        const perUser = leavesByUser.get(leave.userId) ?? new Map<string, boolean>();
+
+        const from = new Date(Math.max(leave.startDate.getTime(), monthStart.getTime()));
+        const to = new Date(Math.min(leave.endDate.getTime(), monthEnd.getTime()));
+
+        for (let cursor = new Date(from); cursor <= to; cursor.setDate(cursor.getDate() + 1)) {
+            perUser.set(getDateKey(cursor), leave.leaveType.isPaid);
+        }
+
+        leavesByUser.set(leave.userId, perUser);
+    }
+
+    const rules: DayRules = { year, month, weekOffDays, holidayKeys, todayKey };
+
+    return {
+        month,
+        year,
+        employees: employees.map((employee) => ({
+            userId: employee.id,
+            name: employee.name ?? "",
+            employeeCode: employee.employeeCode,
+            branchName: employee.branch?.name ?? null,
+            days: resolveMonthDays(
+                rules,
+                attendanceByUser.get(employee.id) ?? new Map<string, string>(),
+                leavesByUser.get(employee.id) ?? new Map<string, boolean>()
+            ),
+        })),
+    };
 };
