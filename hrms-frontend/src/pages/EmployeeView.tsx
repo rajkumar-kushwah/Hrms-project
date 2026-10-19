@@ -26,6 +26,7 @@ import {
     TabsTrigger,
 } from "@/components/ui/tabs";
 
+
 const EmployeeView = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
@@ -178,6 +179,7 @@ const EmployeeView = () => {
                     <TabsTrigger value="bank">
                         Bank & ID
                     </TabsTrigger>
+
                 </TabsList>
 
                 {/* Overview */}
@@ -339,6 +341,7 @@ const EmployeeView = () => {
                         />
                     </div>
                 </TabsContent>
+
             </Tabs>
         </div>
     );

@@ -1,3 +1,4 @@
+import type { DocumentInputType, OnboardingStage } from "@prisma/client";
 import { prisma } from "../config/db.js";
 
 export const createTemplateItem = async (
@@ -8,6 +9,7 @@ export const createTemplateItem = async (
         description?: string;
         isRequired?: boolean;
         requiresDocument?: boolean;
+        documentInputType?: DocumentInputType | null;
     }
 ) => {
     if (!data.title?.trim()) {
@@ -31,6 +33,7 @@ export const createTemplateItem = async (
             description: data.description?.trim() || null,
             isRequired: data.isRequired ?? true,
             requiresDocument: data.requiresDocument ?? false,
+            documentInputType: data.requiresDocument ? data.documentInputType ?? "FILE_UPLOAD" : null,
             order: nextOrder,
         },
     });
@@ -65,6 +68,7 @@ export const updateTemplateItem = async (
         description?: string;
         isRequired?: boolean;
         requiresDocument?: boolean;
+        documentInputType?: DocumentInputType | null;
     }
 ) => {
     const existing = await prisma.onboardingChecklistTemplate.findUnique({
@@ -75,6 +79,9 @@ export const updateTemplateItem = async (
         throw new Error("Checklist item not found");
     }
 
+    const requiresDocument =
+        data.requiresDocument ?? existing.requiresDocument;
+
     return prisma.onboardingChecklistTemplate.update({
         where: { id },
         data: {
@@ -82,6 +89,11 @@ export const updateTemplateItem = async (
             ...(data.description !== undefined && { description: data.description.trim() || null }),
             ...(data.isRequired !== undefined && { isRequired: data.isRequired }),
             ...(data.requiresDocument !== undefined && { requiresDocument: data.requiresDocument }),
+            documentInputType: requiresDocument
+                ? data.documentInputType ??
+                existing.documentInputType ??
+                "FILE_UPLOAD"
+                : null,
         },
     });
 };
@@ -116,12 +128,12 @@ export const deleteTemplateItem = async (id: string, companyId: string) => {
 
 export const reorderTemplateItems = async (
     companyId: string,
-    stage: string,
+    stage: OnboardingStage,
     orderedIds: string[]
 ) => {
     // Verify all IDs belong to this company + stage before touching anything
     const items = await prisma.onboardingChecklistTemplate.findMany({
-        where: { id: { in: orderedIds }, companyId, stage: stage as any },
+        where: { id: { in: orderedIds }, companyId, stage, isActive: true },
         select: { id: true },
     });
 

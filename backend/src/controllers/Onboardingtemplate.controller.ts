@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import * as TemplateService from "../services/Onboardingtemplate.service.js";
+import type { OnboardingStage } from "@prisma/client";
 
 const isAdminUser = (req: Request) => {
     const roleName = req.user?.role?.name
@@ -97,10 +98,28 @@ export const reorderTemplateItems = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: "Company ID is required" });
         }
 
-        const { stage, orderedIds } = req.body as { stage: string; orderedIds: string[] };
+        const { stage, orderedIds } = req.body as {
+            stage: OnboardingStage;
+            orderedIds: string[];
+        };
 
-        if (!stage || !Array.isArray(orderedIds)) {
-            return res.status(400).json({ success: false, message: "stage and orderedIds are required" });
+        const validStages: OnboardingStage[] = [
+            "OFFER",
+            "JOINING",
+            "DOCUMENTS",
+            "TRAINING",
+            "ACTIVE",
+        ];
+
+        if (
+            !validStages.includes(stage) ||
+            !Array.isArray(orderedIds) ||
+            orderedIds.some((id) => typeof id !== "string")
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid stage and orderedIds are required",
+            });
         }
 
         const data = await TemplateService.reorderTemplateItems(companyId, stage, orderedIds);

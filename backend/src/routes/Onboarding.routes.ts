@@ -7,7 +7,8 @@ import {
     toggleChecklistItem,
     setStageManually,
     setOnboardingStatus,
-    resetEmployeeOnboarding
+    resetEmployeeOnboarding,
+    submitChecklistDocumentController
 } from "../controllers/Onboarding.controller.js";
 
 const router = Router();
@@ -19,7 +20,7 @@ router.patch("/:userId/stage", protect, setStageManually);
 router.patch("/:userId/status", protect, setOnboardingStatus);
 router.patch("/item/:itemId/toggle", protect, toggleChecklistItem);
 router.delete("/:userId/reset", protect, resetEmployeeOnboarding);
-
+router.post("/checklist/:itemId/submit-document", protect, submitChecklistDocumentController);
 
 export default router;
 

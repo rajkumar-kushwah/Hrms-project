@@ -59,3 +59,18 @@ export const resetOnboarding = async (userId: string) => {
     const response = await api.delete(`/onboarding/${userId}/reset`);
     return response.data;
 };
+
+export const submitChecklistDocument = async (
+    itemId: string,
+    data: {
+        documentUrl?: string;
+        documentNumber?: string;
+    }
+) => {
+    const response = await api.post(
+        `/onboarding/checklist/${itemId}/submit-document`,
+        data
+    );
+
+    return response.data;
+};

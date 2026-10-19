@@ -1,6 +1,9 @@
 import type { Request, Response } from "express";
 import * as OnboardingService from "../services/Onboarding.service.js";
 import { OnboardingStage, OnboardingStatus } from "@prisma/client";
+import {
+    submitChecklistDocument,
+} from "../services/Onboarding.service.js";
 
 const isAdminUser = (req: Request) => {
     const roleName = req.user?.role?.name
@@ -77,7 +80,7 @@ export const getOnboardingList = async (req: Request, res: Response) => {
 // GET /api/onboarding/:userId
 export const getOnboardingDetail = async (req: Request, res: Response) => {
     try {
-        
+
         const { userId } = req.params as { userId: string };
 
         if (!userId) {
@@ -239,6 +242,53 @@ export const resetEmployeeOnboarding = async (
                 error instanceof Error
                     ? error.message
                     : "Failed to reset onboarding",
+        });
+    }
+};
+
+export const submitChecklistDocumentController = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const { itemId } = req.params;
+        const { documentUrl, documentNumber } = req.body;
+
+        const actingUserId = req.user?.id;
+        const companyId = req.user?.companyId;
+
+
+        if (typeof itemId !== "string" || !itemId.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: "Checklist item ID is required.",
+            });
+        }
+
+
+        const data = await submitChecklistDocument(
+            itemId,
+            companyId,
+            actingUserId,
+            { documentUrl, documentNumber }
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "Document submitted and checklist completed.",
+            data,
+        });
+    } catch (error: any) {
+        const message = error.message || "Unable to submit document.";
+
+        const status =
+            message === "Checklist item not found."
+                ? 404
+                : 400;
+
+        return res.status(status).json({
+            success: false,
+            message,
         });
     }
 };

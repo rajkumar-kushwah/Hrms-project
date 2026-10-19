@@ -14,7 +14,8 @@ export const seedModules = async () => {
     { name: "reports", displayName: "Reports", icon: "BarChart2", url: "/reports", order: 10 },
     { name: "roles", displayName: "Roles & Permissions", icon: "ShieldCheck", url: "/roles", order: 11 },
     { name: "settings", displayName: "Settings", icon: "Settings", url: "/settings", order: 12 },
-    { name: "company-users", displayName: "Company Users", icon: "UserCog", url: "/companyusers", order: 13 }
+    { name: "company-users", displayName: "Company Users", icon: "UserCog", url: "/companyusers", order: 13 },
+
   ];
 
   // Parent modules

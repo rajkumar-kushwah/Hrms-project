@@ -30,6 +30,7 @@ import OnboardingDetail from "@/pages/onboarding/OnboardingDetail";
 import OnboardingList from "@/pages/onboarding/OnboardingList";
 import EmployeeView from "@/pages/EmployeeView";
 
+
 const AppRoutes = () => {
     return (
         <BrowserRouter>
@@ -67,6 +68,7 @@ const AppRoutes = () => {
                         <Route path="/onboardingchecklist" element={<OnboardingChecklistSettings />} />
                         <Route path="/onboarding" element={<OnboardingList />} />
                         <Route path="/onboarding/:userId" element={<OnboardingDetail />} />
+
                     </Route>
                 </Route>
                 {/* Error hanlding */}

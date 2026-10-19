@@ -484,9 +484,9 @@ const OnboardingChecklistSettings = () => {
                 </div>
 
                 <div className="flex shrink-0 gap-2">
-                    <Button
+                    <Button className="cursor-pointer"
                         type="button"
-                        variant="outline"
+                        variant="add"
                         onClick={() => void loadTemplates(true)}
                         disabled={loading || refreshing}
                     >
@@ -500,8 +500,9 @@ const OnboardingChecklistSettings = () => {
                         Refresh
                     </Button>
 
-                    <Button
+                    <Button className="cursor-pointer"
                         type="button"
+                        variant="add"
                         onClick={openAddDialog}
                         disabled={loading || saving || deleting}
                     >
@@ -609,7 +610,7 @@ const OnboardingChecklistSettings = () => {
                                         </p>
                                     </div>
 
-                                    <Button
+                                    <Button variant="add" className="cursor-pointer"
                                         type="button"
                                         onClick={openAddDialog}
                                         disabled={saving || deleting}
@@ -634,9 +635,10 @@ const OnboardingChecklistSettings = () => {
                                             {stage.label.toLowerCase()} stage.
                                         </p>
 
-                                        <Button
+                                        <Button 
                                             type="button"
-                                            className="mt-4"
+                                            variant="add"
+                                            className="mt-4 cursor-pointer"
                                             onClick={openAddDialog}
                                             disabled={saving || deleting}
                                         >
@@ -701,7 +703,7 @@ const OnboardingChecklistSettings = () => {
                                                     </div>
 
                                                     <div className="flex flex-wrap items-center gap-1 sm:justify-end">
-                                                        <Button
+                                                        <Button className="cursor-pointer"
                                                             type="button"
                                                             variant="outline"
                                                             size="sm"
@@ -712,7 +714,7 @@ const OnboardingChecklistSettings = () => {
                                                             Edit
                                                         </Button>
 
-                                                        <Button
+                                                        <Button className="cursor-pointer"
                                                             type="button"
                                                             variant="ghost"
                                                             size="icon"
@@ -729,7 +731,7 @@ const OnboardingChecklistSettings = () => {
                                                             <ArrowUp className="h-4 w-4" />
                                                         </Button>
 
-                                                        <Button
+                                                        <Button className="cursor-pointer"
                                                             type="button"
                                                             variant="ghost"
                                                             size="icon"
@@ -752,7 +754,7 @@ const OnboardingChecklistSettings = () => {
                                                             size="icon"
                                                             aria-label="Delete checklist item"
                                                             title="Delete item"
-                                                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                                            className="text-destructive cursor-pointer hover:bg-destructive/10 hover:text-destructive"
                                                             disabled={!!movingId || deleting || saving}
                                                             onClick={() => setDeleteItem(item)}
                                                         >
@@ -1038,8 +1040,8 @@ const OnboardingChecklistSettings = () => {
                             </div>
                         )}
 
-                        <DialogFooter className="gap-2 sm:gap-0">
-                            <Button
+                        <DialogFooter className="gap-2 sm:gap-2">
+                            <Button className="cursor-pointer"
                                 type="button"
                                 variant="outline"
                                 onClick={closeDialog}
@@ -1049,7 +1051,7 @@ const OnboardingChecklistSettings = () => {
                                 Cancel
                             </Button>
 
-                            <Button type="submit" disabled={saving}>
+                            <Button className="cursor-pointer" type="submit" disabled={saving} variant="add">
                                 {saving && (
                                     <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                                 )}

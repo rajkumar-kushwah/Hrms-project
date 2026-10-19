@@ -27,6 +27,7 @@ import { healthCheck } from "./utilis/dbErrors.js";
 import { isDatabaseUnavailable } from "./utilis/dbErrors.js";
 import type { Request, Response, NextFunction } from "express";
 
+
 dotenv.config();
 const app = express();
 app.set("trust proxy", 1);

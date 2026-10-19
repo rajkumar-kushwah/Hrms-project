@@ -1,5 +1,5 @@
 import { prisma } from "../config/db.js";
-import { OnboardingStatus, type Onboarding } from "@prisma/client";
+import { OnboardingStatus, type Onboarding, DocumentInputType } from "@prisma/client";
 
 const STAGE_ORDER = ["OFFER", "JOINING", "DOCUMENTS", "TRAINING", "ACTIVE"] as const;
 type Stage = (typeof STAGE_ORDER)[number];
@@ -80,6 +80,7 @@ export const startOnboarding = async (
                         description: template.description,
                         isRequired: template.isRequired,
                         requiresDocument: template.requiresDocument,
+                        documentInputType: template.documentInputType,
                         order: template.order,
                     })),
                 },
@@ -189,6 +190,48 @@ export const getOnboardingDetail = async (userId: string, companyId: string) => 
 // onboarding completes and the employee becomes fully Active.
 // ─────────────────────────────────────────────────────────────
 
+// export const toggleChecklistItem = async (
+//     itemId: string,
+//     companyId: string,
+//     actingUserId: string
+// ) => {
+//     const item = await prisma.onboardingChecklistItem.findUnique({
+//         where: { id: itemId },
+//         include: { onboarding: true },
+//     });
+
+//     if (!item || item.onboarding.companyId !== companyId) {
+//         throw new Error("Checklist item not found");
+//     }
+
+//     if (item?.onboarding.status === "ON_HOLD") {
+//         throw new Error(
+//             "Onboarding is on hold. Resume onboarding before updating checklist."
+//         );
+//     }
+
+//     if (item?.onboarding.status === "COMPLETED") {
+//         throw new Error(
+//             "Completed onboarding cannot be modified."
+//         );
+//     }
+
+
+//     const willBeCompleted = !item.isCompleted;
+
+//     await prisma.onboardingChecklistItem.update({
+//         where: { id: itemId },
+//         data: {
+//             isCompleted: willBeCompleted,
+//             completedAt: willBeCompleted ? new Date() : null,
+//             completedBy: willBeCompleted ? actingUserId : null,
+//         },
+//     });
+
+//     return await evaluateStageProgress(item.onboardingId);
+// };
+
+
 export const toggleChecklistItem = async (
     itemId: string,
     companyId: string,
@@ -203,20 +246,58 @@ export const toggleChecklistItem = async (
         throw new Error("Checklist item not found");
     }
 
-    if (item?.onboarding.status === "ON_HOLD") {
+    if (item.onboarding.status === "ON_HOLD") {
         throw new Error(
             "Onboarding is on hold. Resume onboarding before updating checklist."
         );
     }
 
-    if (item?.onboarding.status === "COMPLETED") {
+    if (item.onboarding.status === "COMPLETED") {
         throw new Error(
             "Completed onboarding cannot be modified."
         );
     }
 
-
     const willBeCompleted = !item.isCompleted;
+
+    // Validate documents before marking the item as completed.
+    if (willBeCompleted && item.requiresDocument) {
+        const inputType =
+            item.documentInputType ?? "FILE_UPLOAD";
+
+        const hasDocument = Boolean(item.documentUrl?.trim());
+        const hasDocumentNumber = Boolean(
+            item.documentNumber?.trim()
+        );
+
+        if (
+            inputType === "FILE_UPLOAD" &&
+            !hasDocument
+        ) {
+            throw new Error(
+                "Please upload the required document first."
+            );
+        }
+
+        if (
+            inputType === "DOCUMENT_NUMBER" &&
+            !hasDocumentNumber
+        ) {
+            throw new Error(
+                "Please enter the required document number first."
+            );
+        }
+
+        if (
+            inputType === "EITHER" &&
+            !hasDocument &&
+            !hasDocumentNumber
+        ) {
+            throw new Error(
+                "Please upload a document or enter a document number."
+            );
+        }
+    }
 
     await prisma.onboardingChecklistItem.update({
         where: { id: itemId },
@@ -229,6 +310,7 @@ export const toggleChecklistItem = async (
 
     return await evaluateStageProgress(item.onboardingId);
 };
+
 
 // ─────────────────────────────────────────────────────────────
 // Internal: check if current stage's required items are all done.
@@ -380,4 +462,89 @@ export const resetOnboarding = async (
 
         return { success: true };
     });
+};
+
+
+type SubmitChecklistDocumentInput = {
+    documentUrl?: string | null;
+    documentNumber?: string | null;
+};
+
+export const submitChecklistDocument = async (
+    itemId: string,
+    companyId: string,
+    actingUserId: string,
+    data: SubmitChecklistDocumentInput
+) => {
+    const item = await prisma.onboardingChecklistItem.findFirst({
+        where: {
+            id: itemId,
+            onboarding: {
+                companyId,
+            },
+        },
+        include: {
+            onboarding: true,
+        },
+    });
+
+    if (!item) {
+        throw new Error("Checklist item not found.");
+    }
+
+    if (
+        item.onboarding.status === OnboardingStatus.COMPLETED ||
+        item.onboarding.status === OnboardingStatus.ON_HOLD
+    ) {
+        throw new Error("This onboarding cannot be updated.");
+    }
+
+    if (!item.requiresDocument) {
+        throw new Error("This checklist item does not require a document.");
+    }
+
+    const documentUrl = data.documentUrl?.trim() || null;
+    const documentNumber = data.documentNumber?.trim() || null;
+
+    const inputType = item.documentInputType ?? DocumentInputType.FILE_UPLOAD;
+
+    switch (inputType) {
+        case DocumentInputType.FILE_UPLOAD:
+            if (!documentUrl) {
+                throw new Error("Please upload the required document.");
+            }
+            break;
+
+        case DocumentInputType.DOCUMENT_NUMBER:
+            if (!documentNumber) {
+                throw new Error("Please enter the required document number.");
+            }
+            break;
+
+        case DocumentInputType.EITHER:
+            if (!documentUrl && !documentNumber) {
+                throw new Error(
+                    "Please upload a document or enter a document number."
+                );
+            }
+            break;
+
+        default:
+            throw new Error("Invalid document input type.");
+    }
+
+    const updatedItem = await prisma.onboardingChecklistItem.update({
+        where: { id: itemId },
+        data: {
+            documentUrl,
+            documentNumber,
+            isCompleted: true,
+            completedAt: new Date(),
+            completedBy: actingUserId,
+        },
+    });
+
+    await evaluateStageProgress(item.onboardingId);
+
+    return updatedItem;
 };
