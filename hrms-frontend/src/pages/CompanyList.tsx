@@ -3,32 +3,57 @@ import type { Company, CreateCompanyPayload, UpdateCompanyPayload } from "@/type
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertTriangle, MoreVertical, PlusIcon } from 'lucide-react';
+import { AlertTriangle, MoreVertical, PlusIcon, RefreshCw, X, CheckCircle2, XCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { getCompanies, createCompany, getMyCompany, assignCompanyAdmin, updateCompany, deactivateCompany, permanentDeleteCompany } from "@/services/company.service";
+import {
+  getCompanies,
+  createCompany,
+  getMyCompany,
+  assignCompanyAdmin,
+  updateCompany,
+  deactivateCompany,
+  activateCompany,
+  permanentDeleteCompany,
+} from "@/services/company.service";
 import { toast } from 'sonner';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useAuthStore } from '@/store/auth.store';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { isCompanyAdminRole, isSuperAdminRole } from '@/utilis/roleUtils';
-import PhoneInput, {
-  isValidPhoneNumber,
-} from "react-phone-number-input";
+import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
-import { CheckCircle2, XCircle } from "lucide-react";
 import { companySchema, assignAdminSchema } from "@/validation/company.validation";
+
+const initialForm: CreateCompanyPayload = {
+  name: "",
+  email: "",
+  phone: "",
+  website: "",
+  address: "",
+  gstNumber: "",
+  maxBranches: 1,
+  maxEmployees: 10,
+};
+
+type CompanyErrors = {
+  name?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  address?: string;
+  gstNumber?: string;
+};
 
 function CompanyList() {
   const { user } = useAuthStore();
   const isSuperAdmin = isSuperAdminRole(user?.role?.name);
   const isCompanyAdmin = isCompanyAdminRole(user?.role?.name);
 
-
   const [searchQuery, setSearchQuery] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("all");
-  const [companies, setCompanies] = React.useState<Company[]>([])
+  const [companies, setCompanies] = React.useState<Company[]>([]);
   const [open, setOpen] = React.useState(false);
   const [assignOpen, setAssignOpen] = React.useState(false);
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>("");
@@ -36,17 +61,9 @@ function CompanyList() {
   const [isPhoneValid, setIsPhoneValid] = React.useState(false);
   const [isEditPhoneValid, setIsEditPhoneValid] = React.useState(false);
 
-  const [form, setForm] = React.useState<CreateCompanyPayload>({
-    name: "",
-    email: "",
-    phone: "",
-    website: "",
-    address: "",
-    gstNumber: "",
-    // subscriptionPlan: "basic",
-    maxBranches: 1,
-    maxEmployees: 10,
-  });
+  const [isSpinning, setIsSpinning] = React.useState(false);
+
+  const [form, setForm] = React.useState<CreateCompanyPayload>(initialForm);
 
   const [adminForm, setAdminForm] = React.useState({
     name: "",
@@ -69,24 +86,8 @@ function CompanyList() {
   const [dangerOpen, setDangerOpen] = React.useState(false);
   const [confirmText, setConfirmText] = React.useState("");
 
-  const [errors, setErrors] = React.useState<{
-    name?: string;
-    email?: string;
-    phone?: string;
-    website?: string;
-    address?: string;
-    gstNumber?: string;
-  }>({});
-
-  const [editErrors, setEditErrors] = React.useState<{
-    name?: string;
-    email?: string;
-    phone?: string;
-    website?: string;
-    address?: string;
-    gstNumber?: string;
-  }>({});
-
+  const [errors, setErrors] = React.useState<CompanyErrors>({});
+  const [editErrors, setEditErrors] = React.useState<CompanyErrors>({});
   const [adminErrors, setAdminErrors] = React.useState<{
     name?: string;
     email?: string;
@@ -95,7 +96,7 @@ function CompanyList() {
 
   React.useEffect(() => {
     loadCompanies();
-  }, []);
+  }, [isCompanyAdmin]); // user load hone ke baad role change ho to dobara fetch hoga
 
   const loadCompanies = async () => {
     try {
@@ -107,79 +108,54 @@ function CompanyList() {
         setCompanies(res.data.data);
       }
     } catch (err: any) {
-      const message =
-        err?.message || "Failed to load companies";
-      toast.error(message);
+      toast.error(err?.message || "Failed to load companies");
     }
-
   };
 
-  // const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  //   setForm({ ...form, [e.target.name]: e.target.value });
-  // };
+  // Click par kam se kam 1 poora 360° ghumega, API slow ho to tab tak ghumta rahega
+  const handleRefresh = async () => {
+    setIsSpinning(true);
+    const minSpin = new Promise((res) => setTimeout(res, 1000));
+    await Promise.all([loadCompanies(), minSpin]);
+    setIsSpinning(false);
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
 
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setForm((prev) => ({ ...prev, [name]: value }));
 
-    const fieldSchema = companySchema.shape[
-      name as keyof typeof companySchema.shape
-    ];
-
+    const fieldSchema = companySchema.shape[name as keyof typeof companySchema.shape];
     const result = fieldSchema.safeParse(value);
 
     setErrors((prev) => ({
       ...prev,
-      [name]: result.success
-        ? undefined
-        : result.error.issues[0]?.message,
+      [name]: result.success ? undefined : result.error.issues[0]?.message,
     }));
   };
 
   const handleAdminChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
 
-    setAdminForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setAdminForm((prev) => ({ ...prev, [name]: value }));
 
-    const fieldSchema =
-      assignAdminSchema.shape[
-      name as keyof typeof assignAdminSchema.shape
-      ];
-
+    const fieldSchema = assignAdminSchema.shape[name as keyof typeof assignAdminSchema.shape];
     const result = fieldSchema.safeParse(value);
 
     setAdminErrors((prev) => ({
       ...prev,
-      [name]: result.success
-        ? undefined
-        : result.error.issues[0]?.message,
+      [name]: result.success ? undefined : result.error.issues[0]?.message,
     }));
   };
-
-  // const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-  //   setEditForm({ ...editForm, [e.target.name]: e.target.value });
-  // };
 
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
 
-    setEditForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setEditForm((prev) => ({ ...prev, [name]: value }));
 
-    const fieldSchema =
-      companySchema.shape[
-      name as keyof typeof companySchema.shape
-      ];
+    const fieldSchema = companySchema.shape[name as keyof typeof companySchema.shape];
 
-    // Sirf in fields par live validation
+    // Sirf in fields par live validation (phone ke liye alag PhoneInput hai)
     if (
       name === "name" ||
       name === "email" ||
@@ -191,9 +167,7 @@ function CompanyList() {
 
       setEditErrors((prev) => ({
         ...prev,
-        [name]: result.success
-          ? undefined
-          : result.error.issues[0]?.message,
+        [name]: result.success ? undefined : result.error.issues[0]?.message,
       }));
     }
   };
@@ -226,52 +200,39 @@ function CompanyList() {
     }
 
     setEditErrors({});
-    // if (editForm.phone && !isValidPhoneNumber(editForm.phone)) {
-    //   toast.error("Invalid phone number");
-    //   return;
-    // }
+
     try {
       await updateCompany(selectedCompany.id, editForm);
       toast.success("Company updated successfully");
-      setCompanies((prev) => prev.map((c) => c.id === selectedCompany.id ? { ...c, ...editForm } : c));
-      setEditOpen(false);
+      setCompanies((prev) =>
+        prev.map((c) => (c.id === selectedCompany.id ? { ...c, ...editForm } : c))
+      );
       setEditOpen(false);
       setSelectedCompany(null);
       setIsEditPhoneValid(false);
     } catch (err: any) {
-      const message =
-        err?.message || "Failed to update company";
-      toast.error(message);
+      toast.error(err?.message || "Failed to update company");
     }
-  }
-
-  // const handleDeactivate = async () => {
-  //   if (!selectedCompany) return;
-  //   try {
-  //     await deactivateCompany(selectedCompany.id); //  Naya function
-  //     toast.success("Company deactivated successfully");
-  //     setCompanies((prev) =>
-  //       prev.map((c) => c.id === selectedCompany.id ? { ...c, isActive: false } : c)
-  //     );
-  //     setDeleteConfirmOpen(false);
-  //     setSelectedCompany(null);
-  //   } catch (err: any) {
-  //     toast.error(err?.message || "Failed to deactivate company");
-  //   }
-  // };
+  };
 
   const filteredCompanies = companies.filter((company) => {
+    const query = searchQuery.toLowerCase();
     const matchSearch = searchQuery
-      ? company.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      company.code.toLowerCase().includes(searchQuery.toLowerCase())
+      ? company.name.toLowerCase().includes(query) ||
+      company.code.toLowerCase().includes(query)
       : true;
-    const matchStatus = statusFilter !== "all" ? (statusFilter === "active" ? company.isActive : !company.isActive) : true;
+    const matchStatus =
+      statusFilter !== "all"
+        ? statusFilter === "active"
+          ? company.isActive
+          : !company.isActive
+        : true;
     return matchSearch && matchStatus;
-  })
-
+  });
 
   const handlePermanentDelete = async () => {
-    if (confirmText !== selectedCompany?.name) {
+    if (!selectedCompany) return;
+    if (confirmText !== selectedCompany.name) {
       toast.error("Company name doesn't match");
       return;
     }
@@ -283,9 +244,7 @@ function CompanyList() {
       setEditOpen(false);
       setConfirmText("");
     } catch (err: any) {
-      const message =
-        err?.message || "Failed to delete company";
-      toast.error(message);
+      toast.error(err?.message || "Failed to delete company");
     }
   };
 
@@ -296,10 +255,6 @@ function CompanyList() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // if (!form.name) {
-    //   toast.error("Company name is required");
-    //   return;
-    // }
 
     const result = companySchema.safeParse({
       name: form.name,
@@ -327,45 +282,20 @@ function CompanyList() {
 
     setErrors({});
 
-    // if (form.gstNumber && !validateGST(form.gstNumber)) {
-    //   toast.error("Invalid GST Number format");
-    //   return;
-    // }
-    // if (form.phone && !isValidPhoneNumber(form.phone)) {
-    //   toast.error("Invalid phone number");
-    //   return;
-    // }
-
     try {
       const res = await createCompany(form);
       toast.success("Company created successfully");
       setCompanies((prev) => [...prev, res.data.data]);
-      setForm({
-        name: "",
-        email: "",
-        phone: "",
-        website: "",
-        address: "",
-        gstNumber: "",
-        // subscriptionPlan: "basic",
-        maxBranches: 1,
-        maxEmployees: 10,
-      });
+      setForm(initialForm);
       setIsPhoneValid(false);
       setOpen(false);
     } catch (err: any) {
-      const message =
-        err?.message || "Failed to create company";
-      toast.error(message);
+      toast.error(err?.message || "Failed to create company");
     }
   };
 
   const handleAssignAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // if (!adminForm.name || !adminForm.email || !adminForm.password) {
-    //   toast.error("All fields are required");
-    //   return;
-    // }
 
     const result = assignAdminSchema.safeParse(adminForm);
 
@@ -388,46 +318,54 @@ function CompanyList() {
       setAssignOpen(false);
       setAdminForm({ name: "", email: "", password: "" });
     } catch (err: any) {
-      const message =
-        err?.message || "Failed to assign admin";
-      toast.error(message);
+      toast.error(err?.message || "Failed to assign admin");
     }
-
   };
+
+  // Activate + Deactivate dono yahi handle karta hai
   const handleToggleStatus = async () => {
     if (!selectedCompany) return;
+    const willActivate = !selectedCompany.isActive;
     try {
-      if (selectedCompany.isActive) {
-        await deactivateCompany(selectedCompany.id);
+      if (willActivate) {
+        await activateCompany(selectedCompany.id);
       } else {
-        await updateCompany(selectedCompany.id, { isActive: true }); // Activate back
+        await deactivateCompany(selectedCompany.id);
       }
-      toast.success(`Company ${!selectedCompany.isActive ? "activated" : "deactivated"} successfully!`);
-      setCompanies((prev) =>
-        prev.map((c) => c.id === selectedCompany.id ? { ...c, isActive: !c.isActive } : c)
-      );
+      toast.success(`Company ${willActivate ? "activated" : "deactivated"} successfully!`);
       setDeleteConfirmOpen(false);
       setSelectedCompany(null);
+      await loadCompanies(); // server se fresh data
     } catch (err: any) {
-      const message =
-        err?.message || "Failed to update company";
-      toast.error(message);
+      toast.error(err?.message || "Failed to update company status");
     }
-
   };
 
   return (
     <div className='flex flex-col gap-4'>
 
       {/* Header */}
-      <div className='flex items-center justify-between'>
-        <div className='flex items-center gap-3 flex-wrap'>
-          <Input
-            placeholder="Search company name or code..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className='w-64'
-          />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative w-full sm:w-64">
+            <Input
+              placeholder="Search company name or code..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-64 pr-8"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className='w-36'>
               <SelectValue placeholder="Status" />
@@ -439,9 +377,30 @@ function CompanyList() {
             </SelectContent>
           </Select>
         </div>
-        <div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isSpinning}
+            className="cursor-pointer"
+            aria-label="Refresh"
+          >
+            <RefreshCw className={`h-4 w-4 ${isSpinning ? "animate-spin" : ""}`} />
+            <span className={`ml-2 ${isSpinning ? "" : ""}`}>
+              Refresh
+            </span>
+          </Button>
+
           {!isCompanyAdmin && (
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog
+              open={open}
+              onOpenChange={(value) => {
+                setOpen(value);
+                if (value) setErrors({});
+              }}
+            >
               <DialogTrigger asChild>
                 <Button className='flex items-center gap-2 cursor-pointer' size="sm" variant="add">
                   <PlusIcon className='h-4 w-4' />
@@ -458,9 +417,7 @@ function CompanyList() {
                     <Label>Company Name *</Label>
                     <Input type="text" placeholder="Company Name" name='name' value={form.name} onChange={handleChange} />
                     {errors.name && (
-                      <p className="mt-1 text-sm text-red-500">
-                        {errors.name}
-                      </p>
+                      <p className="mt-1 text-sm text-red-500">{errors.name}</p>
                     )}
                   </div>
                 </div>
@@ -469,15 +426,9 @@ function CompanyList() {
                     <Label>Email</Label>
                     <Input type="email" placeholder="name@example.com" name='email' value={form.email} onChange={handleChange} />
                     {errors.email && (
-                      <p className="mt-1 text-sm text-red-500">
-                        {errors.email}
-                      </p>
+                      <p className="mt-1 text-sm text-red-500">{errors.email}</p>
                     )}
                   </div>
-                  {/* <div className='flex-1'>
-                    <Label>Phone</Label>
-                    <Input type="text" placeholder="Phone" name='phone' value={form.phone} onChange={handleChange} />
-                  </div> */}
                   <div className="flex-1">
                     <Label>Phone</Label>
 
@@ -486,14 +437,8 @@ function CompanyList() {
                       onChange={(value) => {
                         const phone = value || "";
 
-                        setForm((prev) => ({
-                          ...prev,
-                          phone,
-                        }));
-
-                        setIsPhoneValid(
-                          !!phone && isValidPhoneNumber(phone)
-                        );
+                        setForm((prev) => ({ ...prev, phone }));
+                        setIsPhoneValid(!!phone && isValidPhoneNumber(phone));
                       }}
                       placeholder="Enter phone number"
                       defaultCountry="IN"
@@ -523,37 +468,32 @@ function CompanyList() {
                 <div className='flex items-center w-full gap-2'>
                   <div className='flex-1'>
                     <Label>GST Number</Label>
-                    <Input type="text" placeholder="e.g. 07AABCS1234A1Z5" maxLength={15} name='gstNumber' value={form.gstNumber} onChange={handleChange}
+                    <Input
+                      type="text"
+                      placeholder="e.g. 07AABCS1234A1Z5"
+                      maxLength={15}
+                      name='gstNumber'
+                      value={form.gstNumber}
+                      onChange={handleChange}
                       className={form.gstNumber && !validateGST(form.gstNumber) ? "border-red-500 focus-visible:ring-red-500" : ""}
                     />
-                    {/* {form.gstNumber && !validateGST(form.gstNumber) && <p className="text-red-500 text-xs mt-1">Invalid GST Number format</p>} */}
                     {errors.gstNumber && (
-                      <p className="mt-1 text-sm text-red-500">
-                        {errors.gstNumber}
-                      </p>
+                      <p className="mt-1 text-sm text-red-500">{errors.gstNumber}</p>
                     )}
                   </div>
-                  {/* <div className='flex-1'>
-                    <Label>Subscription Plan</Label>
-                    <Input type="text" placeholder="basic/pro/enterprise" name='subscriptionPlan' value={form.subscriptionPlan} onChange={handleChange} />
-                  </div> */}
                 </div>
                 <div>
                   <Label>Website</Label>
                   <Input type="url" placeholder="https://example.com" name='website' value={form.website} onChange={handleChange} />
                   {errors.website && (
-                    <p className="mt-1 text-sm text-red-500">
-                      {errors.website}
-                    </p>
+                    <p className="mt-1 text-sm text-red-500">{errors.website}</p>
                   )}
                 </div>
                 <div>
                   <Label>Address</Label>
                   <Input type="text" placeholder="Company Address" name='address' value={form.address} onChange={handleChange} />
                   {errors.address && (
-                    <p className="mt-1 text-sm text-red-500">
-                      {errors.address}
-                    </p>
+                    <p className="mt-1 text-sm text-red-500">{errors.address}</p>
                   )}
                 </div>
                 <Button variant="add" className='cursor-pointer' onClick={handleSubmit}>
@@ -563,40 +503,35 @@ function CompanyList() {
             </Dialog>
           )}
         </div>
+
       </div>
 
       {/* Assign Admin Dialog */}
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assign Company Admin- {selectedCompany?.name}</DialogTitle>
+            <DialogTitle>Assign Company Admin - {selectedCompany?.name}</DialogTitle>
             <DialogDescription>Create admin account for this company</DialogDescription>
           </DialogHeader>
           <div>
             <Label>Name</Label>
             <Input type="text" placeholder="Admin Name" name="name" value={adminForm.name} onChange={handleAdminChange} />
             {adminErrors.name && (
-              <p className="mt-1 text-sm text-red-500">
-                {adminErrors.name}
-              </p>
+              <p className="mt-1 text-sm text-red-500">{adminErrors.name}</p>
             )}
           </div>
           <div>
             <Label>Email</Label>
             <Input type="email" placeholder="admin@company.com" name="email" value={adminForm.email} onChange={handleAdminChange} />
             {adminErrors.email && (
-              <p className="mt-1 text-sm text-red-500">
-                {adminErrors.email}
-              </p>
+              <p className="mt-1 text-sm text-red-500">{adminErrors.email}</p>
             )}
           </div>
           <div>
             <Label>Password</Label>
             <Input type="password" placeholder="Password" name="password" value={adminForm.password} onChange={handleAdminChange} />
             {adminErrors.password && (
-              <p className="mt-1 text-sm text-red-500">
-                {adminErrors.password}
-              </p>
+              <p className="mt-1 text-sm text-red-500">{adminErrors.password}</p>
             )}
           </div>
           <Button variant='add' onClick={handleAssignAdmin}>
@@ -617,9 +552,7 @@ function CompanyList() {
               <Label>Company Name</Label>
               <Input name="name" value={editForm.name} onChange={handleEditChange} placeholder='Company Name' />
               {editErrors.name && (
-                <p className="mt-1 text-sm text-red-500">
-                  {editErrors.name}
-                </p>
+                <p className="mt-1 text-sm text-red-500">{editErrors.name}</p>
               )}
             </div>
             <div className="flex gap-2">
@@ -627,9 +560,7 @@ function CompanyList() {
                 <Label>Email</Label>
                 <Input name="email" value={editForm.email} onChange={handleEditChange} placeholder='name@example.com' />
                 {editErrors.email && (
-                  <p className="mt-1 text-sm text-red-500">
-                    {editErrors.email}
-                  </p>
+                  <p className="mt-1 text-sm text-red-500">{editErrors.email}</p>
                 )}
               </div>
               <div className="flex-1">
@@ -640,14 +571,8 @@ function CompanyList() {
                   onChange={(value) => {
                     const phone = value || "";
 
-                    setEditForm((prev) => ({
-                      ...prev,
-                      phone,
-                    }));
-
-                    setIsEditPhoneValid(
-                      !!phone && isValidPhoneNumber(phone)
-                    );
+                    setEditForm((prev) => ({ ...prev, phone }));
+                    setIsEditPhoneValid(!!phone && isValidPhoneNumber(phone));
                   }}
                   placeholder="Enter phone number"
                   defaultCountry="IN"
@@ -678,32 +603,26 @@ function CompanyList() {
               <Label>GST Number</Label>
               <Input name="gstNumber" value={editForm.gstNumber} onChange={handleEditChange} placeholder='GST Number' />
               {editErrors.gstNumber && (
-                <p className="mt-1 text-sm text-red-500">
-                  {editErrors.gstNumber}
-                </p>
+                <p className="mt-1 text-sm text-red-500">{editErrors.gstNumber}</p>
               )}
             </div>
             <div>
               <Label>Website</Label>
               <Input name="website" value={editForm.website} onChange={handleEditChange} placeholder='https://example.com' />
               {editErrors.website && (
-                <p className="mt-1 text-sm text-red-500">
-                  {editErrors.website}
-                </p>
+                <p className="mt-1 text-sm text-red-500">{editErrors.website}</p>
               )}
             </div>
             <div>
               <Label>Address</Label>
               <Input name="address" value={editForm.address} onChange={handleEditChange} placeholder='Company Address' />
               {editErrors.address && (
-                <p className="mt-1 text-sm text-red-500">
-                  {editErrors.address}
-                </p>
+                <p className="mt-1 text-sm text-red-500">{editErrors.address}</p>
               )}
             </div>
             <Button variant='add' onClick={handleEdit}>Update Company</Button>
           </div>
-          {/* Edit Dialog ke andar, form ke neeche */}
+
           {isSuperAdmin && (
             <div className="border border-red-200 rounded-lg p-4 mt-4 bg-red-50">
               <h4 className="text-red-700 font-semibold flex items-center gap-2 text-sm">
@@ -723,29 +642,33 @@ function CompanyList() {
             </div>
           )}
         </DialogContent>
-
       </Dialog>
 
-      {/* Deactivate Confirm Dialog */}
+      {/* Activate / Deactivate Confirm Dialog */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Deactivate Company</DialogTitle>
+            <DialogTitle>
+              {selectedCompany?.isActive ? "Deactivate Company" : "Activate Company"}
+            </DialogTitle>
             <DialogDescription>
-              Are you sure you want to  <strong className="font-semibold ">
-                {" "}
-                {selectedCompany?.isActive ? "deactivate" : "activate"}
-              </strong> , <strong className='text-card-foreground'>{selectedCompany?.name}</strong>?
+              Are you sure you want to{" "}
+              <strong>{selectedCompany?.isActive ? "deactivate" : "activate"}</strong>{" "}
+              <strong className="text-card-foreground">{selectedCompany?.name}</strong>?
               {selectedCompany?.isActive
                 ? " You can activate it again later."
                 : " You can deactivate it again later."}
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" className=" cursor-pointer" onClick={() => setDeleteConfirmOpen(false)}>
+            <Button variant="outline" className="cursor-pointer" onClick={() => setDeleteConfirmOpen(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" className=" cursor-pointer" onClick={handleToggleStatus}>
+            <Button
+              variant={selectedCompany?.isActive ? "destructive" : "default"}
+              className="cursor-pointer"
+              onClick={handleToggleStatus}
+            >
               {selectedCompany?.isActive ? "Deactivate" : "Activate"}
             </Button>
           </div>
@@ -783,9 +706,8 @@ function CompanyList() {
         </DialogContent>
       </Dialog>
 
-
       {/* Table */}
-      <div className="bg-card  grid grid-cols-1 rounded border w-full overflow-x-auto">
+      <div className="bg-card grid grid-cols-1 rounded border w-full overflow-x-auto">
         <Table className='table-auto'>
           <TableHeader className='bg-muted rounded-lg'>
             <TableRow>
@@ -797,7 +719,6 @@ function CompanyList() {
               <TableHead>GST Number</TableHead>
               <TableHead>Website</TableHead>
               <TableHead>Address</TableHead>
-              {/* <TableHead>Plan</TableHead> */}
               <TableHead>Status</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
@@ -817,9 +738,6 @@ function CompanyList() {
                 <TableCell>{company.gstNumber ?? "—"}</TableCell>
                 <TableCell>{company.website ?? "—"}</TableCell>
                 <TableCell>{company.address ?? "—"}</TableCell>
-                {/* <TableCell>
-                  <Badge variant="outline">{company.subscriptionPlan ?? "basic"}</Badge>
-                </TableCell> */}
                 <TableCell>
                   <Badge className={company.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
                     {company.isActive ? "Active" : "Inactive"}
@@ -837,7 +755,6 @@ function CompanyList() {
                         <DropdownMenuItem
                           onClick={() => {
                             setSelectedCompany(company);
-
                             setEditForm({
                               name: company.name || "",
                               email: company.email || "",
@@ -846,36 +763,34 @@ function CompanyList() {
                               address: company.address || "",
                               gstNumber: company.gstNumber || "",
                             });
-
+                            setEditErrors({});
                             setIsEditPhoneValid(
                               !!company.phone && isValidPhoneNumber(company.phone)
                             );
-
                             setEditOpen(true);
                           }}
                         >
                           Edit
                         </DropdownMenuItem>
                         {!isCompanyAdmin && (
-                          <>
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setSelectedCompanyId(company.id);
-                                setSelectedCompany(company);
-                                setAssignOpen(true);
-                              }}
-                            >
-                              Assign Admin
-                            </DropdownMenuItem>
-
-                          </>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedCompanyId(company.id);
+                              setSelectedCompany(company);
+                              setAssignOpen(true);
+                            }}
+                          >
+                            Assign Admin
+                          </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem variant="destructive" onClick={() => {
-                          setSelectedCompany(company);
-                          setDeleteConfirmOpen(true);
-
-                        }}
-                          disabled={!isSuperAdmin}>
+                        <DropdownMenuItem
+                          variant={company.isActive ? "destructive" : "default"}
+                          onClick={() => {
+                            setSelectedCompany(company);
+                            setDeleteConfirmOpen(true);
+                          }}
+                          disabled={!isSuperAdmin}
+                        >
                           {company.isActive ? "Deactivate" : "Activate"}
                         </DropdownMenuItem>
                       </DropdownMenuGroup>
@@ -884,7 +799,7 @@ function CompanyList() {
                 </TableCell>
               </TableRow>
             ))}
-            {companies.length === 0 && (
+            {filteredCompanies.length === 0 && (
               <TableRow>
                 <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                   No companies found

@@ -31,3 +31,7 @@ export const getMyCompany = () => {
 export const assignCompanyAdmin = ( companyId: string, data: AssignAdminPayload) => {
   return api.post(`/company/${companyId}/assign-admin`, data);
 };
+
+export const activateCompany = (id: string) => {
+  return api.patch(`/company/${id}/activate`);
+};

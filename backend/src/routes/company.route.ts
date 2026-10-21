@@ -8,6 +8,7 @@ import {
     getMyCompany,
     permanentDeleteCompany,
     deactivateCompany,
+    activateCompany,
 } from "../controllers/company.controller.js";
 import { protect } from "../middleware/auth.middleware.js";
 import { authorize, checkSuperAdmin } from "../middleware/role.middleware.js";
@@ -23,6 +24,7 @@ router.get("/:id", protect, authorize("company", "canView"), validate(companyIdS
 router.put("/:id", protect, authorize("company", "canEdit"), validate(companyIdSchema, "params"), validate(updateCompanySchema), updateCompany);
 router.delete("/:id", protect, authorize("company", "canDelete"), validate(companyIdSchema, "params"), deactivateCompany);
 router.delete("/:id/permanent", protect, checkSuperAdmin, validate(companyIdSchema, "params"), permanentDeleteCompany);
+router.patch("/:id/activate", protect, checkSuperAdmin, validate(companyIdSchema, "params"), activateCompany);
 
 // assign company admin 
 router.post("/:id/assign-admin", protect, authorize("company", "canCreate"), validate(companyIdSchema, "params"), validate(assignAdminSchema), assignCompanyAdmin);

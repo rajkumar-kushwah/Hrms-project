@@ -253,6 +253,14 @@ export const permanentDeleteCompany = async (id: string) => {
     };
 };
 
+export const activateCompany = async (id: string) => {
+    await prisma.company.update({
+        where: { id },
+        data: { isActive: true },
+    });
+
+    return { message: "Company activated successfully" };
+};
 
 // ─────────────────────────────────────────────
 // Generate Password

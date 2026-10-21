@@ -66,24 +66,59 @@ export const getCompanyById = async (req: Request, res: Response) => {
 }
 
 // update Company
+// export const updateCompany = async (req: Request, res: Response) => {
+//     try {
+//         const id = (req.params.id as string);
+//         const company = await CompanyService.updateCompany(id, req.body);
+
+//         res.status(200).json({
+//             success: true,
+//             message: "Company updated successfully",
+//             data: company,
+//         });
+//     } catch (Error: any) {
+//         console.error(Error);
+//         res.status(400).json({
+//             success: false,
+//             message: Error.message ?? "Failed to update company",
+//         });
+//     }
+// }
+
 export const updateCompany = async (req: Request, res: Response) => {
     try {
-        const id = (req.params.id as string);
-        const company = await CompanyService.updateCompany(id, req.body);
+        const id = req.params.id as string;
+        const isSuperAdmin = req.user?.role?.name?.toLowerCase().replace(/\s+/g, "_") === "super_admin";
 
-        res.status(200).json({
-            success: true,
-            message: "Company updated successfully",
-            data: company,
-        });
-    } catch (Error: any) {
-        console.error(Error);
-        res.status(400).json({
-            success: false,
-            message: Error.message ?? "Failed to update company",
-        });
+        if (!isSuperAdmin && req.user?.companyId !== id) {
+            return res.status(403).json({ success: false, message: "Forbidden" });
+        }
+
+        const { name, email, phone, website, address, gstNumber } = req.body;
+        const data: any = { name, email, phone, website, address, gstNumber };
+
+        // sirf super admin ye fields badal sake
+        if (isSuperAdmin) {
+            const { subscriptionPlan, maxBranches, maxEmployees, isActive } = req.body;
+            Object.assign(data, { subscriptionPlan, maxBranches, maxEmployees, isActive });
+        }
+
+        const company = await CompanyService.updateCompany(id, data);
+        res.status(200).json({ success: true, message: "Company updated successfully", data: company });
+    } catch (error: any) {
+        res.status(400).json({ success: false, message: error.message ?? "Failed to update company" });
     }
-}
+};
+
+export const activateCompany = async (req: Request, res: Response) => {
+    try {
+        const id = req.params.id as string;
+        const result = await CompanyService.activateCompany(id);
+        res.status(200).json({ success: true, message: result.message });
+    } catch (error: any) {
+        res.status(400).json({ success: false, message: error.message });
+    }
+};
 
 // delete company
 export const deactivateCompany = async (req: Request, res: Response) => {
