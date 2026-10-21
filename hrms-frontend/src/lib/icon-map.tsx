@@ -7,11 +7,13 @@ import {
   FileText, FileBarChart, FileBarChart2,
   FileSpreadsheet, FileClock,
   UserRoundPlus,
+  UserCog
 } from "lucide-react";
 
 export const iconMap: Record<string, React.ReactNode> = {
   LayoutDashboard: <LayoutDashboard />,
   Building2: <Building2 />,
+  UserCog: <UserCog />,
   GitBranch: <GitBranch />,
   Tag: <Tag />,
   Users: <Users />,

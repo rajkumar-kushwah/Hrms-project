@@ -4,17 +4,17 @@ export const seedModules = async () => {
   const modules = [
     { name: "dashboard", displayName: "Dashboard", icon: "LayoutDashboard", url: "/dashboard", order: 1 },
     { name: "company", displayName: "Company Setup", icon: "Building2", url: "/company", order: 2 },
-    { name: "branch", displayName: "Branch", icon: "GitBranch", url: "/branch", order: 3 },
-    { name: "category", displayName: "Category", icon: "Tag", url: "/category", order: 4 },
-    { name: "employee", displayName: "Employee", icon: "Users", url: "/employee", order: 5 },
-    { name: "onboarding", displayName: "Onboarding", icon: "UserRoundPlus", url: "/onboarding", order: 6 },
-    { name: "attendance", displayName: "Attendance", icon: "CalendarCheck", url: "/attendance", order: 7 },
-    { name: "leave", displayName: "Leave", icon: "CalendarOff", url: "/leave", order: 8 },
-    { name: "payroll", displayName: "Payroll", icon: "Wallet", url: "/payroll", order: 9 },
-    { name: "reports", displayName: "Reports", icon: "BarChart2", url: "/reports", order: 10 },
-    { name: "roles", displayName: "Roles & Permissions", icon: "ShieldCheck", url: "/roles", order: 11 },
-    { name: "settings", displayName: "Settings", icon: "Settings", url: "/settings", order: 12 },
-    { name: "company-users", displayName: "Company Users", icon: "UserCog", url: "/companyusers", order: 13 },
+    { name: "company-users", displayName: "Company Users", icon: "UserCog", url: "/companyusers", order: 3 },
+    { name: "branch", displayName: "Branch", icon: "GitBranch", url: "/branch", order: 4 },
+    { name: "category", displayName: "Category", icon: "Tag", url: "/category", order: 5 },
+    { name: "employee", displayName: "Employee", icon: "Users", url: "/employee", order: 6 },
+    { name: "onboarding", displayName: "Onboarding", icon: "UserRoundPlus", url: "/onboarding", order: 7 },
+    { name: "attendance", displayName: "Attendance", icon: "CalendarCheck", url: "/attendance", order: 8 },
+    { name: "leave", displayName: "Leave", icon: "CalendarOff", url: "/leave", order: 9 },
+    { name: "payroll", displayName: "Payroll", icon: "Wallet", url: "/payroll", order: 10 },
+    { name: "reports", displayName: "Reports", icon: "BarChart2", url: "/reports", order: 11 },
+    { name: "roles", displayName: "Roles & Permissions", icon: "ShieldCheck", url: "/roles", order: 12 },
+    { name: "settings", displayName: "Settings", icon: "Settings", url: "/settings", order: 13 },
 
   ];
 
