@@ -15,30 +15,30 @@ async function main() {
   console.log("Database query successful");
   await seedModules();        //  Pehle modules
 
-  const documentVerificationModule = await prisma.module.findUnique({
-    where: {
-      name: "document-verification",
-    },
-    select: {
-      id: true,
-    },
-  });
+  // const documentVerificationModule = await prisma.module.findUnique({
+  //   where: {
+  //     name: "document-verification",
+  //   },
+  //   select: {
+  //     id: true,
+  //   },
+  // });
 
-  if (documentVerificationModule) {
-    await prisma.permission.deleteMany({
-      where: {
-        moduleId: documentVerificationModule.id,
-      },
-    });
+  // if (documentVerificationModule) {
+  //   await prisma.permission.deleteMany({
+  //     where: {
+  //       moduleId: documentVerificationModule.id,
+  //     },
+  //   });
 
-    await prisma.module.delete({
-      where: {
-        id: documentVerificationModule.id,
-      },
-    });
+  //   await prisma.module.delete({
+  //     where: {
+  //       id: documentVerificationModule.id,
+  //     },
+  //   });
 
-    console.log("Document Verification module deleted!");
-  }
+  //   console.log("Document Verification module deleted!");
+  // }
   await seedSuperAdminRole(); //  Phir role + permissions
   await seedSuperAdmin();     //  Aakhir mein user
   await seedOnboardingTemplates();

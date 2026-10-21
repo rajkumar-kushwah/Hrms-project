@@ -47,12 +47,13 @@ if (!connectionString) {
     throw new Error("DATABASE_URL is not configured");
 }
 
+const isRenderDatabase = connectionString.includes(".render.com");
+
 const adapter = new PrismaPg({
     connectionString,
-    ssl:
-        process.env.NODE_ENV === "production"
-            ? { rejectUnauthorized: false }
-            : false,
+    ssl: isRenderDatabase
+        ? { rejectUnauthorized: false }
+        : false,
 });
 
 export const prisma = new PrismaClient({

@@ -38,58 +38,57 @@ model Company {
 }
 
 model User {
-  id                            String                         @id @default(uuid())
-  name                          String?
-  email                         String                         @unique
-  password                      String
-  createdAt                     DateTime                       @default(now())
-  updatedAt                     DateTime                       @updatedAt
-  lastLogin                     DateTime?
-  isActive                      Boolean                        @default(true)
-  companyId                     String?
-  roleId                        Int?
-  createdBy                     String?
-  branchId                      String?
-  categoryId                    String?
-  designation                   String?
-  employeeCode                  String?                        @unique
-  joiningDate                   DateTime?
-  phone                         String?
-  aadharNumber                  String?
-  bankAccountNumber             String?
-  bankIFSC                      String?
-  bankName                      String?
-  bloodGroup                    String?
-  currentAddress                String?
-  dateOfBirth                   DateTime?
-  emergencyContactName          String?
-  emergencyContactPhone         String?
-  employmentType                String?
-  esiNumber                     String?
-  gender                        String?
-  maritalStatus                 String?
-  panNumber                     String?
-  permanentAddress              String?
-  pfNumber                      String?
-  profilePhoto                  String?
-  reportingManagerId            String?
-  workShift                     String?
-  grossSalary                   Float?
-  employmentStatus              EmploymentStatus               @default(ONBOARDING)
-  attendances                   Attendance[]
-  approvedLeaves                LeaveRequest[]                 @relation("ApprovedLeaves")
-  leaveRequests                 LeaveRequest[]                 @relation("LeaveRequests")
-  onboarding                    Onboarding?
-  payrolls                      Payroll[]
-  branch                        Branch?                        @relation(fields: [branchId], references: [id])
-  category                      Category?                      @relation(fields: [categoryId], references: [id])
-  company                       Company?                       @relation(fields: [companyId], references: [id])
-  createdByUser                 User?                          @relation("CreatedBy", fields: [createdBy], references: [id])
-  createdUsers                  User[]                         @relation("CreatedBy")
-  reportingManager              User?                          @relation("ReportingManager", fields: [reportingManagerId], references: [id])
-  teamMembers                   User[]                         @relation("ReportingManager")
-  role                          Role?                          @relation(fields: [roleId], references: [id])
-
+  id                    String           @id @default(uuid())
+  name                  String?
+  email                 String           @unique
+  password              String
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  lastLogin             DateTime?
+  isActive              Boolean          @default(true)
+  companyId             String?
+  roleId                Int?
+  createdBy             String?
+  branchId              String?
+  categoryId            String?
+  designation           String?
+  employeeCode          String?          @unique
+  joiningDate           DateTime?
+  phone                 String?
+  aadharNumber          String?
+  bankAccountNumber     String?
+  bankIFSC              String?
+  bankName              String?
+  bloodGroup            String?
+  currentAddress        String?
+  dateOfBirth           DateTime?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  employmentType        String?
+  esiNumber             String?
+  gender                String?
+  maritalStatus         String?
+  panNumber             String?
+  permanentAddress      String?
+  pfNumber              String?
+  profilePhoto          String?
+  reportingManagerId    String?
+  workShift             String?
+  grossSalary           Float?
+  employmentStatus      EmploymentStatus @default(ONBOARDING)
+  attendances           Attendance[]
+  approvedLeaves        LeaveRequest[]   @relation("ApprovedLeaves")
+  leaveRequests         LeaveRequest[]   @relation("LeaveRequests")
+  onboarding            Onboarding?
+  payrolls              Payroll[]
+  branch                Branch?          @relation(fields: [branchId], references: [id])
+  category              Category?        @relation(fields: [categoryId], references: [id])
+  company               Company?         @relation(fields: [companyId], references: [id])
+  createdByUser         User?            @relation("CreatedBy", fields: [createdBy], references: [id])
+  createdUsers          User[]           @relation("CreatedBy")
+  reportingManager      User?            @relation("ReportingManager", fields: [reportingManagerId], references: [id])
+  teamMembers           User[]           @relation("ReportingManager")
+  role                  Role?            @relation(fields: [roleId], references: [id])
 }
 
 model Role {
@@ -342,9 +341,9 @@ model OnboardingChecklistItem {
   documentUrl       String?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
-  onboarding        Onboarding         @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
   documentInputType DocumentInputType?
   documentNumber    String?
+  onboarding        Onboarding         @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
 
   @@index([onboardingId])
 }
@@ -358,10 +357,10 @@ model OnboardingChecklistTemplate {
   isRequired        Boolean            @default(true)
   order             Int                @default(0)
   requiresDocument  Boolean            @default(false)
-  documentInputType DocumentInputType?
   isActive          Boolean            @default(true)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
+  documentInputType DocumentInputType?
   company           Company            @relation(fields: [companyId], references: [id])
 
   @@index([companyId, stage])
