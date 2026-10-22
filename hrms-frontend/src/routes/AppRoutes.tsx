@@ -29,6 +29,7 @@ import OnboardingChecklistSettings from "@/pages/settings/Onboardingchecklistset
 import OnboardingDetail from "@/pages/onboarding/OnboardingDetail";
 import OnboardingList from "@/pages/onboarding/OnboardingList";
 import EmployeeView from "@/pages/EmployeeView";
+import AttendanceReport from "@/pages/reports/AttendanceReport";
 
 
 const AppRoutes = () => {
@@ -68,6 +69,7 @@ const AppRoutes = () => {
                         <Route path="/onboardingchecklist" element={<OnboardingChecklistSettings />} />
                         <Route path="/onboarding" element={<OnboardingList />} />
                         <Route path="/onboarding/:userId" element={<OnboardingDetail />} />
+                        <Route path="/reports/attendance" element={<AttendanceReport />} />
 
                     </Route>
                 </Route>
