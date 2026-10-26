@@ -279,57 +279,57 @@ const Roles = () => {
     // };
 
     const togglePermission = (
-    moduleId: number,
-    action: "canView" | "canCreate" | "canEdit" | "canDelete"
-) => {
-    setPermissions((prev) => {
-        const updatedPermissions = prev.map((permission) => {
-            if (permission.moduleId !== moduleId) {
-                return permission;
-            }
+        moduleId: number,
+        action: "canView" | "canCreate" | "canEdit" | "canDelete"
+    ) => {
+        setPermissions((prev) => {
+            const updatedPermissions = prev.map((permission) => {
+                if (permission.moduleId !== moduleId) {
+                    return permission;
+                }
 
-            const updatedPermission = {
-                ...permission,
-                [action]: !permission[action],
-            };
+                const updatedPermission = {
+                    ...permission,
+                    [action]: !permission[action],
+                };
 
-            // View OFF => all actions OFF
-            if (action === "canView" && !updatedPermission.canView) {
-                updatedPermission.canCreate = false;
-                updatedPermission.canEdit = false;
-                updatedPermission.canDelete = false;
-            }
+                // View OFF => all actions OFF
+                if (action === "canView" && !updatedPermission.canView) {
+                    updatedPermission.canCreate = false;
+                    updatedPermission.canEdit = false;
+                    updatedPermission.canDelete = false;
+                }
 
-            // Create/Edit/Delete ON => View ON
-            if (
-                action !== "canView" &&
-                updatedPermission[action]
-            ) {
-                updatedPermission.canView = true;
-            }
+                // Create/Edit/Delete ON => View ON
+                if (
+                    action !== "canView" &&
+                    updatedPermission[action]
+                ) {
+                    updatedPermission.canView = true;
+                }
 
-            return updatedPermission;
+                return updatedPermission;
+            });
+
+            // Permission validation
+            const hasPermission = updatedPermissions.some(
+                (permission) =>
+                    permission.canView ||
+                    permission.canCreate ||
+                    permission.canEdit ||
+                    permission.canDelete
+            );
+
+            setErrors((prevErrors) => ({
+                ...prevErrors,
+                permissions: hasPermission
+                    ? undefined
+                    : "At least one permission must be selected",
+            }));
+
+            return updatedPermissions;
         });
-
-        // Permission validation
-        const hasPermission = updatedPermissions.some(
-            (permission) =>
-                permission.canView ||
-                permission.canCreate ||
-                permission.canEdit ||
-                permission.canDelete
-        );
-
-        setErrors((prevErrors) => ({
-            ...prevErrors,
-            permissions: hasPermission
-                ? undefined
-                : "At least one permission must be selected",
-        }));
-
-        return updatedPermissions;
-    });
-};
+    };
 
     const handleSubmit = async () => {
         // if (!form.name) { toast.error("Role name is required"); return; }
@@ -428,6 +428,7 @@ const Roles = () => {
         setOpen(false);
         setEditRole(null);
         setForm({ name: "", description: "" });
+        setErrors({})
         initPermissions();
     };
 
@@ -436,7 +437,10 @@ const Roles = () => {
 
             {/* Header */}
             <div className="flex items-center justify-end">
-                <Button variant="add" size="sm" onClick={() => setOpen(true)}>
+                <Button variant="add" size="sm" onClick={() => {
+                    handleClose();
+                    setOpen(true);
+                }}>
                     <PlusIcon className="h-4 w-4 mr-2" />
                     Add Role
                 </Button>
@@ -454,8 +458,11 @@ const Roles = () => {
                         {/* Name + Description */}
                         <div className="flex gap-3">
                             <div className="flex-1">
-                                <Label>Role Name *</Label>
+                                <Label htmlFor="name">
+                                    Role Name <span className="text-destructive">*</span>
+                                </Label>
                                 <Input
+                                    id="name"
                                     placeholder="e.g. HR Manager"
                                     value={form.name}
                                     onChange={(e) => handleChange("name", e.target.value)}
@@ -465,8 +472,11 @@ const Roles = () => {
                                 )}
                             </div>
                             <div className="flex-1">
-                                <Label>Description</Label>
+                                <Label htmlFor="description">
+                                    Description <span className="text-destructive">*</span>
+                                </Label>
                                 <Input
+                                    id="description"
                                     placeholder="Role description"
                                     value={form.description}
                                     onChange={(e) => handleChange("description", e.target.value)}

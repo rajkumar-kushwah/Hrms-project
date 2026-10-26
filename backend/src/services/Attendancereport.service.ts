@@ -1,19 +1,11 @@
+
 import { prisma } from "../config/db.js";
-import { getMonthlySheet, type DayStatus } from "../services/attendance.service.js";
+import {
+    getMonthlySheet,
+    type DayStatus,
+} from "../services/attendance.service.js";
 
 const round1 = (value: number) => Math.round(value * 10) / 10;
-
-// ─────────────────────────────────────────────────────────────
-// Attendance report for a month.
-//
-// Daily statuses come from getMonthlySheet (same rules as payroll),
-// so this report and the Payroll page can never disagree on counts.
-// Only the working hours need one extra query.
-//
-// Attendance % = (present + late + half-day * 0.5) / working days
-// Working days = days that are not future, week off or holiday
-// (leave days stay in the denominator, so leave lowers the percentage)
-// ─────────────────────────────────────────────────────────────
 
 export const getAttendanceReport = async (
     companyId: string,
@@ -28,24 +20,29 @@ export const getAttendanceReport = async (
     const monthEnd = new Date(year, month, 0);
     monthEnd.setHours(23, 59, 59, 999);
 
-    // Sirf un din ke ghante jab punch-out hua (workingHours > 0),
-    // warna adhoore din average ko neeche kheench dete hain
-    const hourRows = await prisma.attendance.groupBy({
-        by: ["userId"],
-        where: {
-            companyId,
-            userId: { in: sheet.employees.map((employee) => employee.userId) },
-            date: { gte: monthStart, lte: monthEnd },
-            workingHours: { gt: 0 },
-        },
-        _sum: { workingHours: true },
-        _count: { workingHours: true },
-    });
+    const userIds = sheet.employees.map((employee) => employee.userId);
+
+    const hourRows = userIds.length
+        ? await prisma.attendance.groupBy({
+              by: ["userId"],
+              where: {
+                  companyId,
+                  userId: { in: userIds },
+                  date: { gte: monthStart, lte: monthEnd },
+                  workingHours: { gt: 0 },
+              },
+              _sum: { workingHours: true },
+              _count: { workingHours: true },
+          })
+        : [];
 
     const hoursByUser = new Map(
         hourRows.map((row) => [
             row.userId,
-            { total: row._sum.workingHours ?? 0, days: row._count.workingHours },
+            {
+                total: row._sum.workingHours ?? 0,
+                days: row._count.workingHours,
+            },
         ])
     );
 
@@ -63,7 +60,9 @@ export const getAttendanceReport = async (
         const unpaidWeekOff = count("Unpaid Week Off");
         const holiday = count("Holiday");
 
-        const workingDays = present + late + halfDay + absent + paidLeave + unpaidLeave;
+        const workingDays =
+            present + late + halfDay + absent + paidLeave + unpaidLeave;
+
         const attended = present + late + halfDay * 0.5;
         const hours = hoursByUser.get(employee.userId);
 
@@ -83,11 +82,16 @@ export const getAttendanceReport = async (
             holiday,
             workingDays,
             attendancePercent:
-                workingDays > 0 ? Math.round((attended / workingDays) * 100) : 0,
-            // payroll ke totalUnpaidDays wala hi formula
-            unpaidDays: absent + unpaidLeave + unpaidWeekOff + halfDay * 0.5,
+                workingDays > 0
+                    ? Math.round((attended / workingDays) * 100)
+                    : 0,
+            unpaidDays:
+                absent + unpaidLeave + unpaidWeekOff + halfDay * 0.5,
             totalHours: round1(hours?.total ?? 0),
-            avgHours: hours && hours.days > 0 ? round1(hours.total / hours.days) : 0,
+            avgHours:
+                hours && hours.days > 0
+                    ? round1(hours.total / hours.days)
+                    : 0,
         };
     });
 
@@ -107,12 +111,16 @@ export const getAttendanceReport = async (
             unpaidDays: total((row) => row.unpaidDays),
             totalHours: round1(total((row) => row.totalHours)),
             avgAttendancePercent: rows.length
-                ? Math.round(total((row) => row.attendancePercent) / rows.length)
+                ? Math.round(
+                      total((row) => row.attendancePercent) / rows.length
+                  )
                 : 0,
         };
     };
 
-    const branchNames = [...new Set(employees.map((employee) => employee.branchName))].sort();
+    const branchNames = [
+        ...new Set(employees.map((employee) => employee.branchName)),
+    ].sort();
 
     return {
         month,
@@ -120,7 +128,9 @@ export const getAttendanceReport = async (
         totals: summarize(employees),
         byBranch: branchNames.map((name) => ({
             name,
-            ...summarize(employees.filter((employee) => employee.branchName === name)),
+            ...summarize(
+                employees.filter((employee) => employee.branchName === name)
+            ),
         })),
         employees,
     };

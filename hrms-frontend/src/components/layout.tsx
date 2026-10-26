@@ -120,6 +120,15 @@ export default function Layout() {
             // case "/onboarding/:userId":
             //     return "OnboardingDetail";
 
+            case "/settings/general":
+                return "General Configuration";
+
+            case "/settings/attendance":
+                return "Attendance Configuration";
+
+            case "/settings/onboarding-checklist":
+                return "Onboarding Checklist Configuration";
+
             default:
                 return "Dashboard";
         }

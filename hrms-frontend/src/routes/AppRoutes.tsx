@@ -8,7 +8,7 @@ import { Toaster } from "sonner";
 import Unauthorized from "@/Unauthorized/Unauthorized";
 import ErrorPage from "@/ErrorHandling/ErrorPage";
 import CompanyList from "@/pages/CompanyList";
-import Users from "../pages/Users";
+import Users from "../pages/CompanyUsers";
 import Roles from "@/pages/Roles";
 import BranchList from "@/pages/BranchList";
 import CategoryList from "@/pages/CategoryList";
@@ -58,7 +58,7 @@ const AppRoutes = () => {
                         <Route path="/attendance/list" element={<AttendanceList />} />
                         <Route path="/attendance/live" element={<AttendanceLive />} />
                         <Route path="/attendance/employee/:userId" element={<EmployeeAttendanceDetail />} />
-                        <Route path="/settings" element={<Settings />} />
+                        <Route path="/settings/*" element={<Settings />} />
                         <Route path="/attendance/geo-fencing" element={<GeoFencing />} />
                         <Route path="/leave/request" element={<LeaveRequestPage />} />
                         <Route path="/leave/approval" element={<LeaveApproval />} />

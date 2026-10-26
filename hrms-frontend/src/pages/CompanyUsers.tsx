@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreVertical } from "lucide-react";
+import { MoreVertical, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { getCompanyUsers, resetUserPassword, toggleUserStatus } from "@/services/companyUser.service";
 import type { CompanyUser } from "@/types/companyuser.types";
@@ -20,6 +20,7 @@ const Users = () => {
     const [selectedUser, setSelectedUser] = React.useState<CompanyUser | null>(null);
     const [newPassword, setNewPassword] = React.useState("");
     const { user: currentUser } = useAuthStore();
+    const [showPassword, setShowPassword] = React.useState(false);
 
     React.useEffect(() => {
         loadUsers();
@@ -96,14 +97,33 @@ const Users = () => {
                         <DialogDescription>Reset password for {selectedUser?.name}</DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-col gap-3">
-                        <Label>New Password</Label>
-                        <Input
-                            type="password"
-                            placeholder="Min 6 characters"
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                        />
-                        <Button onClick={handleResetPassword}>
+                        <Label htmlFor="newPassword">New Password</Label>
+
+                        <div className="relative">
+                            <Input
+                                id="newPassword"
+                                type={showPassword ? "text" : "password"}
+                                placeholder="Min 6 characters"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                className="pr-10"
+                            />
+
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword((prev) => !prev)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                                aria-label={showPassword ? "Hide password" : "Show password"}
+                            >
+                                {showPassword ? (
+                                    <EyeOff className="h-4 w-4" />
+                                ) : (
+                                    <Eye className="h-4 w-4" />
+                                )}
+                            </button>
+                        </div>
+
+                        <Button onClick={handleResetPassword} variant="add" className="cursor-pointer">
                             Reset Password
                         </Button>
                     </div>

@@ -1,39 +1,77 @@
 import type { Request, Response } from "express";
 import * as RoleService from "../services/role.service.js";
 import { prisma } from "../config/db.js";
+import {
+    isSuperAdminRole,
+    getCompanyId,
+} from "../utilis/roleUtils.js";
+import {
+    isDatabaseUnavailable,
+    sendDatabaseUnavailable,
+} from "../utilis/dbErrors.js";
+
 // Sabhi roles
 export const getCompanyRoles = async (req: Request, res: Response) => {
     try {
-        const companyId = req.user?.companyId ?? null;
-        const isSuperAdmin = req.user?.role?.name === "super_admin";
+        const superAdmin = isSuperAdminRole(req.user?.role?.name);
+        const companyId = getCompanyId(req);
 
-        const roles = await RoleService.getCompanyRoles(companyId, isSuperAdmin);
-        res.status(200).json({ success: true, data: roles });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
+        const roles = await RoleService.getCompanyRoles(
+            companyId,
+            superAdmin
+        );
+
+        return res.status(200).json({
+            success: true,
+            data: roles,
+        });
+    } catch (error: unknown) {
+        if (isDatabaseUnavailable(error)) {
+            return sendDatabaseUnavailable(res);
+        }
+
+        return res.status(400).json({
+            success: false,
+            message:
+                error instanceof Error
+                    ? error.message
+                    : "Failed to create role",
+        });
     }
 };
 
 // Role create
 export const createRole = async (req: Request, res: Response) => {
     try {
-        const companyId = req.user?.companyId!;
+        const companyId = getCompanyId(req);
+        const superAdmin = isSuperAdminRole(req.user?.role?.name);
 
-        if (!companyId) {
+        if (!companyId && !superAdmin) {
             return res.status(400).json({
                 success: false,
-                message: "Company not found in session"
+                message: "Company not found in session",
             });
         }
 
         const role = await RoleService.createRole(companyId, req.body);
-        res.status(201).json({
+
+        return res.status(201).json({
             success: true,
             message: "Role created successfully",
             data: role,
         });
-    } catch (error: any) {
-        res.status(400).json({ success: false, message: error.message });
+    } catch (error: unknown) {
+        if (isDatabaseUnavailable(error)) {
+            return sendDatabaseUnavailable(res);
+        }
+
+        return res.status(400).json({
+            success: false,
+            message:
+                error instanceof Error
+                    ? error.message
+                    : "Failed to create role",
+        });
     }
 };
 
@@ -53,38 +91,48 @@ export const getRolePermissions = async (req: Request, res: Response) => {
 // Permissions update
 export const updateRolePermissions = async (req: Request, res: Response) => {
     try {
-        // const companyId = req.user?.companyId!;
-        const id = (req.params.id as string);
-        const roleId = parseInt(id);
+        const id = req.params.id as string;
+        const roleId = parseInt(id, 10);
+
+        if (Number.isNaN(roleId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid role ID",
+            });
+        }
+
         const { permissions, name, description } = req.body;
 
-        const roleName = name
+        const superAdmin = isSuperAdminRole(req.user?.role?.name);
+        const companyId = superAdmin ? null : getCompanyId(req);
 
-
-        const roleNameNormalized =
-            req.user?.role?.name
-                ?.trim()
-                .toLowerCase()
-                .replace(/\s+/g, "_");
-
-        const companyId = roleNameNormalized === "super_admin"
-            ? null
-            : req.user?.companyId!;
+        if (!superAdmin && !companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Company not found in session",
+            });
+        }
 
         const role = await RoleService.updateRolePermissions(
             roleId,
             companyId,
-            roleName,
+            name,
             permissions,
             description
         );
-        res.status(200).json({
+
+        return res.status(200).json({
             success: true,
             message: "Permissions updated successfully",
             data: role,
         });
-    } catch (error: any) {
-        res.status(400).json({ success: false, message: error.message });
+    } catch (error: unknown) {
+        return res.status(400).json({
+            success: false,
+            message: error instanceof Error
+                ? error.message
+                : "Failed to update role permissions",
+        });
     }
 };
 

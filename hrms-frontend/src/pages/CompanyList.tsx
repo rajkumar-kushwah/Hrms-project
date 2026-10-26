@@ -25,6 +25,7 @@ import { isCompanyAdminRole, isSuperAdminRole } from '@/utilis/roleUtils';
 import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { companySchema, assignAdminSchema } from "@/validation/company.validation";
+import { Eye, EyeOff } from "lucide-react";
 
 const initialForm: CreateCompanyPayload = {
   name: "",
@@ -93,6 +94,8 @@ function CompanyList() {
     email?: string;
     password?: string;
   }>({});
+
+  const [showAdminPassword, setShowAdminPassword] = React.useState(false);
 
   React.useEffect(() => {
     loadCompanies();
@@ -214,12 +217,26 @@ function CompanyList() {
       toast.error(err?.message || "Failed to update company");
     }
   };
+  const handleClose = () => {
+    setOpen(false);
+    setForm({ ...initialForm });
+    setErrors({});
+    setIsPhoneValid(false);
+  };
+
+  const handleAssignClose = () => {
+    setAssignOpen(false);
+    setAdminForm({ name: "", email: "", password: "" });
+    setAdminErrors({});
+    setShowAdminPassword(false);
+  };
 
   const filteredCompanies = companies.filter((company) => {
-    const query = searchQuery.toLowerCase();
+    const query = searchQuery.trim().toLowerCase();
     const matchSearch = searchQuery
       ? company.name.toLowerCase().includes(query) ||
-      company.code.toLowerCase().includes(query)
+      company.code.toLowerCase().includes(query) ||
+      (company.email ?? "").toLowerCase().includes(query)
       : true;
     const matchStatus =
       statusFilter !== "all"
@@ -349,7 +366,7 @@ function CompanyList() {
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative w-full sm:w-64">
             <Input
-              placeholder="Search company name or code..."
+              placeholder="Search by company name, code or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-64 pr-8"
@@ -397,8 +414,12 @@ function CompanyList() {
             <Dialog
               open={open}
               onOpenChange={(value) => {
-                setOpen(value);
-                if (value) setErrors({});
+                if (value) {
+                  setOpen(true);
+                  setErrors({});
+                } else {
+                  handleClose();
+                }
               }}
             >
               <DialogTrigger asChild>
@@ -507,7 +528,13 @@ function CompanyList() {
       </div>
 
       {/* Assign Admin Dialog */}
-      <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
+      <Dialog open={assignOpen} onOpenChange={(value) => {
+        if (value) {
+          setAssignOpen(true);
+        } else {
+          handleAssignClose();
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Assign Company Admin - {selectedCompany?.name}</DialogTitle>
@@ -522,14 +549,36 @@ function CompanyList() {
           </div>
           <div>
             <Label>Email</Label>
-            <Input type="email" placeholder="admin@company.com" name="email" value={adminForm.email} onChange={handleAdminChange} />
+            <Input type="email" placeholder="admin@company.com..." name="email" autoComplete="off" value={adminForm.email} onChange={handleAdminChange} />
             {adminErrors.email && (
               <p className="mt-1 text-sm text-red-500">{adminErrors.email}</p>
             )}
           </div>
           <div>
             <Label>Password</Label>
-            <Input type="password" placeholder="Password" name="password" value={adminForm.password} onChange={handleAdminChange} />
+            <div className="relative">
+              <Input
+                type={showAdminPassword ? "text" : "password"}
+                placeholder="Password"
+                name="password"
+                value={adminForm.password}
+                onChange={handleAdminChange}
+                className="pr-10"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowAdminPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                aria-label={showAdminPassword ? "Hide password" : "Show password"}
+              >
+                {showAdminPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
             {adminErrors.password && (
               <p className="mt-1 text-sm text-red-500">{adminErrors.password}</p>
             )}
@@ -777,6 +826,9 @@ function CompanyList() {
                             onClick={() => {
                               setSelectedCompanyId(company.id);
                               setSelectedCompany(company);
+                              setAdminForm({ name: "", email: "", password: "" });
+                              setAdminErrors({});
+                              setShowAdminPassword(false);
                               setAssignOpen(true);
                             }}
                           >

@@ -14,52 +14,88 @@ export const getCompanyRoles = async (companyId: string | null, isSuperAdmin: bo
 };
 
 // Naya role banao
+
+
+
 export const createRole = async (
-    companyId: string,
+    companyId: string | null,
     data: {
         name: string;
         description?: string;
     }
 ) => {
-    // Same name already exist?
+    const name = data.name?.trim();
+
+    if (!name) {
+        throw new Error("Role name is required");
+    }
+
+    if (name.length > 100) {
+        throw new Error("Role name cannot exceed 100 characters");
+    }
+
     const existing = await prisma.role.findFirst({
         where: {
-            name: data.name,
+            name: {
+                equals: name,
+                mode: "insensitive",
+            },
             companyId,
         },
+        select: { id: true, name: true },
     });
 
-    if (existing) throw new Error("Role already exists");
+    if (existing) {
+        throw new Error(
+            `Role "${existing.name}" already exists${companyId ? " in this company" : " globally"
+            }`
+        );
+    }
 
-    // Role banao
-    const role = await prisma.role.create({
-        data: {
-            name: data.name,
-            description: data.description ?? null,
-            isActive: true,
-            companyId,
-        }
-    });
-
-    // Default permissions - sab false
     const allModules = await prisma.module.findMany({
-        include: { children: true },
+        where: { isActive: true },
+        select: { id: true },
     });
 
-    await prisma.permission.createMany({
-        data: allModules.map((mod) => ({
-            roleId: role.id,
-            moduleId: mod.id,
-            companyId,
-            canView: false,
-            canCreate: false,
-            canEdit: false,
-            canDelete: false,
-        })),
-        skipDuplicates: true,
-    });
+    try {
+        return await prisma.$transaction(async (tx) => {
+            const role = await tx.role.create({
+                data: {
+                    name,
+                    description: data.description?.trim() || null,
+                    isActive: true,
+                    companyId,
+                },
+            });
 
-    return role;
+            await tx.permission.createMany({
+                data: allModules.map((module) => ({
+                    roleId: role.id,
+                    moduleId: module.id,
+                    companyId,
+                    canView: false,
+                    canCreate: false,
+                    canEdit: false,
+                    canDelete: false,
+                })),
+                skipDuplicates: true,
+            });
+
+            return role;
+        });
+    } catch (error: unknown) {
+        if (
+            error instanceof Error &&
+            "code" in error &&
+            error.code === "P2002"
+        ) {
+            throw new Error(
+                `Role "${name}" already exists in this scope`
+            );
+        }
+
+        throw error;
+    }
 };
 
 // Role ki permissions dekho

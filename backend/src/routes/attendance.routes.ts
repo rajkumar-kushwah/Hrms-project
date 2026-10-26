@@ -25,7 +25,7 @@ router.get("/live", protect, authorize("attendance_live", "canView"), getLiveAtt
 // monthly attendance
 router.get("/employee/:userId", protect, authorize("attendance_list", "canView"), getEmployeeAttendance);
 
-router.get("/monthly-sheet", protect,  getMonthlySheet);
+router.get("/monthly-sheet", protect, authorize("attendance_list", "canView"), getMonthlySheet);
 
 export default router;
 

@@ -1,18 +1,50 @@
+
 import type { Request, Response } from "express";
 import * as BranchService from "../services/branch.service.js";
+import {
+    getCompanyId,
+    isSuperAdminRole,
+} from "../utilis/roleUtils.js";
+import {
+    isDatabaseUnavailable,
+    sendDatabaseUnavailable,
+} from "../utilis/dbErrors.js";
 
-const normalizeName = (value?: string | null) => {
-    return value
-        ?.trim()
-        .toLowerCase()
-        .replace(/\s+/g, "_")
-        .replace(/_+/g, "_");
+// Resolve company context from the logged-in user.
+const resolveCompanyId = (req: Request): string | null =>
+    isSuperAdminRole(req.user?.role?.name) ? null : getCompanyId(req);
+
+// Handle controller errors consistently.
+const handleBranchError = (
+    res: Response,
+    error: unknown,
+    statusCode = 400
+) => {
+    if (isDatabaseUnavailable(error)) {
+        return sendDatabaseUnavailable(res);
+    }
+
+    const message =
+        error instanceof Error ? error.message : "An unexpected error occurred";
+
+    return res.status(statusCode).json({
+        success: false,
+        message,
+    });
 };
 
-// create branch
+// Create branch
 export const createBranch = async (req: Request, res: Response) => {
     try {
-        const companyId = req.user?.companyId!;
+        const companyId = getCompanyId(req);
+
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Company not found in session",
+            });
+        }
+
         const branch = await BranchService.createBranch(companyId, req.body);
 
         return res.status(201).json({
@@ -20,129 +52,150 @@ export const createBranch = async (req: Request, res: Response) => {
             message: "Branch created successfully",
             data: branch,
         });
-    } catch (error: any) {
-        return res.status(400).json({ success: false, message: error.message });
+    } catch (error: unknown) {
+        return handleBranchError(res, error);
     }
-}
+};
 
-// Get all branch
+// Get all branches
 export const getBranches = async (req: Request, res: Response) => {
     try {
-        const roleName = req.user?.role?.name;
-        const normalizedRole = roleName ? normalizeName(roleName) : "";
-        const companyId = normalizedRole === "super_admin" ? null : req.user?.companyId!;
-
+        const companyId = resolveCompanyId(req);
         const branches = await BranchService.getAllBranches(companyId);
 
         return res.status(200).json({
             success: true,
-            data: branches
+            data: branches,
         });
-    } catch (error: any) {
-        return res.status(500).json({ success: false, message: error.message });
+    } catch (error: unknown) {
+        return handleBranchError(res, error, 500);
     }
-}
+};
 
-// get single branch
+// Get branch by ID
 export const getBranchById = async (req: Request, res: Response) => {
     try {
-        const id = (req.params.id as string);
-        const roleName = req.user?.role?.name;
-        const normalizedRole = roleName ? normalizeName(roleName) : "";
-        const companyId = normalizedRole === "super_admin" ? null : req.user?.companyId!;
+        const id = req.params.id as string;
 
-        if (!id) return res.status(400).json({ success: false, message: "Invalid branch id" });
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid branch id",
+            });
+        }
 
-        const branch = await BranchService.getBranchById(id, companyId);
+        const branch = await BranchService.getBranchById(
+            id,
+            resolveCompanyId(req)
+        );
 
         return res.status(200).json({
             success: true,
-            data: branch
+            data: branch,
         });
-    } catch (error: any) {
-        return res.status(404).json({ success: false, message: error.message });
+    } catch (error: unknown) {
+        return handleBranchError(res, error, 404);
     }
-}
+};
 
-
-// update branch
+// Update branch
 export const updateBranch = async (req: Request, res: Response) => {
     try {
-        const id = (req.params.id as string);
-        const roleName = req.user?.role?.name;
-        const normalizedRole = roleName ? normalizeName(roleName) : "";
-        const companyId = normalizedRole === "super_admin" ? null : req.user?.companyId!;
+        const id = req.params.id as string;
 
-        if (!id) return res.status(400).json({ success: false, message: "Invalid branch id" });
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid branch id",
+            });
+        }
 
-        const branch = await BranchService.updateBranch(id, companyId, req.body);
-  
+        const branch = await BranchService.updateBranch(
+            id,
+            resolveCompanyId(req),
+            req.body
+        );
+
         return res.status(200).json({
             success: true,
             message: "Branch updated successfully",
-            data: branch
+            data: branch,
         });
-    } catch (error: any) {
-        return res.status(400).json({ success: false, message: error.message });
+    } catch (error: unknown) {
+        return handleBranchError(res, error);
     }
-}
+};
 
-// delete branch
+// Delete branch
 export const deleteBranch = async (req: Request, res: Response) => {
     try {
-        const id = (req.params.id as string);
-        const roleName = req.user?.role?.name;
-        const normalizedRole = roleName ? normalizeName(roleName) : "";
-        const companyId = normalizedRole === "super_admin" ? null : req.user?.companyId!;
+        const id = req.params.id as string;
 
-        if (!id) return res.status(400).json({ success: false, message: "Invalid branch id" });
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid branch id",
+            });
+        }
 
-        const result = await BranchService.deleteBranch(id, companyId);
+        const result = await BranchService.deleteBranch(
+            id,
+            resolveCompanyId(req)
+        );
 
         return res.status(200).json({
             success: true,
-            message: result.message
+            message: result.message,
         });
-    } catch (error: any) {
-        return res.status(400).json({ success: false, message: error.message });
+    } catch (error: unknown) {
+        return handleBranchError(res, error);
     }
-}
+};
 
-// parmanent delete branch
-export const permanentDeleteBranch = async (req: Request, res: Response) => {
+// Permanently delete branch
+export const permanentDeleteBranch = async (
+    req: Request,
+    res: Response
+) => {
     try {
-        const id = (req.params.id as string);
-        const roleName = req.user?.role?.name;
-        const normalizedRole = roleName ? normalizeName(roleName) : "";
-        const companyId = normalizedRole === "super_admin" ? null : req.user?.companyId!;
+        const id = req.params.id as string;
 
-        if (!id) return res.status(400).json({ success: false, message: "Invalid branch id" });
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid branch id",
+            });
+        }
 
-        const result = await BranchService.permanentDeleteBranch(id, companyId);
+        const result = await BranchService.permanentDeleteBranch(
+            id,
+            resolveCompanyId(req)
+        );
 
         return res.status(200).json({
             success: true,
-            message: result.message
+            message: result.message,
         });
-    } catch (error: any) {
-        return res.status(400).json({ success: false, message: error.message });
+    } catch (error: unknown) {
+        return handleBranchError(res, error);
     }
-}
+};
 
-// getGeoFencing
-export const getGeoFencingOverview = async (req: Request, res: Response) => {
+// Get geofencing overview
+export const getGeoFencingOverview = async (
+    req: Request,
+    res: Response
+) => {
     try {
-        const roleName = req.user?.role?.name;
-        const normalizedRole = roleName ? normalizeName(roleName) : "";
-        const companyId = normalizedRole === "super_admin" ? null : req.user?.companyId!;
-
-        const result = await BranchService.getGeoFencingOverview(companyId);
+        const result = await BranchService.getGeoFencingOverview(
+            resolveCompanyId(req)
+        );
 
         return res.status(200).json({
             success: true,
-            data: result
+            data: result,
         });
-    } catch (error: any) {
-        return res.status(500).json({ success: false, message: error.message });
+    } catch (error: unknown) {
+        return handleBranchError(res, error, 500);
     }
-}
+};

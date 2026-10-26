@@ -130,22 +130,22 @@ const DOCUMENT_TYPES: {
   label: string;
   description: string;
 }[] = [
-  {
-    value: "FILE_UPLOAD",
-    label: "File Upload",
-    description: "Employee uploads a document file.",
-  },
-  {
-    value: "DOCUMENT_NUMBER",
-    label: "Document Number",
-    description: "Employee enters a document number.",
-  },
-  {
-    value: "EITHER",
-    label: "File or Number",
-    description: "Employee can provide either one.",
-  },
-];
+    {
+      value: "FILE_UPLOAD",
+      label: "File Upload",
+      description: "Employee uploads a document file.",
+    },
+    {
+      value: "DOCUMENT_NUMBER",
+      label: "Document Number",
+      description: "Employee enters a document number.",
+    },
+    {
+      value: "EITHER",
+      label: "File or Number",
+      description: "Employee can provide either one.",
+    },
+  ];
 
 function getErrorMessage(error: unknown): string {
   if (typeof error === "object" && error !== null && "response" in error) {
@@ -329,7 +329,10 @@ export default function OnboardingChecklistSettings() {
         return;
       }
 
-      if (requestInProgress.current) return;
+      if (requestInProgress.current) {
+        if (!showRefresh) return;
+        setRefreshing(true);
+      }
 
       requestInProgress.current = true;
       const requestId = ++requestIdRef.current;
@@ -612,9 +615,8 @@ export default function OnboardingChecklistSettings() {
             }
           >
             <RefreshCw
-              className={`mr-2 h-4 w-4 ${
-                loading || refreshing ? "animate-spin" : ""
-              }`}
+              className={`mr-2 h-4 w-4 ${loading || refreshing ? "animate-spin" : ""
+                }`}
             />
             Refresh
           </Button>
@@ -986,10 +988,9 @@ export default function OnboardingChecklistSettings() {
               <DialogDescription>
                 {editingItem
                   ? "Update the checklist requirement and document settings."
-                  : `Create a default checklist item for the ${
-                      STAGES.find((stage) => stage.value === activeStage)
-                        ?.label
-                    } stage.`}
+                  : `Create a default checklist item for the ${STAGES.find((stage) => stage.value === activeStage)
+                    ?.label
+                  } stage.`}
               </DialogDescription>
             </DialogHeader>
 

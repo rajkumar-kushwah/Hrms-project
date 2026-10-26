@@ -1,12 +1,12 @@
+
 import { prisma } from "../config/db.js";
 
-
-// create branch
+// Create branch
 export const createBranch = async (
     companyId: string,
     data: {
         name: string;
-        code: string;
+        code?: string;
         address?: string;
         phone?: string;
         email?: string;
@@ -20,83 +20,89 @@ export const createBranch = async (
         locationName?: string;
     }
 ) => {
-
-    const lastBranch = await prisma.branch.findFirst({
-        where: { companyId },
-        orderBy: {
-            code: "desc",
-        },
-        select: {
-            code: true,
+    const existingName = await prisma.branch.findFirst({
+        where: {
+            companyId,
+            name: data.name.trim(),
         },
     });
 
-    let nextNumber = 1;
-
-    if (lastBranch?.code) {
-        nextNumber =
-            parseInt(lastBranch.code.replace("BR", "")) + 1;
+    if (existingName) {
+        throw new Error("Branch name already exists in this company.");
     }
 
+    // Generate the next branch code for this company.
+    const lastBranch = await prisma.branch.findFirst({
+        where: { companyId },
+        orderBy: { code: "desc" },
+        select: { code: true },
+    });
+
+    const lastNumber = lastBranch?.code?.match(/^BR(\d+)$/);
+    const nextNumber = lastNumber ? Number(lastNumber[1]) + 1 : 1;
     const code = `BR${String(nextNumber).padStart(3, "0")}`;
 
-    // code duplicat chek same company mein
-    const codeCheck = await prisma.branch.findUnique({
-        where: {
-            code_companyId: {
-                code,
-                companyId,
-            }
-        }
+    const codeCheck = await prisma.branch.findFirst({
+        where: { companyId, code },
     });
-    if (codeCheck) throw new Error("Branch code already exists in this company.");
 
-    // Branch banao
-    const branch = await prisma.branch.create({
+    if (codeCheck) {
+        throw new Error("Branch code already exists in this company.");
+    }
+
+    return prisma.branch.create({
         data: {
             ...data,
+            name: data.name.trim(),
             code,
             companyId,
-        }
-    });
-
-    return branch;
-}
-
-// Get all branches
-export const getAllBranches = async (companyId: string | null) => {
-    return await prisma.branch.findMany({
-        where: {
-            ...(companyId ? { companyId } : {}),
         },
         include: {
             company: {
-                select: { id: true, name: true }
-            }
+                select: { id: true, name: true },
+            },
         },
-        orderBy: { createdAt: "desc" }
+    });
+};
+
+// Get all branches
+export const getAllBranches = async (companyId: string | null) => {
+    return prisma.branch.findMany({
+        where: companyId ? { companyId } : {},
+        include: {
+            company: {
+                select: { id: true, name: true },
+            },
+        },
+        orderBy: { createdAt: "desc" },
     });
 };
 
 // Get single branch
-export const getBranchById = async (id: string, companyId: string | null) => {
-    const branch = await prisma.branch.findUnique({
+export const getBranchById = async (
+    id: string,
+    companyId: string | null
+) => {
+    const branch = await prisma.branch.findFirst({
         where: {
             id,
             ...(companyId ? { companyId } : {}),
         },
         include: {
             company: {
-                select: { id: true, name: true }
-            }
-        }
+                select: { id: true, name: true },
+            },
+        },
     });
-    if (!branch) throw new Error("Branch not found");
+
+    if (!branch) {
+        throw new Error("Branch not found");
+    }
+
     return branch;
+};
 
-}
-
-// Update Branch
+// Update branch
 export const updateBranch = async (
     id: string,
     companyId: string | null,
@@ -116,70 +122,126 @@ export const updateBranch = async (
         locationName?: string;
     }
 ) => {
-    const existing = await prisma.branch.findUnique({
+    const existing = await prisma.branch.findFirst({
         where: {
             id,
             ...(companyId ? { companyId } : {}),
-        }
+        },
     });
-    if (!existing) throw new Error("Branch not found");
 
-    return await prisma.branch.update({
-        where: { id },
+    if (!existing) {
+        throw new Error("Branch not found");
+    }
+
+    if (data.name !== undefined) {
+        const duplicate = await prisma.branch.findFirst({
+            where: {
+                companyId: existing.companyId,
+                name: data.name.trim(),
+                id: { not: id },
+            },
+        });
+
+        if (duplicate) {
+            throw new Error("Branch name already exists in this company.");
+        }
+
+        data.name = data.name.trim();
+    }
+
+    return prisma.branch.update({
+        where: { id: existing.id },
         data,
+        include: {
+            company: {
+                select: { id: true, name: true },
+            },
+        },
     });
 };
 
-// Delete Branch
-export const deleteBranch = async (id: string, companyId: string | null) => {
-    const existing = await prisma.branch.findUnique({
+// Soft delete branch
+export const deleteBranch = async (
+    id: string,
+    companyId: string | null
+) => {
+    const existing = await prisma.branch.findFirst({
         where: {
             id,
             ...(companyId ? { companyId } : {}),
-        }
+        },
     });
-    if (!existing) throw new Error("Branch not found");
+
+    if (!existing) {
+        throw new Error("Branch not found");
+    }
+
+    if (!existing.isActive) {
+        throw new Error("Branch is already deactivated.");
+    }
 
     await prisma.branch.update({
-        where: { id },
-        data: { isActive: false }
+        where: { id: existing.id },
+        data: { isActive: false },
     });
 
     return { message: "Branch deactivated successfully" };
-}
+};
 
-// Danger Zone - Delete branch permanently
-export const permanentDeleteBranch = async (id: string, companyId: string | null) => {
-    const branch = await prisma.branch.findUnique({
+// Permanently delete branch
+export const permanentDeleteBranch = async (
+    id: string,
+    companyId: string | null
+) => {
+    const branch = await prisma.branch.findFirst({
         where: {
             id,
             ...(companyId ? { companyId } : {}),
         },
         include: {
-            _count: { select: { users: true } }
-        }
+            _count: {
+                select: { users: true },
+            },
+        },
     });
 
-    if (!branch) throw new Error("Branch not found");
-
-    // Ager Employee hai to delete mat kro
-    if (branch._count.users > 0) {
-        throw new Error(`Branch delete - ${branch._count.users} employees Assigned to this branch`);
+    if (!branch) {
+        throw new Error("Branch not found");
     }
 
-    // Category check 
+    const employeeCount = branch._count.users;
+
+    if (employeeCount > 0) {
+        throw new Error(
+            `Cannot delete branch: ${employeeCount} ${
+                employeeCount === 1 ? "employee is" : "employees are"
+            } assigned to this branch.`
+        );
+    }
+
     const categoryCount = await prisma.category.count({
-        where: { branchId: id }
+        where: { branchId: id },
     });
-    if (categoryCount > 0) {
-        throw new Error(`Category delete - ${categoryCount} category exits under this branch`);
-    }
-    await prisma.branch.delete({ where: { id } });
-    return { message: "Branch permanently deleted" };
-}
 
-// getGeoFencingOverview
-export const getGeoFencingOverview = async (companyId: string | null) => {
+    if (categoryCount > 0) {
+        throw new Error(
+            `Cannot delete branch: ${categoryCount} ${
+                categoryCount === 1 ? "category exists" : "categories exist"
+            } under this branch.`
+        );
+    }
+
+    await prisma.branch.delete({
+        where: { id: branch.id },
+    });
+
+    return { message: "Branch permanently deleted successfully" };
+};
+
+// Get geofencing overview
+export const getGeoFencingOverview = async (
+    companyId: string | null
+) => {
     const branches = await prisma.branch.findMany({
         where: {
             ...(companyId ? { companyId } : {}),
@@ -193,29 +255,60 @@ export const getGeoFencingOverview = async (companyId: string | null) => {
             longitude: true,
             geoRadius: true,
             locationName: true,
-            _count: { select: { users: true } }
-        }
+            _count: {
+                select: { users: true },
+            },
+        },
     });
+
+    if (branches.length === 0) {
+        return [];
+    }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const todayattendance = await prisma.attendance.findMany({
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayAttendance = await prisma.attendance.findMany({
         where: {
-            branchId: { in: branches.map((branch) => branch.id) },
-            date: today,
+            branchId: {
+                in: branches.map((branch) => branch.id),
+            },
+            date: {
+                gte: today,
+                lt: tomorrow,
+            },
             punchInTime: { not: null },
         },
         select: {
             branchId: true,
             isWithinGeoFence: true,
             punchInTime: true,
-            user: { select: { id: true, name: true, employeeCode: true } },
-        }
+            user: {
+                select: {
+                    id: true,
+                    name: true,
+                    employeeCode: true,
+                },
+            },
+        },
     });
 
     return branches.map((branch) => {
-        const branchAttendance = todayattendance.filter((a) => a.branchId === branch.id);
+        const branchAttendance = todayAttendance.filter(
+            (attendance) => attendance.branchId === branch.id
+        );
+
+        const insideFence = branchAttendance.filter(
+            (attendance) => attendance.isWithinGeoFence === true
+        ).length;
+
+        const outsideFence = branchAttendance.filter(
+            (attendance) => attendance.isWithinGeoFence === false
+        ).length;
+
         return {
             id: branch.id,
             name: branch.name,
@@ -225,15 +318,15 @@ export const getGeoFencingOverview = async (companyId: string | null) => {
             geoRadius: branch.geoRadius,
             locationName: branch.locationName,
             totalEmployees: branch._count.users,
-            insideFence: branchAttendance.filter(a => a.isWithinGeoFence).length,
-            outsideFence: branchAttendance.filter(a => !a.isWithinGeoFence).length,
+            insideFence,
+            outsideFence,
             totalPunchedInToday: branchAttendance.length,
-             employees: branchAttendance.map(a => ({
-                id: a.user.id,
-                name: a.user.name,
-                employeeCode: a.user.employeeCode,
-                isWithinGeoFence: a.isWithinGeoFence,
-                punchInTime: a.punchInTime,
+            employees: branchAttendance.map((attendance) => ({
+                id: attendance.user.id,
+                name: attendance.user.name,
+                employeeCode: attendance.user.employeeCode,
+                isWithinGeoFence: attendance.isWithinGeoFence,
+                punchInTime: attendance.punchInTime,
             })),
         };
     });

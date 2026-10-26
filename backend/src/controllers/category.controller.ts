@@ -1,81 +1,184 @@
+
 import type { Request, Response } from "express";
 import * as CategoryService from "../services/category.service.js";
+import {
+    getCompanyId,
+    isSuperAdminRole,
+} from "../utilis/roleUtils.js";
+import {
+    isDatabaseUnavailable,
+    sendDatabaseUnavailable,
+} from "../utilis/dbErrors.js";
 
+const resolveCompanyId = (req: Request): string | null =>
+    isSuperAdminRole(req.user?.role?.name) ? null : getCompanyId(req);
 
-// create category controller
+const handleCategoryError = (
+    res: Response,
+    error: unknown,
+    statusCode = 400
+) => {
+    if (isDatabaseUnavailable(error)) {
+        return sendDatabaseUnavailable(res);
+    }
+
+    const message =
+        error instanceof Error ? error.message : "An unexpected error occurred";
+
+    return res.status(statusCode).json({
+        success: false,
+        message,
+    });
+};
+
+// Create category
 export const createCategory = async (req: Request, res: Response) => {
     try {
-        const companyId = req.user?.companyId!;
-        const category = await CategoryService.createCategory(companyId, req.body);
+        const companyId = getCompanyId(req);
 
-        res.status(201).json({
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Company not found in session",
+            });
+        }
+
+        const category = await CategoryService.createCategory(
+            companyId,
+            req.body
+        );
+
+        return res.status(201).json({
             success: true,
             message: "Category created successfully",
-            data: category
+            data: category,
         });
-    } catch (error: any) {
-        res.status(400).json({ success: false, message: error.message });
+    } catch (error: unknown) {
+        return handleCategoryError(res, error);
     }
-}
+};
 
+// Get all categories
 export const getCategories = async (req: Request, res: Response) => {
     try {
-        const companyId = req.user?.role?.name === "super_admin" ? null : req.user?.companyId!;
-        const categories = await CategoryService.getCategories(companyId);
+        const categories = await CategoryService.getCategories(
+            resolveCompanyId(req)
+        );
 
-        res.status(200).json({ success: true, data: categories });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(200).json({
+            success: true,
+            data: categories,
+        });
+    } catch (error: unknown) {
+        return handleCategoryError(res, error, 500);
     }
-}
+};
 
+// Get category by ID
 export const getCategoryById = async (req: Request, res: Response) => {
     try {
-        const id = (req.params.id as string);
-        const category = await CategoryService.getCategoryById(id);
+        const id = req.params.id as string;
 
-        return res.status(200).json({ success: true, data: category });
-    } catch (error: any) {
-        return res.status(404).json({ success: false, message: error.message });
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid category id",
+            });
+        }
+
+        const category = await CategoryService.getCategoryById(
+            id,
+            resolveCompanyId(req)
+        );
+
+        return res.status(200).json({
+            success: true,
+            data: category,
+        });
+    } catch (error: unknown) {
+        return handleCategoryError(res, error, 404);
     }
-}
+};
 
+// Update category
 export const updateCategory = async (req: Request, res: Response) => {
     try {
-        const id = (req.params.id as string);
-        const category = await CategoryService.updateCategory(id, req.body);
+        const id = req.params.id as string;
+
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid category id",
+            });
+        }
+
+        const category = await CategoryService.updateCategory(
+            id,
+            resolveCompanyId(req),
+            req.body
+        );
 
         return res.status(200).json({
             success: true,
             message: "Category updated successfully",
-            data: category
+            data: category,
         });
-    } catch (error: any) {
-        return res.status(400).json({ success: false, message: error.message });
+    } catch (error: unknown) {
+        return handleCategoryError(res, error);
     }
-}
+};
 
-// delte category controller
+// Delete category
 export const deleteCategory = async (req: Request, res: Response) => {
     try {
-        const id = (req.params.id as string);
-        const result = await CategoryService.deleteCategory(id);
+        const id = req.params.id as string;
 
-        return res.status(200).json({ success: true, message: result.message });
-    } catch (error: any) {
-        return res.status(400).json({ success: false, message: error.message });
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid category id",
+            });
+        }
+
+        const result = await CategoryService.deleteCategory(
+            id,
+            resolveCompanyId(req)
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+        });
+    } catch (error: unknown) {
+        return handleCategoryError(res, error);
     }
-}
+};
 
-// permanent delete category controller
-export const permanentDeleteCategory = async (req: Request, res: Response) => {
+// Permanently delete category
+export const permanentDeleteCategory = async (
+    req: Request,
+    res: Response
+) => {
     try {
-        const id = (req.params.id as string);
-        if (!id) return res.status(400).json({ success: false, message: "Invalid category id" });
-        const result = await CategoryService.permanentDeleteCategory(id);
+        const id = req.params.id as string;
 
-        return res.status(200).json({ success: true, message: result.message });
-    } catch (error: any) {
-        return res.status(400).json({ success: false, message: error.message });
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid category id",
+            });
+        }
+
+        const result = await CategoryService.permanentDeleteCategory(
+            id,
+            resolveCompanyId(req)
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: result.message,
+        });
+    } catch (error: unknown) {
+        return handleCategoryError(res, error);
     }
-}
+};
