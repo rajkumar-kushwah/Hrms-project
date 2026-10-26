@@ -8,8 +8,11 @@ import {
     setStageManually,
     setOnboardingStatus,
     resetEmployeeOnboarding,
-    submitChecklistDocumentController
+    submitChecklistDocumentController,
+    uploadOnboardingDocument,
+    handleOnboardingUploadError
 } from "../controllers/Onboarding.controller.js";
+import onboardingUpload from "../middleware/onboardingUpload.middleware.js";
 
 const router = Router();
 
@@ -21,6 +24,14 @@ router.patch("/:userId/status", protect, setOnboardingStatus);
 router.patch("/item/:itemId/toggle", protect, toggleChecklistItem);
 router.delete("/:userId/reset", protect, resetEmployeeOnboarding);
 router.post("/checklist/:itemId/submit-document", protect, submitChecklistDocumentController);
+router.post(
+    "/:itemId/upload-document",
+    protect,
+    onboardingUpload.single("file"),
+    uploadOnboardingDocument,
+    handleOnboardingUploadError
+);
+
 
 export default router;
 

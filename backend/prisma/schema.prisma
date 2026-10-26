@@ -327,41 +327,44 @@ model Onboarding {
 }
 
 model OnboardingChecklistItem {
-  id                String             @id @default(uuid())
+  id                String                       @id @default(uuid())
   onboardingId      String
+  templateId        String?
   stage             OnboardingStage
   title             String
   description       String?
-  isRequired        Boolean            @default(true)
-  order             Int                @default(0)
-  isCompleted       Boolean            @default(false)
+  isRequired        Boolean                      @default(true)
+  order             Int                          @default(0)
+  isCompleted       Boolean                      @default(false)
   completedAt       DateTime?
   completedBy       String?
-  requiresDocument  Boolean            @default(false)
+  requiresDocument  Boolean                      @default(false)
   documentUrl       String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
   documentInputType DocumentInputType?
   documentNumber    String?
-  onboarding        Onboarding         @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+  onboarding        Onboarding                   @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+  template          OnboardingChecklistTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
   @@index([onboardingId])
 }
 
 model OnboardingChecklistTemplate {
-  id                String             @id @default(uuid())
+  id                String                    @id @default(uuid())
   companyId         String
   stage             OnboardingStage
   title             String
   description       String?
-  isRequired        Boolean            @default(true)
-  order             Int                @default(0)
-  requiresDocument  Boolean            @default(false)
-  isActive          Boolean            @default(true)
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  isRequired        Boolean                   @default(true)
+  order             Int                       @default(0)
+  requiresDocument  Boolean                   @default(false)
+  isActive          Boolean                   @default(true)
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
   documentInputType DocumentInputType?
-  company           Company            @relation(fields: [companyId], references: [id])
+  company           Company                   @relation(fields: [companyId], references: [id])
+  onboardingItems   OnboardingChecklistItem[]
 
   @@index([companyId, stage])
 }

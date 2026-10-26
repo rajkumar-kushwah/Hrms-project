@@ -74,3 +74,44 @@ export const submitChecklistDocument = async (
 
     return response.data;
 };
+
+
+
+
+
+// export const uploadOnboardingDocument = async (
+//     file: File,
+//     itemId: string
+// ): Promise<{ data: { url: string; publicId?: string } }> => {
+//     const formData = new FormData();
+//     formData.append("file", file);
+
+//     const response = await api.post(
+//         `/onboarding/${itemId}/upload-document`,
+//         formData
+//     );
+
+//     return {
+//         data: {
+//             url: response.data.data.url,
+//             ...(response.data.data.publicId
+//                 ? { publicId: response.data.data.publicId }
+//                 : {}),
+//         },
+//     };
+// };
+
+export const uploadOnboardingDocument = async (
+    file: File,
+    itemId: string
+) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await api.post(
+        `/onboarding/${itemId}/upload-document`,
+        formData
+    );
+
+    return response.data;
+};

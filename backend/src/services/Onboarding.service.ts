@@ -22,20 +22,22 @@ const nextStage = (current: Stage): Stage | null => {
 
 export const startOnboarding = async (
     userId: string,
-    companyId: string,
+    companyId: string | null,
     targetDate?: Date,
     notes?: string
 ) => {
     const user = await prisma.user.findFirst({
         where: {
             id: userId,
-            companyId,
+            ...(companyId !== null ? { companyId } : {}),
         },
     });
 
-    if (!user) {
-        throw new Error("Employee not found in this company");
+    if (!user || !user.companyId) {
+        throw new Error("Employee not found or company not assigned");
     }
+
+    const actualCompanyId = user.companyId;
 
     const existing = await prisma.onboarding.findUnique({
         where: { userId },
@@ -44,11 +46,18 @@ export const startOnboarding = async (
     if (existing) {
         throw new Error("Onboarding already started for this employee");
     }
+    const requiredStages = [
+        "OFFER",
+        "JOINING",
+        "DOCUMENTS",
+        "TRAINING",
+        "ACTIVE",
+    ] as const;
 
     const templateItems =
         await prisma.onboardingChecklistTemplate.findMany({
             where: {
-                companyId,
+                companyId: actualCompanyId,
                 isActive: true,
             },
             orderBy: [
@@ -57,9 +66,16 @@ export const startOnboarding = async (
             ],
         });
 
-    if (templateItems.length === 0) {
+    const missingStages = requiredStages.filter(
+        (stage) =>
+            !templateItems.some(
+                (item) => item.stage === stage && item.isRequired
+            )
+    );
+
+    if (missingStages.length > 0) {
         throw new Error(
-            "Onboarding checklist templates are not configured for this company"
+            `Active checklist templates missing for: ${missingStages.join(", ")}. Please configure the onboarding checklist templates first.`
         );
     }
 
@@ -67,7 +83,7 @@ export const startOnboarding = async (
         const onboarding = await tx.onboarding.create({
             data: {
                 userId,
-                companyId,
+                companyId: actualCompanyId,
                 currentStage: "OFFER",
                 status: "IN_PROGRESS",
                 ...(targetDate !== undefined && { targetDate }),
@@ -75,6 +91,7 @@ export const startOnboarding = async (
 
                 items: {
                     create: templateItems.map((template) => ({
+                        templateId: template.id,
                         stage: template.stage,
                         title: template.title,
                         description: template.description,
@@ -94,6 +111,7 @@ export const startOnboarding = async (
             where: { id: userId },
             data: {
                 employmentStatus: "ONBOARDING",
+                isActive: false,
             },
         });
 
@@ -108,11 +126,11 @@ export const startOnboarding = async (
 // with progress % for a quick overview table.
 // ─────────────────────────────────────────────────────────────
 
-export const getOnboardingList = async (companyId: string, status?: OnboardingStatus) => {
+export const getOnboardingList = async (companyId: string | null, status?: OnboardingStatus) => {
     const onboardings = await prisma.onboarding.findMany({
         where: {
-            companyId,
-            ...(status && { status }),
+            ...(companyId !== null ? { companyId } : {}),
+            ...(status ? { status } : {}),
         },
         include: {
             user: {
@@ -149,7 +167,7 @@ export const getOnboardingList = async (companyId: string, status?: OnboardingSt
 // Detail — full checklist for one employee, grouped by stage
 // ─────────────────────────────────────────────────────────────
 
-export const getOnboardingDetail = async (userId: string, companyId: string) => {
+export const getOnboardingDetail = async (userId: string, companyId: string | null) => {
     const onboarding = await prisma.onboarding.findUnique({
         where: { userId },
         include: {
@@ -160,8 +178,11 @@ export const getOnboardingDetail = async (userId: string, companyId: string) => 
         },
     });
 
-    if (!onboarding || onboarding.companyId !== companyId) {
-        throw new Error("Onboarding record not found");
+    if (
+        !onboarding ||
+        (companyId !== null && onboarding.companyId !== companyId)
+    ) {
+        throw new Error("Onboarding record not found or access denied");
     }
 
     const grouped: Record<string, typeof onboarding.items> = {};
@@ -234,7 +255,7 @@ export const getOnboardingDetail = async (userId: string, companyId: string) => 
 
 export const toggleChecklistItem = async (
     itemId: string,
-    companyId: string,
+    companyId: string | null,
     actingUserId: string
 ) => {
     const item = await prisma.onboardingChecklistItem.findUnique({
@@ -242,8 +263,18 @@ export const toggleChecklistItem = async (
         include: { onboarding: true },
     });
 
-    if (!item || item.onboarding.companyId !== companyId) {
-        throw new Error("Checklist item not found");
+    if (
+        !item ||
+        (companyId !== null && item.onboarding.companyId !== companyId)
+    ) {
+        throw new Error("Checklist item not found or access denied");
+    }
+
+    // Current onboarding stage check
+    if (item.stage !== item.onboarding.currentStage) {
+        throw new Error(
+            `You can only modify checklist items for the current stage: ${item.onboarding.currentStage}.`
+        );
     }
 
     if (item.onboarding.status === "ON_HOLD") {
@@ -335,7 +366,9 @@ const evaluateStageProgress = async (onboardingId: string): Promise<Onboarding> 
 
     // Khaali array par every() true deta hai, to jis stage mein required
     // item nahi hai wo bhi "done" maana jayega aur aage badh jayega
-    const allRequiredDone = requiredItems.every((i) => i.isCompleted);
+    const allRequiredDone =
+        requiredItems.length > 0 &&
+        requiredItems.every((i) => i.isCompleted);
 
     if (!allRequiredDone) return onboarding;
 
@@ -374,15 +407,18 @@ const evaluateStageProgress = async (onboardingId: string): Promise<Onboarding> 
 
 export const setStageManually = async (
     userId: string,
-    companyId: string,
+    companyId: string | null,
     stage: Stage
 ) => {
     const onboarding = await prisma.onboarding.findUnique({
         where: { userId },
     });
 
-    if (!onboarding || onboarding.companyId !== companyId) {
-        throw new Error("Onboarding record not found");
+    if (
+        !onboarding ||
+        (companyId !== null && onboarding.companyId !== companyId)
+    ) {
+        throw new Error("Onboarding record not found or access denied");
     }
 
     if (onboarding.status === "COMPLETED") {
@@ -407,15 +443,18 @@ export const setStageManually = async (
 
 export const setOnboardingStatus = async (
     userId: string,
-    companyId: string,
+    companyId: string | null,
     status: "IN_PROGRESS" | "ON_HOLD"
 ) => {
     const onboarding = await prisma.onboarding.findUnique({
         where: { userId },
     });
 
-    if (!onboarding || onboarding.companyId !== companyId) {
-        throw new Error("Onboarding record not found");
+    if (
+        !onboarding ||
+        (companyId !== null && onboarding.companyId !== companyId)
+    ) {
+        throw new Error("Onboarding record not found or access denied");
     }
 
     if (onboarding.status === "COMPLETED") {
@@ -434,14 +473,17 @@ export const setOnboardingStatus = async (
 
 export const resetOnboarding = async (
     userId: string,
-    companyId: string
+    companyId: string | null
 ) => {
     const onboarding = await prisma.onboarding.findUnique({
         where: { userId },
     });
 
-    if (!onboarding || onboarding.companyId !== companyId) {
-        throw new Error("Onboarding record not found");
+    if (
+        !onboarding ||
+        (companyId !== null && onboarding.companyId !== companyId)
+    ) {
+        throw new Error("Onboarding record not found or access denied");
     }
 
     if (onboarding.status === "COMPLETED") {
@@ -456,7 +498,8 @@ export const resetOnboarding = async (
         await tx.user.update({
             where: { id: userId },
             data: {
-                employmentStatus: "ACTIVE",
+                employmentStatus: "ONBOARDING",
+                isActive: false,
             },
         });
 
@@ -472,16 +515,16 @@ type SubmitChecklistDocumentInput = {
 
 export const submitChecklistDocument = async (
     itemId: string,
-    companyId: string,
+    companyId: string | null,
     actingUserId: string,
     data: SubmitChecklistDocumentInput
 ) => {
     const item = await prisma.onboardingChecklistItem.findFirst({
         where: {
             id: itemId,
-            onboarding: {
-                companyId,
-            },
+            ...(companyId !== null
+                ? { onboarding: { companyId } }
+                : {}),
         },
         include: {
             onboarding: true,
@@ -489,7 +532,13 @@ export const submitChecklistDocument = async (
     });
 
     if (!item) {
-        throw new Error("Checklist item not found.");
+        throw new Error("Checklist item not found or access denied");
+    }
+
+    if (item.stage !== item.onboarding.currentStage) {
+        throw new Error(
+            `You can only modify checklist items for the current stage: ${item.onboarding.currentStage}.`
+        );
     }
 
     if (
@@ -548,3 +597,5 @@ export const submitChecklistDocument = async (
 
     return updatedItem;
 };
+
+
