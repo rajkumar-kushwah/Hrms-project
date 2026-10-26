@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreVertical, Eye, EyeOff } from "lucide-react";
+import { MoreVertical, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { getCompanyUsers, resetUserPassword, toggleUserStatus } from "@/services/companyUser.service";
 import type { CompanyUser } from "@/types/companyuser.types";
@@ -21,19 +21,29 @@ const Users = () => {
     const [newPassword, setNewPassword] = React.useState("");
     const { user: currentUser } = useAuthStore();
     const [showPassword, setShowPassword] = React.useState(false);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [isRefreshing, setIsRefreshing] = React.useState(false);
 
     React.useEffect(() => {
         loadUsers();
     }, []);
 
-    const loadUsers = async () => {
+    const loadUsers = async (isRefresh = false) => {
+        if (isRefresh) {
+            setIsRefreshing(true);
+        } else {
+            setIsLoading(true);
+        }
+
         try {
             const res = await getCompanyUsers();
             setUsers(res.data.data);
         } catch (err: any) {
-            const message =
-                err?.message || "Failed to load users";
+            const message = err?.message || "Failed to load users";
             toast.error(message);
+        } finally {
+            setIsLoading(false);
+            setIsRefreshing(false);
         }
     };
 
@@ -130,6 +140,22 @@ const Users = () => {
                 </DialogContent>
             </Dialog>
 
+            {/* Refresh */}
+            <div className="flex justify-end mb-2">
+                <Button className="cursor-pointer gap-2"
+                    variant="add"
+                    size="sm"
+                    onClick={() => loadUsers(true)}
+                    disabled={isLoading || isRefreshing}
+                    title="Refresh users"
+                >
+                    <RefreshCw className={` ${isRefreshing ? "animate-spin" : ""}`} />
+                    <span className={` ${isRefreshing ? "" : ""}`}>
+                        Refresh
+                    </span>
+                </Button>
+            </div>
+
             {/* Table */}
             <div className="bg-card p-2 grid grid-cols-1 rounded border w-full overflow-x-auto">
                 <Table>
@@ -146,64 +172,77 @@ const Users = () => {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {users.map((user, index) => (
-                            <TableRow key={user.id}>
-                                <TableCell>{index + 1}</TableCell>
-                                <TableCell>{user.name}</TableCell>
-                                <TableCell>{user.email}</TableCell>
-                                <TableCell>{user.company?.name ?? "—"}</TableCell>
-                                <TableCell>
-                                    <Badge variant="outline">
-                                        {user.role ? formatRole(user.role.name) : "—"}
-                                    </Badge>
-                                </TableCell>
-                                <TableCell>
-                                    <Badge className={user.isActive
-                                        ? "bg-green-100 text-green-700"
-                                        : "bg-red-100 text-red-700"}>
-                                        {user.isActive ? "Active" : "Inactive"}
-                                    </Badge>
-                                </TableCell>
-                                <TableCell>
-                                    {new Date(user.createdAt).toLocaleDateString()}
-                                </TableCell>
-                                <TableCell className="sticky right-0 bg-card">
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" className="p-2">
-                                                <MoreVertical className="h-4 w-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            {/* Toggle Status */}
-                                            <DropdownMenuItem variant="destructive"
-                                                onClick={() => handleToggleStatus(user)}
-                                                disabled={user.id === currentUser?.id}
-
-                                            >
-                                                {user.isActive ? "Deactivate" : "Activate"}
-                                            </DropdownMenuItem>
-
-                                            {/* Reset Password */}
-                                            <DropdownMenuItem
-                                                onClick={() => {
-                                                    setSelectedUser(user);
-                                                    setResetOpen(true);
-                                                }}
-                                            >
-                                                Reset Password
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                        {users.length === 0 && (
+                        {isLoading ? (
                             <TableRow>
-                                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                                    No users found
+                                <TableCell colSpan={8} className="py-8 text-center">
+                                    <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                                        <RefreshCw className="h-4 w-4 animate-spin" />
+                                        Loading users...
+                                    </div>
                                 </TableCell>
                             </TableRow>
+                        ) : (
+                            <>
+                                {users.map((user, index) => (
+                                    <TableRow key={user.id}>
+                                        <TableCell>{index + 1}</TableCell>
+                                        <TableCell>{user.name}</TableCell>
+                                        <TableCell>{user.email}</TableCell>
+                                        <TableCell>{user.company?.name ?? "—"}</TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline">
+                                                {user.role ? formatRole(user.role.name) : "—"}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge className={user.isActive
+                                                ? "bg-green-100 text-green-700"
+                                                : "bg-red-100 text-red-700"}>
+                                                {user.isActive ? "Active" : "Inactive"}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            {new Date(user.createdAt).toLocaleDateString()}
+                                        </TableCell>
+                                        <TableCell className="sticky right-0 bg-card">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" className="p-2">
+                                                        <MoreVertical className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    {/* Toggle Status */}
+                                                    <DropdownMenuItem variant="destructive"
+                                                        onClick={() => handleToggleStatus(user)}
+                                                        disabled={user.id === currentUser?.id}
+
+                                                    >
+                                                        {user.isActive ? "Deactivate" : "Activate"}
+                                                    </DropdownMenuItem>
+
+                                                    {/* Reset Password */}
+                                                    <DropdownMenuItem
+                                                        onClick={() => {
+                                                            setSelectedUser(user);
+                                                            setResetOpen(true);
+                                                        }}
+                                                    >
+                                                        Reset Password
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                                {users.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                                            No users found
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </>
                         )}
                     </TableBody>
                 </Table>
