@@ -84,6 +84,7 @@ function CompanyList() {
     gstNumber: "",
   });
 
+  const [isLoading, setIsLoading] = React.useState(true);
   const [dangerOpen, setDangerOpen] = React.useState(false);
   const [confirmText, setConfirmText] = React.useState("");
 
@@ -101,7 +102,30 @@ function CompanyList() {
     loadCompanies();
   }, [isCompanyAdmin]); // user load hone ke baad role change ho to dobara fetch hoga
 
+  // const loadCompanies = async () => {
+  //   try {
+  //     if (isCompanyAdmin) {
+  //       const res = await getMyCompany();
+  //       setCompanies([res.data.data]);
+  //     } else {
+  //       const res = await getCompanies();
+  //       setCompanies(res.data.data);
+  //     }
+  //   } catch (err: any) {
+  //     toast.error(err?.message || "Failed to load companies");
+  //   }
+  // };
+
+  // Click par kam se kam 1 poora 360° ghumega, API slow ho to tab tak ghumta rahega
+  const handleRefresh = async () => {
+    setIsSpinning(true);
+    const minSpin = new Promise((res) => setTimeout(res, 1000));
+    await Promise.all([loadCompanies(), minSpin]);
+    setIsSpinning(false);
+  };
   const loadCompanies = async () => {
+    setIsLoading(true);
+
     try {
       if (isCompanyAdmin) {
         const res = await getMyCompany();
@@ -112,15 +136,9 @@ function CompanyList() {
       }
     } catch (err: any) {
       toast.error(err?.message || "Failed to load companies");
+    } finally {
+      setIsLoading(false);
     }
-  };
-
-  // Click par kam se kam 1 poora 360° ghumega, API slow ho to tab tak ghumta rahega
-  const handleRefresh = async () => {
-    setIsSpinning(true);
-    const minSpin = new Promise((res) => setTimeout(res, 1000));
-    await Promise.all([loadCompanies(), minSpin]);
-    setIsSpinning(false);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -773,90 +791,103 @@ function CompanyList() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredCompanies.map((company) => (
-              <TableRow key={company.id}>
-                <TableCell>
-                  {company.logo
-                    ? <img src={company.logo} alt="logo" className="h-8 w-8 rounded" />
-                    : "—"}
-                </TableCell>
-                <TableCell>{company.name}</TableCell>
-                <TableCell>{company.code}</TableCell>
-                <TableCell>{company.email ?? "—"}</TableCell>
-                <TableCell>{company.phone ?? "—"}</TableCell>
-                <TableCell>{company.gstNumber ?? "—"}</TableCell>
-                <TableCell>{company.website ?? "—"}</TableCell>
-                <TableCell>{company.address ?? "—"}</TableCell>
-                <TableCell>
-                  <Badge className={company.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
-                    {company.isActive ? "Active" : "Inactive"}
-                  </Badge>
-                </TableCell>
-                <TableCell className="sticky right-0 bg-card">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="p-2 shrink-0 hover:bg-[var(--themePrimary)]/5 hover:text-white">
-                        <MoreVertical className="h-4 w-4 text-[var(--themePrimary)]" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuGroup>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setSelectedCompany(company);
-                            setEditForm({
-                              name: company.name || "",
-                              email: company.email || "",
-                              phone: company.phone || "",
-                              website: company.website || "",
-                              address: company.address || "",
-                              gstNumber: company.gstNumber || "",
-                            });
-                            setEditErrors({});
-                            setIsEditPhoneValid(
-                              !!company.phone && isValidPhoneNumber(company.phone)
-                            );
-                            setEditOpen(true);
-                          }}
-                        >
-                          Edit
-                        </DropdownMenuItem>
-                        {!isCompanyAdmin && (
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setSelectedCompanyId(company.id);
-                              setSelectedCompany(company);
-                              setAdminForm({ name: "", email: "", password: "" });
-                              setAdminErrors({});
-                              setShowAdminPassword(false);
-                              setAssignOpen(true);
-                            }}
-                          >
-                            Assign Admin
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem
-                          variant={company.isActive ? "destructive" : "default"}
-                          onClick={() => {
-                            setSelectedCompany(company);
-                            setDeleteConfirmOpen(true);
-                          }}
-                          disabled={!isSuperAdmin}
-                        >
-                          {company.isActive ? "Deactivate" : "Activate"}
-                        </DropdownMenuItem>
-                      </DropdownMenuGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))}
-            {filteredCompanies.length === 0 && (
+            {isLoading ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
-                  No companies found
+                <TableCell colSpan={10} className="py-8 text-center">
+                  <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    Loading companies...
+                  </div>
                 </TableCell>
               </TableRow>
+            ) : (
+              <>
+                {filteredCompanies.map((company) => (
+                  <TableRow key={company.id}>
+                    <TableCell>
+                      {company.logo
+                        ? <img src={company.logo} alt="logo" className="h-8 w-8 rounded" />
+                        : "—"}
+                    </TableCell>
+                    <TableCell>{company.name}</TableCell>
+                    <TableCell>{company.code}</TableCell>
+                    <TableCell>{company.email ?? "—"}</TableCell>
+                    <TableCell>{company.phone ?? "—"}</TableCell>
+                    <TableCell>{company.gstNumber ?? "—"}</TableCell>
+                    <TableCell>{company.website ?? "—"}</TableCell>
+                    <TableCell>{company.address ?? "—"}</TableCell>
+                    <TableCell>
+                      <Badge className={company.isActive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
+                        {company.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="sticky right-0 bg-card">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="p-2 shrink-0 hover:bg-[var(--themePrimary)]/5 hover:text-white">
+                            <MoreVertical className="h-4 w-4 text-[var(--themePrimary)]" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuGroup>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedCompany(company);
+                                setEditForm({
+                                  name: company.name || "",
+                                  email: company.email || "",
+                                  phone: company.phone || "",
+                                  website: company.website || "",
+                                  address: company.address || "",
+                                  gstNumber: company.gstNumber || "",
+                                });
+                                setEditErrors({});
+                                setIsEditPhoneValid(
+                                  !!company.phone && isValidPhoneNumber(company.phone)
+                                );
+                                setEditOpen(true);
+                              }}
+                            >
+                              Edit
+                            </DropdownMenuItem>
+                            {!isCompanyAdmin && (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setSelectedCompanyId(company.id);
+                                  setSelectedCompany(company);
+                                  setAdminForm({ name: "", email: "", password: "" });
+                                  setAdminErrors({});
+                                  setShowAdminPassword(false);
+                                  setAssignOpen(true);
+                                }}
+                              >
+                                Assign Admin
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              variant={company.isActive ? "destructive" : "default"}
+                              onClick={() => {
+                                setSelectedCompany(company);
+                                setDeleteConfirmOpen(true);
+                              }}
+                              disabled={!isSuperAdmin}
+                            >
+                              {company.isActive ? "Deactivate" : "Activate"}
+                            </DropdownMenuItem>
+                          </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {filteredCompanies.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                      No companies found
+                    </TableCell>
+                  </TableRow>
+                )}
+              </>
             )}
           </TableBody>
         </Table>
