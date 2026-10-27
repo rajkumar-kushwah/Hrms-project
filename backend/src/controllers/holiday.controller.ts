@@ -81,9 +81,16 @@ export const getHolidaysController = async (
     res: Response
 ) => {
     try {
-        const companyId = req.user?.companyId ?? null;
-        const holidays = await getHolidays(companyId);
+        const companyId = getCompanyId(req);
 
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Please select a company first",
+            });
+        }
+
+        const holidays = await getHolidays(companyId);
         return res.status(200).json({
             success: true,
             message: "Holidays fetched successfully",
@@ -109,7 +116,7 @@ export const getActiveHolidaysController = async (
     res: Response
 ) => {
     try {
-        const companyId = req.user?.companyId;
+        const companyId = getCompanyId(req);
 
         if (!companyId) {
             return res.status(400).json({

@@ -12,29 +12,33 @@ import {
     ToggleRight,
 } from "lucide-react";
 
-import {
-    getHolidays,
-    createHoliday,
-    updateHoliday,
-    activateHoliday,
-    deactivateHoliday,
-} from "@/services/holiday.service";
-
-import type { HolidayType } from "@/types/holiday.types";
+import { api } from "@/api/axios";
+import type {
+    HolidayType,
+    CreateHolidayPayload,
+    UpdateHolidayPayload,
+} from "@/types/holiday.types";
 import {
     createHolidaySchema,
     holidayNameSchema,
     holidayDateSchema,
 } from "@/validation/holiday.validation";
-
 import { useAuthStore } from "@/store/auth.store";
-import { isEmployeeRole } from "@/utilis/roleUtils";
+import {
+    isEmployeeRole,
+} from "@/utilis/roleUtils";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import {
     Dialog,
     DialogContent,
@@ -43,14 +47,12 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
 import {
     Table,
     TableBody,
@@ -67,8 +69,12 @@ type HolidayForm = {
 };
 
 type HolidayField = keyof HolidayForm;
-
 type HolidayErrors = Partial<Record<HolidayField, string>>;
+
+type CompanyOption = {
+    id: string;
+    name: string;
+};
 
 const EMPTY_FORM: HolidayForm = {
     name: "",
@@ -102,11 +108,9 @@ const getErrorMessage = (error: unknown): string => {
         }
     }
 
-    if (error instanceof Error) {
-        return error.message;
-    }
-
-    return "Something went wrong. Please try again.";
+    return error instanceof Error
+        ? error.message
+        : "Something went wrong. Please try again.";
 };
 
 const formatDate = (value: string): string => {
@@ -114,9 +118,7 @@ const formatDate = (value: string): string => {
 
     const date = new Date(`${value.slice(0, 10)}T00:00:00`);
 
-    if (Number.isNaN(date.getTime())) {
-        return value;
-    }
+    if (Number.isNaN(date.getTime())) return value;
 
     return date.toLocaleDateString("en-IN", {
         day: "2-digit",
@@ -125,9 +127,8 @@ const formatDate = (value: string): string => {
     });
 };
 
-const toDateInputValue = (value: string): string => {
-    return value ? value.slice(0, 10) : "";
-};
+const toDateInputValue = (value: string): string =>
+    value ? value.slice(0, 10) : "";
 
 const validateField = (
     field: HolidayField,
@@ -136,7 +137,6 @@ const validateField = (
 ): string | undefined => {
     if (field === "name") {
         const result = holidayNameSchema.safeParse(value);
-
         return result.success
             ? undefined
             : result.error.issues[0]?.message;
@@ -149,27 +149,13 @@ const validateField = (
     }
 
     if (
-        field === "startDate" &&
-        values.endDate &&
-        values.endDate >= values.startDate
-    ) {
-        return undefined;
-    }
-
-    if (
-        field === "startDate" &&
+        values.startDate &&
         values.endDate &&
         values.startDate > values.endDate
     ) {
-        return "Start date cannot be after end date";
-    }
-
-    if (
-        field === "endDate" &&
-        values.startDate &&
-        values.endDate < values.startDate
-    ) {
-        return "End date must be on or after start date";
+        return field === "startDate"
+            ? "Start date cannot be after end date"
+            : "End date must be on or after start date";
     }
 
     return undefined;
@@ -177,7 +163,16 @@ const validateField = (
 
 export default function HolidayPage() {
     const user = useAuthStore((state) => state.user);
+    const roleName = user?.role?.name
+        ?.trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_");
+
+    const isSuperAdmin = roleName === "super_admin";
     const employeeView = isEmployeeRole(user?.role?.name ?? "");
+
+    const [companies, setCompanies] = useState<CompanyOption[]>([]);
+    const [selectedCompanyId, setSelectedCompanyId] = useState("");
 
     const [holidays, setHolidays] = useState<HolidayType[]>([]);
     const [loading, setLoading] = useState(true);
@@ -192,6 +187,70 @@ export default function HolidayPage() {
     const [form, setForm] = useState<HolidayForm>(EMPTY_FORM);
     const [errors, setErrors] = useState<HolidayErrors>({});
 
+    // Super Admin ke liye company list load karein.
+    useEffect(() => {
+        if (!isSuperAdmin) return;
+
+        const loadCompanies = async () => {
+            try {
+                // Apne backend ke actual company-list endpoint ke
+                // mutabik "/company" ko adjust karein, agar zaroori ho.
+                const response = await api.get("/company");
+                const result = response?.data?.data;
+
+                if (!Array.isArray(result)) {
+                    setCompanies([]);
+                    toast.error("Company list ka response sahi nahi hai");
+                    return;
+                }
+
+                const options: CompanyOption[] = result
+                    .filter(
+                        (company: unknown): company is Record<string, unknown> =>
+                            typeof company === "object" &&
+                            company !== null &&
+                            "id" in company &&
+                            typeof company.id === "string",
+                    )
+                    .map((company) => ({
+                        id: company.id as string,
+                        name:
+                            (typeof company.name === "string"
+                                ? company.name
+                                : typeof company.companyName === "string"
+                                    ? company.companyName
+                                    : "Unnamed Company"),
+                    }));
+
+                setCompanies(options);
+
+                if (options.length === 0) {
+                    toast.error("Koi company nahi mili");
+                }
+            } catch (error: unknown) {
+                toast.error(getErrorMessage(error));
+            }
+        };
+
+        void loadCompanies();
+    }, [isSuperAdmin]);
+
+    const requestConfig = useCallback(() => {
+        if (isSuperAdmin) {
+            if (!selectedCompanyId) {
+                throw new Error("Please select a company first");
+            }
+
+            return {
+                headers: {
+                    "x-company-id": selectedCompanyId,
+                },
+            };
+        }
+
+        return {};
+    }, [isSuperAdmin, selectedCompanyId]);
+
     const loadHolidays = useCallback(async (isRefresh = false) => {
         try {
             if (isRefresh) {
@@ -200,19 +259,26 @@ export default function HolidayPage() {
                 setLoading(true);
             }
 
-            const response = await getHolidays();
+            if (isSuperAdmin && !selectedCompanyId) {
+                setHolidays([]);
+                return;
+            }
 
-            // API returns: { success: true, data: [...] }
+            const response = await api.get(
+                "/holidays",
+                requestConfig(),
+            );
+
             const result = response?.data?.data;
-
             setHolidays(Array.isArray(result) ? result : []);
         } catch (error: unknown) {
+            setHolidays([]);
             toast.error(getErrorMessage(error));
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    }, []);
+    }, [isSuperAdmin, selectedCompanyId, requestConfig]);
 
     useEffect(() => {
         void loadHolidays();
@@ -225,19 +291,22 @@ export default function HolidayPage() {
     };
 
     const openAddDialog = () => {
+        if (isSuperAdmin && !selectedCompanyId) {
+            toast.error("Please select a company first");
+            return;
+        }
+
         resetForm();
         setOpen(true);
     };
 
     const openEditDialog = (holiday: HolidayType) => {
         setEditHoliday(holiday);
-
         setForm({
             name: holiday.name,
             startDate: toDateInputValue(holiday.startDate),
             endDate: toDateInputValue(holiday.endDate),
         });
-
         setErrors({});
         setOpen(true);
     };
@@ -267,14 +336,12 @@ export default function HolidayPage() {
                 [field]: validateField(field, value, nextForm),
             };
 
-            // Both date fields depend on the selected date range.
             if (field === "startDate" || field === "endDate") {
                 nextErrors.startDate = validateField(
                     "startDate",
                     nextForm.startDate,
                     nextForm,
                 );
-
                 nextErrors.endDate = validateField(
                     "endDate",
                     nextForm.endDate,
@@ -286,8 +353,15 @@ export default function HolidayPage() {
         });
     };
 
-    const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (
+        event: FormEvent<HTMLFormElement>,
+    ) => {
         event.preventDefault();
+
+        if (isSuperAdmin && !selectedCompanyId) {
+            toast.error("Please select a company first");
+            return;
+        }
 
         const result = createHolidaySchema.safeParse(form);
 
@@ -315,24 +389,32 @@ export default function HolidayPage() {
         setSaving(true);
 
         try {
-            const payload = {
+            const config = requestConfig();
+
+            const payload: CreateHolidayPayload = {
                 name: result.data.name,
                 startDate: result.data.startDate,
                 endDate: result.data.endDate,
             };
 
             if (editHoliday) {
-                await updateHoliday(editHoliday.id, payload);
+                const updatePayload: UpdateHolidayPayload = payload;
+
+                await api.put(
+                    `/holidays/${editHoliday.id}`,
+                    updatePayload,
+                    config,
+                );
+
                 toast.success("Holiday updated successfully");
             } else {
-                await createHoliday(payload);
+                await api.post("/holidays", payload, config);
                 toast.success("Holiday created successfully");
             }
 
             setOpen(false);
             resetForm();
-
-            await loadHolidays();
+            await loadHolidays(true);
         } catch (error: unknown) {
             toast.error(getErrorMessage(error));
         } finally {
@@ -343,12 +425,21 @@ export default function HolidayPage() {
     const handleToggleStatus = async (holiday: HolidayType) => {
         try {
             setActionId(holiday.id);
+            const config = requestConfig();
 
             if (holiday.isActive) {
-                await deactivateHoliday(holiday.id);
+                await api.patch(
+                    `/holidays/${holiday.id}/deactivate`,
+                    {},
+                    config,
+                );
                 toast.success("Holiday deactivated successfully");
             } else {
-                await activateHoliday(holiday.id);
+                await api.patch(
+                    `/holidays/${holiday.id}/activate`,
+                    {},
+                    config,
+                );
                 toast.success("Holiday activated successfully");
             }
 
@@ -363,30 +454,67 @@ export default function HolidayPage() {
     return (
         <div className="space-y-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-
+                <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">
                         Manage company holidays and their date ranges.
                     </p>
+
+                    {isSuperAdmin && (
+                        <div className="w-full max-w-sm space-y-1">
+                            <Label htmlFor="holiday-company">
+                                Select Company
+                            </Label>
+
+                            <Select
+                                value={selectedCompanyId}
+                                onValueChange={setSelectedCompanyId}
+                            >
+                                <SelectTrigger id="holiday-company">
+                                    <SelectValue placeholder="Choose a company" />
+                                </SelectTrigger>
+
+                                <SelectContent>
+                                    {companies.map((company) => (
+                                        <SelectItem
+                                            key={company.id}
+                                            value={company.id}
+                                        >
+                                            {company.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <Button className="cursor-pointer"
+                    <Button
                         type="button"
                         variant="add"
                         size="sm"
                         onClick={() => void loadHolidays(true)}
-                        disabled={refreshing || loading}
-                        aria-label="Refresh holidays"
+                        disabled={
+                            refreshing ||
+                            loading ||
+                            (isSuperAdmin && !selectedCompanyId)
+                        }
                     >
-                        <RefreshCw className={` ${refreshing ? "animate-spin" : ""}`} />
-                        <span className={` ${refreshing ? "" : ""}`}>
-                            Refresh
-                        </span>
+                        <RefreshCw
+                            className={
+                                refreshing ? "animate-spin" : ""
+                            }
+                        />
+                        Refresh
                     </Button>
 
                     {!employeeView && (
-                        <Button type="button" variant="add" className="cursor-pointer" onClick={openAddDialog}>
+                        <Button
+                            type="button"
+                            variant="add"
+                            onClick={openAddDialog}
+                            disabled={isSuperAdmin && !selectedCompanyId}
+                        >
                             <Plus className="mr-2 h-4 w-4" />
                             Add Holiday
                         </Button>
@@ -418,6 +546,15 @@ export default function HolidayPage() {
                                     className="h-24 text-center text-muted-foreground"
                                 >
                                     Loading holidays...
+                                </TableCell>
+                            </TableRow>
+                        ) : isSuperAdmin && !selectedCompanyId ? (
+                            <TableRow>
+                                <TableCell
+                                    colSpan={employeeView ? 4 : 5}
+                                    className="h-24 text-center text-muted-foreground"
+                                >
+                                    Select a company to view its holidays.
                                 </TableCell>
                             </TableRow>
                         ) : holidays.length === 0 ? (
@@ -514,11 +651,16 @@ export default function HolidayPage() {
             </div>
 
             {!employeeView && (
-                <Dialog open={open} onOpenChange={handleOpenChange}>
+                <Dialog
+                    open={open}
+                    onOpenChange={handleOpenChange}
+                >
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader>
                             <DialogTitle>
-                                {editHoliday ? "Edit Holiday" : "Add Holiday"}
+                                {editHoliday
+                                    ? "Edit Holiday"
+                                    : "Add Holiday"}
                             </DialogTitle>
 
                             <DialogDescription>
@@ -532,7 +674,6 @@ export default function HolidayPage() {
                                     <Label htmlFor="holiday-name">
                                         Holiday Name
                                     </Label>
-
                                     <Input
                                         id="holiday-name"
                                         value={form.name}
@@ -544,18 +685,9 @@ export default function HolidayPage() {
                                         }
                                         placeholder="Enter holiday name"
                                         aria-invalid={Boolean(errors.name)}
-                                        aria-describedby={
-                                            errors.name
-                                                ? "holiday-name-error"
-                                                : undefined
-                                        }
                                     />
-
                                     {errors.name && (
-                                        <p
-                                            id="holiday-name-error"
-                                            className="text-sm text-destructive"
-                                        >
+                                        <p className="text-sm text-destructive">
                                             {errors.name}
                                         </p>
                                     )}
@@ -565,7 +697,6 @@ export default function HolidayPage() {
                                     <Label htmlFor="holiday-start-date">
                                         Start Date
                                     </Label>
-
                                     <Input
                                         id="holiday-start-date"
                                         type="date"
@@ -580,18 +711,9 @@ export default function HolidayPage() {
                                         aria-invalid={Boolean(
                                             errors.startDate,
                                         )}
-                                        aria-describedby={
-                                            errors.startDate
-                                                ? "holiday-start-date-error"
-                                                : undefined
-                                        }
                                     />
-
                                     {errors.startDate && (
-                                        <p
-                                            id="holiday-start-date-error"
-                                            className="text-sm text-destructive"
-                                        >
+                                        <p className="text-sm text-destructive">
                                             {errors.startDate}
                                         </p>
                                     )}
@@ -601,7 +723,6 @@ export default function HolidayPage() {
                                     <Label htmlFor="holiday-end-date">
                                         End Date
                                     </Label>
-
                                     <Input
                                         id="holiday-end-date"
                                         type="date"
@@ -616,35 +737,32 @@ export default function HolidayPage() {
                                         aria-invalid={Boolean(
                                             errors.endDate,
                                         )}
-                                        aria-describedby={
-                                            errors.endDate
-                                                ? "holiday-end-date-error"
-                                                : undefined
-                                        }
                                     />
-
                                     {errors.endDate && (
-                                        <p
-                                            id="holiday-end-date-error"
-                                            className="text-sm text-destructive"
-                                        >
+                                        <p className="text-sm text-destructive">
                                             {errors.endDate}
                                         </p>
                                     )}
                                 </div>
                             </div>
 
-                            <DialogFooter className="gap-2 sm:gap-0 ">
-                                <Button className="cursor-pointer"
+                            <DialogFooter className="gap-2 sm:gap-0">
+                                <Button
                                     type="button"
                                     variant="outline"
-                                    onClick={() => handleOpenChange(false)}
+                                    onClick={() =>
+                                        handleOpenChange(false)
+                                    }
                                     disabled={saving}
                                 >
                                     Cancel
                                 </Button>
 
-                                <Button type="submit" className="cursor-pointer" variant="add" disabled={saving}>
+                                <Button
+                                    type="submit"
+                                    variant="add"
+                                    disabled={saving}
+                                >
                                     {saving
                                         ? "Saving..."
                                         : editHoliday

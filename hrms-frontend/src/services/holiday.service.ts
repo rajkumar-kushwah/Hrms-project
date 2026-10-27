@@ -6,39 +6,55 @@ import type {
 } from "@/types/holiday.types";
 
 // Get all holidays
-export const getHolidays = () => {
-    return api.get("/holidays");
+export const getHolidays = (companyId?: string) => {
+    return api.get("/holidays", {
+        headers: companyId
+            ? { "x-company-id": companyId }
+            : {},
+    });
 };
 
-// Create holiday
 export const createHoliday = (
-    data: CreateHolidayPayload
+    data: CreateHolidayPayload,
+    companyId?: string
 ) => {
-    return api.post("/holidays", data);
+    return api.post("/holidays", data, {
+        headers: companyId
+            ? { "x-company-id": companyId }
+            : {},
+    });
 };
 
-// Update holiday
 export const updateHoliday = (
     id: string,
-    data: UpdateHolidayPayload
+    data: UpdateHolidayPayload,
+    companyId?: string
 ) => {
-    return api.put(`/holidays/${id}`, data);
+    return api.put(`/holidays/${id}`, data, {
+        headers: companyId
+            ? { "x-company-id": companyId }
+            : {},
+    });
 };
 
-// Deactivate holiday
 export const deactivateHoliday = (
-    id: string
+    id: string,
+    companyId?: string
 ) => {
-    return api.patch(
-        `/holidays/${id}/deactivate`
-    );
+    return api.patch(`/holidays/${id}/deactivate`, {}, {
+        headers: companyId
+            ? { "x-company-id": companyId }
+            : {},
+    });
 };
 
-// Activate holiday
 export const activateHoliday = (
-    id: string
+    id: string,
+    companyId?: string
 ) => {
-    return api.patch(
-        `/holidays/${id}/activate`
-    );
+    return api.patch(`/holidays/${id}/activate`, {}, {
+        headers: companyId
+            ? { "x-company-id": companyId }
+            : {},
+    });
 };
