@@ -7,6 +7,7 @@ import {
     deactivateHoliday,
     activateHoliday,
 } from "../services/holiday.service.js";
+import { getCompanyId } from "../utilis/roleUtils.js";
 
 // ─────────────────────────────────────────────
 // Error Message Helper
@@ -29,12 +30,12 @@ export const createHolidayController = async (
     try {
         const { name, startDate, endDate } = req.body;
 
-        const companyId = req.user?.companyId;
+        const companyId = getCompanyId(req);
 
         if (!companyId) {
             return res.status(400).json({
                 success: false,
-                message: "Company not found",
+                message: "Please select a company before creating a holiday",
             });
         }
 
