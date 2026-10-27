@@ -6,6 +6,7 @@ import {
     updateHoliday,
     deactivateHoliday,
     activateHoliday,
+    deleteHoliday
 } from "../services/holiday.service.js";
 import { getCompanyId } from "../utilis/roleUtils.js";
 
@@ -261,6 +262,44 @@ export const activateHolidayController = async (
         return res.status(400).json({
             success: false,
             message: message || "Failed to activate holiday",
+        });
+    }
+};
+
+export const deleteHolidayController = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const { id } = req.params;
+        const companyId = getCompanyId(req);
+
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Please select a company first",
+            });
+        }
+
+        if (typeof id !== "string") {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid holiday ID",
+            });
+        }
+
+        await deleteHoliday(id, companyId);
+
+        return res.status(200).json({
+            success: true,
+            message: "Holiday deleted successfully",
+        });
+    } catch (error: unknown) {
+        const message = getErrorMessage(error);
+
+        return res.status(400).json({
+            success: false,
+            message,
         });
     }
 };

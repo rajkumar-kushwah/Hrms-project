@@ -58,3 +58,8 @@ export const activateHoliday = (
             : {},
     });
 };
+
+
+export const deleteHoliday = (id: string) => {
+    return api.delete(`/holidays/${id}`);
+};

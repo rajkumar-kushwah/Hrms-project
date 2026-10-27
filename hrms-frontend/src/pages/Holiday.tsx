@@ -10,6 +10,7 @@ import {
     RefreshCw,
     ToggleLeft,
     ToggleRight,
+    Trash2,
 } from "lucide-react";
 
 import { api } from "@/api/axios";
@@ -187,6 +188,11 @@ export default function HolidayPage() {
     const [form, setForm] = useState<HolidayForm>(EMPTY_FORM);
     const [errors, setErrors] = useState<HolidayErrors>({});
 
+    const [deleteHolidayItem, setDeleteHolidayItem] =
+        useState<HolidayType | null>(null);
+
+    const [deleting, setDeleting] = useState(false);
+
     // Super Admin ke liye company list load karein.
     useEffect(() => {
         if (!isSuperAdmin) return;
@@ -288,6 +294,36 @@ export default function HolidayPage() {
         setForm(EMPTY_FORM);
         setErrors({});
         setEditHoliday(null);
+    };
+
+    const handleDelete = async () => {
+        if (!deleteHolidayItem) return;
+
+        if (isSuperAdmin && !selectedCompanyId) {
+            toast.error("Please select a company first");
+            return;
+        }
+
+        try {
+            setDeleting(true);
+
+            const config = requestConfig();
+
+            await api.delete(
+                `/holidays/${deleteHolidayItem.id}`,
+                config,
+            );
+
+            toast.success("Holiday deleted successfully");
+
+            setDeleteHolidayItem(null);
+
+            await loadHolidays(true);
+        } catch (error: unknown) {
+            toast.error(getErrorMessage(error));
+        } finally {
+            setDeleting(false);
+        }
     };
 
     const openAddDialog = () => {
@@ -473,7 +509,7 @@ export default function HolidayPage() {
                                     <SelectValue placeholder="Choose a company" />
                                 </SelectTrigger>
 
-                                <SelectContent>
+                                <SelectContent position="popper" avoidCollisions={true}>
                                     {companies.map((company) => (
                                         <SelectItem
                                             key={company.id}
@@ -521,6 +557,50 @@ export default function HolidayPage() {
                     )}
                 </div>
             </div>
+
+            {/* Delete holiday modal */}
+            <Dialog
+                open={Boolean(deleteHolidayItem)}
+                onOpenChange={(nextOpen) => {
+                    if (!nextOpen && !deleting) {
+                        setDeleteHolidayItem(null);
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Delete Holiday</DialogTitle>
+
+                        <DialogDescription>
+                            Are you sure you want to delete{" "}
+                            <span className="font-medium text-foreground">
+                                {deleteHolidayItem?.name}
+                            </span>
+                            ? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <DialogFooter className="gap-2 sm:gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setDeleteHolidayItem(null)}
+                            disabled={deleting}
+                        >
+                            Cancel
+                        </Button>
+
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={() => void handleDelete()}
+                            disabled={deleting}
+                        >
+                            {deleting ? "Deleting..." : "Delete Holiday"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <div className="rounded-md border">
                 <Table>
@@ -639,6 +719,13 @@ export default function HolidayPage() {
                                                             ? "Deactivate"
                                                             : "Activate"}
                                                     </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        className="text-destructive focus:text-destructive"
+                                                        onSelect={() => setDeleteHolidayItem(holiday)}
+                                                    >
+                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                        Delete
+                                                    </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>
@@ -746,10 +833,10 @@ export default function HolidayPage() {
                                 </div>
                             </div>
 
-                            <DialogFooter className="gap-2 sm:gap-0">
-                                <Button
+                            <DialogFooter className="gap-2 sm:gap-2">
+                                <Button className="cursor-pointer"
                                     type="button"
-                                    variant="outline"
+                                    variant="add"
                                     onClick={() =>
                                         handleOpenChange(false)
                                     }
@@ -758,7 +845,7 @@ export default function HolidayPage() {
                                     Cancel
                                 </Button>
 
-                                <Button
+                                <Button className="cursor-pointer"
                                     type="submit"
                                     variant="add"
                                     disabled={saving}

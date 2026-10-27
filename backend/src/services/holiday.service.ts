@@ -286,3 +286,25 @@ export const activateHoliday = async (
         message: "Holiday activated successfully",
     };
 };
+
+export const deleteHoliday = async (
+    id: string,
+    companyId: string
+) => {
+    const existing = await prisma.holiday.findFirst({
+        where: {
+            id,
+            companyId,
+        },
+    });
+
+    if (!existing) {
+        throw new Error("Holiday not found");
+    }
+
+    return await prisma.holiday.delete({
+        where: {
+            id: existing.id,
+        },
+    });
+};

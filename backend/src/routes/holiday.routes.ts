@@ -7,6 +7,7 @@ import {
     updateHolidayController,
     deactivateHolidayController,
     activateHolidayController,
+    deleteHolidayController,
 } from "../controllers/holiday.controller.js";
 
 import { protect } from "../middleware/auth.middleware.js";
@@ -70,6 +71,15 @@ router.patch(
     protect,
     authorize("holiday", "canEdit"),
     activateHolidayController
+);
+
+
+// Delete holiday
+router.delete(
+    "/:id",
+    protect,
+    authorize("holiday", "canDelete"),
+    deleteHolidayController
 );
 
 
