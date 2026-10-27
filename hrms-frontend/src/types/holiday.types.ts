@@ -2,7 +2,8 @@ export interface HolidayType {
     id: string;
     companyId: string;
     name: string;
-    date: string;
+    startDate: string;
+    endDate: string;
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
@@ -10,12 +11,14 @@ export interface HolidayType {
 
 export interface CreateHolidayPayload {
     name: string;
-    date: string;
+    startDate: string;
+    endDate: string;
     isActive?: boolean;
 }
 
 export interface UpdateHolidayPayload {
     name?: string;
-    date?: string;
+    startDate?: string;
+    endDate?: string;
     isActive?: boolean;
 }

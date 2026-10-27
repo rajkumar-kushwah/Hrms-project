@@ -8,36 +8,63 @@ export const createHoliday = async (
     companyId: string,
     data: {
         name: string;
-        date: string;
+        startDate: string;
+        endDate: string;
     }
 ) => {
-    const holidayDate = new Date(data.date);
+    const name = data.name.trim();
 
-    if (isNaN(holidayDate.getTime())) {
-        throw new Error("Invalid holiday date");
+    if (!name) {
+        throw new Error("Holiday name is required");
     }
 
-    // Same company mein same date ka holiday already hai ya nahi
+    const startDate = new Date(data.startDate);
+    const endDate = new Date(data.endDate);
+
+    if (
+        !data.startDate ||
+        !data.endDate ||
+        isNaN(startDate.getTime()) ||
+        isNaN(endDate.getTime())
+    ) {
+        throw new Error("Invalid holiday date range");
+    }
+
+    // Date-only values ko normalize karein
+    startDate.setUTCHours(0, 0, 0, 0);
+    endDate.setUTCHours(0, 0, 0, 0);
+
+    if (startDate > endDate) {
+        throw new Error("Start date cannot be after end date");
+    }
+
+    // Check overlapping holidays in the same company
     const existing = await prisma.holiday.findFirst({
         where: {
             companyId,
-            date: holidayDate,
+            startDate: {
+                lte: endDate,
+            },
+            endDate: {
+                gte: startDate,
+            },
         },
     });
 
     if (existing) {
-        throw new Error("Holiday already exists for this date");
+        throw new Error(
+            "Another holiday already exists within this date range"
+        );
     }
 
-    const holiday = await prisma.holiday.create({
+    return await prisma.holiday.create({
         data: {
-            name: data.name.trim(),
-            date: holidayDate,
+            name,
+            startDate,
+            endDate,
             companyId,
         },
     });
-
-    return holiday;
 };
 
 
@@ -54,7 +81,7 @@ export const getHolidays = async (
             ...(companyId ? { companyId } : {}),
         },
         orderBy: {
-            date: "asc",
+            startDate: "asc",
         },
     });
 };
@@ -74,7 +101,7 @@ export const getActiveHolidays = async (
             isActive: true,
         },
         orderBy: {
-            date: "asc",
+            startDate: "asc",
         },
     });
 };
@@ -88,7 +115,8 @@ export const updateHoliday = async (
     id: string,
     data: {
         name?: string;
-        date?: string;
+        startDate?: string;
+        endDate?: string;
     }
 ) => {
     const existing = await prisma.holiday.findUnique({
@@ -103,29 +131,77 @@ export const updateHoliday = async (
 
     const updateData: {
         name?: string;
-        date?: Date;
+        startDate?: Date;
+        endDate?: Date;
     } = {};
 
     if (data.name !== undefined) {
-        updateData.name = data.name.trim();
-    }
+        const name = data.name.trim();
 
-    if (data.date !== undefined) {
-        const holidayDate = new Date(data.date);
-
-        if (isNaN(holidayDate.getTime())) {
-            throw new Error("Invalid holiday date");
+        if (!name) {
+            throw new Error("Holiday name is required");
         }
 
-        updateData.date = holidayDate;
+        updateData.name = name;
     }
 
-    // Agar date change ho rahi hai to duplicate check
-    if (updateData.date) {
+    const startDate = data.startDate !== undefined
+        ? new Date(data.startDate)
+        : existing.startDate
+            ? new Date(existing.startDate)
+            : new Date(NaN);
+
+    const endDate = data.endDate !== undefined
+        ? new Date(data.endDate)
+        : existing.endDate
+            ? new Date(existing.endDate)
+            : new Date(NaN);
+
+    if (
+        isNaN(startDate.getTime()) ||
+        isNaN(endDate.getTime())
+    ) {
+        throw new Error("Valid start date and end date are required");
+    }
+
+    if (
+        (data.startDate !== undefined &&
+            (!data.startDate || isNaN(startDate.getTime()))) ||
+        (data.endDate !== undefined &&
+            (!data.endDate || isNaN(endDate.getTime())))
+    ) {
+        throw new Error("Invalid holiday date range");
+    }
+
+    startDate.setUTCHours(0, 0, 0, 0);
+    endDate.setUTCHours(0, 0, 0, 0);
+
+    if (startDate > endDate) {
+        throw new Error("Start date cannot be after end date");
+    }
+
+    if (data.startDate !== undefined) {
+        updateData.startDate = startDate;
+    }
+
+    if (data.endDate !== undefined) {
+        updateData.endDate = endDate;
+    }
+
+    // Check overlap with other holidays in the same company
+    if (
+        data.startDate !== undefined ||
+        data.endDate !== undefined
+    ) {
         const duplicate = await prisma.holiday.findFirst({
             where: {
                 companyId: existing.companyId,
-                date: updateData.date,
+                startDate: {
+                    lte: endDate,
+                },
+                endDate: {
+                    gte: startDate,
+                },
                 NOT: {
                     id,
                 },
@@ -134,7 +210,7 @@ export const updateHoliday = async (
 
         if (duplicate) {
             throw new Error(
-                "Another holiday already exists for this date"
+                "Another holiday already exists within this date range"
             );
         }
     }

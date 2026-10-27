@@ -56,13 +56,13 @@ router.put(
 
 
 // Deactivate holiday
-router.delete(
-    "/:id",
+// Deactivate holiday
+router.patch(
+    "/:id/deactivate",
     protect,
-    authorize("holiday", "canDelete"),
+    authorize("holiday", "canEdit"),
     deactivateHolidayController
 );
-
 
 // Activate holiday
 router.patch(

@@ -10,12 +10,14 @@ export const createLeaveTypeSchema = z.object({
   description: z
     .string()
     .trim()
+    .min(1, "Description cannot be less than 1 characters")
     .max(500, "Description cannot exceed 500 characters")
     .optional(),
 
   daysPerYear: z
     .number()
     .min(0, "Days per year cannot be negative")
+    .max(365, "Days per year cannot exceed 365")
     .optional(),
 
   isPaid: z.boolean().optional(),

@@ -12,6 +12,7 @@ import {
     normalizeRoleName,
     getCompanyId,
 } from "../utilis/roleUtils.js";
+import { prisma } from "../config/db.js";
 
 export const punchIn = async (req: Request, res: Response) => {
     try {
@@ -261,11 +262,12 @@ export const getEmployeeAttendance = async (req: Request, res: Response) => {
 
 
 // GET /api/attendance/monthly-sheet?month=9&year=2026
+// Super Admin: /api/attendance/monthly-sheet?month=9&year=2026&companyId=COMPANY_ID
 export const getMonthlySheet = async (req: Request, res: Response) => {
     try {
         const roleName = normalizeRoleName(req.user?.role?.name);
-        const companyId = getCompanyId(req);
         const userId = req.user?.id;
+        const companyId = getCompanyId(req);
 
         const month = Number(req.query.month) || new Date().getMonth() + 1;
         const year = Number(req.query.year) || new Date().getFullYear();
@@ -291,7 +293,7 @@ export const getMonthlySheet = async (req: Request, res: Response) => {
             });
         }
 
-        // Employee: sirf apni attendance
+        // Employee: sirf apni attendance sheet
         if (roleName === "employee") {
             if (!companyId) {
                 return res.status(400).json({
@@ -313,16 +315,19 @@ export const getMonthlySheet = async (req: Request, res: Response) => {
             });
         }
 
-        // Admin: company ki monthly attendance sheet
-        if (roleName !== "super_admin" && roleName !== "company_admin") {
+        // Sirf Super Admin aur Company Admin ko monthly sheet access hai.
+        if (
+            roleName !== "super_admin" &&
+            roleName !== "company_admin"
+        ) {
             return res.status(403).json({
                 success: false,
                 message: "Not authorized",
             });
         }
 
-        // Is service ko company-specific sheet chahiye.
-        // Super Admin ke liye company select karne ka logic alag se chahiye.
+        // Super Admin ke liye selected company required hai.
+        // Company Admin ke liye getCompanyId(req) apni company return karega.
         if (!companyId) {
             return res.status(400).json({
                 success: false,
@@ -330,8 +335,21 @@ export const getMonthlySheet = async (req: Request, res: Response) => {
             });
         }
 
+        // Confirm the selected company exists.
+        const company = await prisma.company.findUnique({
+            where: { id: companyId },
+            select: { id: true },
+        });
+
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: "Selected company not found",
+            });
+        }
+
         const data = await SheetService.getMonthlySheet(
-            companyId,
+            company.id,
             month,
             year
         );

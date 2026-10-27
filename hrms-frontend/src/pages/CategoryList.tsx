@@ -180,6 +180,9 @@ const CategoryList = () => {
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 flex-wrap">
                     <Input
+                        type="search"
+                        name="category-search"
+                        autoComplete="off"
                         placeholder="Search category name..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}

@@ -55,6 +55,62 @@ const getMonthRange = (month: number, year: number) => {
     return { start, end };
 };
 
+/**
+ * Adds a single-day holiday and/or all days in a holiday date range.
+ * The range is clipped to the requested month.
+ */
+const addHolidayDates = (
+    holidayKeys: Set<string>,
+    holiday: {
+        date: Date | null;
+        startDate: Date | null;
+        endDate: Date | null;
+    },
+    rangeStart: Date,
+    rangeEnd: Date
+) => {
+    // Single-day holiday
+    if (holiday.date) {
+        const holidayDate = startOfDay(holiday.date);
+
+        if (holidayDate >= startOfDay(rangeStart) &&
+            holidayDate <= startOfDay(rangeEnd)) {
+            holidayKeys.add(getDateKey(holidayDate));
+        }
+    }
+
+    // Multi-day holiday
+    if (holiday.startDate && holiday.endDate) {
+        const from = startOfDay(
+            new Date(
+                Math.max(
+                    holiday.startDate.getTime(),
+                    rangeStart.getTime()
+                )
+            )
+        );
+
+        const to = startOfDay(
+            new Date(
+                Math.min(
+                    holiday.endDate.getTime(),
+                    rangeEnd.getTime()
+                )
+            )
+        );
+
+        if (from > to) return;
+
+        for (
+            let cursor = new Date(from);
+            cursor <= to;
+            cursor.setDate(cursor.getDate() + 1)
+        ) {
+            holidayKeys.add(getDateKey(cursor));
+        }
+    }
+};
+
 // ─── Punch In ───────────────────────────────────────────────
 
 export const punchIn = async (
@@ -270,6 +326,7 @@ export const getMyAttendance = async (
     const currentDate = new Date();
     const targetMonth = month ?? currentDate.getMonth() + 1;
     const targetYear = year ?? currentDate.getFullYear();
+
     const { start: startDate, end: endDate } = getMonthRange(
         targetMonth,
         targetYear
@@ -298,9 +355,25 @@ export const getMyAttendance = async (
                 where: {
                     companyId,
                     isActive: true,
-                    date: { gte: startDate, lte: endDate },
+                    OR: [
+                        {
+                            date: {
+                                gte: startDate,
+                                lte: endDate,
+                            },
+                        },
+                        {
+                            startDate: { lte: endDate },
+                            endDate: { gte: startDate },
+                        },
+                    ],
                 },
-                select: { name: true, date: true },
+                select: {
+                    name: true,
+                    date: true,
+                    startDate: true,
+                    endDate: true,
+                },
             }),
 
             prisma.leaveRequest.findMany({
@@ -328,12 +401,24 @@ export const getMyAttendance = async (
         ])
     );
 
-    const holidayMap = new Map(
-        holidays.map((holiday) => [
-            getDateKey(new Date(holiday.date)),
-            holiday.name,
-        ])
-    );
+    const holidayMap = new Map<string, string>();
+
+    for (const holiday of holidays) {
+        const holidayKeys = new Set<string>();
+
+        addHolidayDates(
+            holidayKeys,
+            holiday,
+            startDate,
+            endDate
+        );
+
+        for (const key of holidayKeys) {
+            if (!holidayMap.has(key)) {
+                holidayMap.set(key, holiday.name);
+            }
+        }
+    }
 
     const leaveMap = new Map<string, string>();
 
@@ -397,19 +482,44 @@ export const getMyAttendance = async (
         cursor.setDate(cursor.getDate() + 1)
     ) {
         const date = new Date(cursor);
+
         if (date > today) continue;
 
         const key = getDateKey(date);
 
         // Priority: actual attendance > holiday > approved leave > week off > absent.
+        // Priority: holiday > actual attendance > approved leave > week off > absent.
+        const holidayName = holidayMap.get(key);
+
+        if (holidayName !== undefined) {
+            result.push({
+                id: `holiday-${key}`,
+                userId,
+                companyId,
+                branchId: null,
+                date,
+                punchInTime: null,
+                punchOutTime: null,
+                punchInLat: null,
+                punchInLng: null,
+                punchOutLat: null,
+                punchOutLng: null,
+                workingHours: 0,
+                isWithinGeoFence: false,
+                status: "Holiday",
+                holidayName,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            });
+            continue;
+        }
+
         const attendance = attendanceMap.get(key);
 
         if (attendance) {
             result.push(attendance);
             continue;
         }
-
-        const holidayName = holidayMap.get(key);
 
         if (holidayName !== undefined) {
             result.push({
@@ -668,8 +778,6 @@ export const getAllAttendance = async (
         };
     });
 };
-
-// ─── Live Attendance ─────────────────────────────────────────
 
 // ─── Live Attendance ─────────────────────────────────────────
 
@@ -961,9 +1069,24 @@ export const getMonthlySheet = async (
             where: {
                 companyId,
                 isActive: true,
-                date: { gte: monthStart, lte: monthEnd },
+                OR: [
+                    {
+                        date: {
+                            gte: monthStart,
+                            lte: monthEnd,
+                        },
+                    },
+                    {
+                        startDate: { lte: monthEnd },
+                        endDate: { gte: monthStart },
+                    },
+                ],
             },
-            select: { date: true },
+            select: {
+                date: true,
+                startDate: true,
+                endDate: true,
+            },
         }),
 
         prisma.attendance.findMany({
@@ -997,11 +1120,16 @@ export const getMonthlySheet = async (
         }),
     ]);
 
-    const holidayKeys = new Set(
-        holidays.map((holiday) =>
-            getDateKey(new Date(holiday.date))
-        )
-    );
+    const holidayKeys = new Set<string>();
+
+    for (const holiday of holidays) {
+        addHolidayDates(
+            holidayKeys,
+            holiday,
+            monthStart,
+            monthEnd
+        );
+    }
 
     const attendanceByUser = new Map<
         string,

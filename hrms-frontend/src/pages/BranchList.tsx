@@ -76,6 +76,21 @@ type EditForm = {
     locationName?: string;
 };
 
+const initialForm: CreateBranchPayload = {
+    name: "",
+    address: "",
+    phone: "",
+    email: "",
+    city: "",
+    state: "",
+    pincode: "",
+    managerName: "",
+    latitude: undefined,
+    longitude: undefined,
+    geoRadius: undefined,
+    locationName: "",
+};
+
 const BranchList = () => {
     const { user } = useAuthStore();
 
@@ -152,20 +167,7 @@ const BranchList = () => {
 
     // CREATE FORM
     const [form, setForm] =
-        React.useState<CreateBranchPayload>({
-            name: "",
-            address: "",
-            phone: "",
-            email: "",
-            city: "",
-            state: "",
-            pincode: "",
-            managerName: "",
-            latitude: undefined,
-            longitude: undefined,
-            geoRadius: undefined,
-            locationName: "",
-        });
+        React.useState<CreateBranchPayload>({ ...initialForm });
 
     // EDIT FORM
     const [editForm, setEditForm] =
@@ -184,9 +186,18 @@ const BranchList = () => {
         } catch (err: any) {
             toast.error(
                 err?.message ||
-                    "Failed to load branches"
+                "Failed to load branches"
             );
         }
+    };
+
+    const handleClose = () => {
+        setOpen(false);
+        setForm({ ...initialForm });
+        setErrors({});
+        setIsPhoneValid(false);
+        setPhoneError("");
+        setCreateMapOpen(false);
     };
 
     // CREATE INPUT CHANGE
@@ -202,7 +213,7 @@ const BranchList = () => {
 
         const schemaField =
             branchSchema.shape[
-                name as keyof typeof branchSchema.shape
+            name as keyof typeof branchSchema.shape
             ];
 
         if (!schemaField) return;
@@ -230,7 +241,7 @@ const BranchList = () => {
 
         const schemaField =
             branchSchema.shape[
-                name as keyof typeof branchSchema.shape
+            name as keyof typeof branchSchema.shape
             ];
 
         if (!schemaField) return;
@@ -253,11 +264,11 @@ const BranchList = () => {
 
             const matchSearch = searchQuery
                 ? branch.name
-                      .toLowerCase()
-                      .includes(search) ||
-                  branch.code
-                      .toLowerCase()
-                      .includes(search)
+                    .toLowerCase()
+                    .includes(search) ||
+                branch.code
+                    .toLowerCase()
+                    .includes(search)
                 : true;
 
             const matchStatus =
@@ -320,41 +331,20 @@ const BranchList = () => {
         setErrors({});
 
         try {
-            const res =
-                await createBranch(form);
+            const res = await createBranch(form);
 
-            toast.success(
-                "Branch created successfully!"
-            );
+            toast.success("Branch created successfully!");
 
             setBranches((prev) => [
                 res.data.data,
                 ...prev,
             ]);
 
-            setForm({
-                name: "",
-                address: "",
-                phone: "",
-                email: "",
-                city: "",
-                state: "",
-                pincode: "",
-                managerName: "",
-                latitude: undefined,
-                longitude: undefined,
-                geoRadius: undefined,
-                locationName: "",
-            });
-
-            setIsPhoneValid(false);
-            setPhoneError("");
-
-            setOpen(false);
+            handleClose();
+            void loadBranches();
         } catch (err: any) {
             toast.error(
-                err?.message ||
-                    "Failed to create branch"
+                err?.message || "Failed to create branch"
             );
         }
     };
@@ -425,9 +415,9 @@ const BranchList = () => {
                 prev.map((b) =>
                     b.id === selectedBranch.id
                         ? {
-                              ...b,
-                              ...res.data.data,
-                          }
+                            ...b,
+                            ...res.data.data,
+                        }
                         : b
                 )
             );
@@ -441,7 +431,7 @@ const BranchList = () => {
         } catch (err: any) {
             toast.error(
                 err?.message ||
-                    "Failed to update branch"
+                "Failed to update branch"
             );
         }
     };
@@ -461,10 +451,9 @@ const BranchList = () => {
                 );
 
             toast.success(
-                `Branch ${
-                    selectedBranch.isActive
-                        ? "deactivated"
-                        : "activated"
+                `Branch ${selectedBranch.isActive
+                    ? "deactivated"
+                    : "activated"
                 } successfully!`
             );
 
@@ -472,9 +461,9 @@ const BranchList = () => {
                 prev.map((b) =>
                     b.id === selectedBranch.id
                         ? {
-                              ...b,
-                              ...res.data.data,
-                          }
+                            ...b,
+                            ...res.data.data,
+                        }
                         : b
                 )
             );
@@ -484,7 +473,7 @@ const BranchList = () => {
         } catch (err: any) {
             toast.error(
                 err?.message ||
-                    "Failed to update branch"
+                "Failed to update branch"
             );
         }
     };
@@ -528,7 +517,7 @@ const BranchList = () => {
             } catch (err: any) {
                 toast.error(
                     err?.message ||
-                        "Failed to delete branch"
+                    "Failed to delete branch"
                 );
             }
         };
@@ -539,6 +528,9 @@ const BranchList = () => {
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 flex-wrap">
                     <Input
+                        type="search"
+                        name="branch-search"
+                        autoComplete="off"
                         placeholder="Search branch name or code..."
                         value={searchQuery}
                         onChange={(e) =>
@@ -590,7 +582,13 @@ const BranchList = () => {
             {/* CREATE DIALOG */}
             <Dialog
                 open={open}
-                onOpenChange={setOpen}
+                onOpenChange={(isOpen) => {
+                    if (!isOpen) {
+                        handleClose();
+                    } else {
+                        setOpen(true);
+                    }
+                }}
             >
                 <DialogContent>
                     <DialogHeader>
@@ -893,7 +891,7 @@ const BranchList = () => {
                                     <MapPin className="h-4 w-4 mr-2" />
 
                                     {form.latitude !==
-                                    undefined
+                                        undefined
                                         ? "Update Location"
                                         : "Set Location"}
                                 </Button>
@@ -901,7 +899,7 @@ const BranchList = () => {
                                 {form.latitude !==
                                     undefined &&
                                     form.longitude !==
-                                        undefined && (
+                                    undefined && (
                                         <span className="text-xs text-muted-foreground">
                                             {form.latitude.toFixed(
                                                 4
@@ -1250,7 +1248,7 @@ const BranchList = () => {
                                     <MapPin className="h-4 w-4 mr-2" />
 
                                     {editForm.latitude !==
-                                    undefined
+                                        undefined
                                         ? "Update Location"
                                         : "Set Location"}
                                 </Button>
@@ -1258,7 +1256,7 @@ const BranchList = () => {
                                 {editForm.latitude !=
                                     null &&
                                     editForm.longitude !=
-                                        null && (
+                                    null && (
                                         <span className="text-xs text-muted-foreground">
                                             {editForm.latitude.toFixed(
                                                 4
@@ -1663,16 +1661,16 @@ const BranchList = () => {
 
                                                                 setIsEditPhoneValid(
                                                                     !!phone &&
-                                                                        isValidPhoneNumber(
-                                                                            phone
-                                                                        )
+                                                                    isValidPhoneNumber(
+                                                                        phone
+                                                                    )
                                                                 );
 
                                                                 setEditPhoneError(
                                                                     phone &&
-                                                                    !isValidPhoneNumber(
-                                                                        phone
-                                                                    )
+                                                                        !isValidPhoneNumber(
+                                                                            phone
+                                                                        )
                                                                         ? "Invalid phone number"
                                                                         : ""
                                                                 );
@@ -1717,20 +1715,20 @@ const BranchList = () => {
 
                             {filteredBranches.length ===
                                 0 && (
-                                <TableRow>
-                                    <TableCell
-                                        colSpan={
-                                            isSuperAdmin
-                                                ? 9
-                                                : 8
-                                        }
-                                        className="text-center text-muted-foreground py-8"
-                                    >
-                                        No branches
-                                        found
-                                    </TableCell>
-                                </TableRow>
-                            )}
+                                    <TableRow>
+                                        <TableCell
+                                            colSpan={
+                                                isSuperAdmin
+                                                    ? 9
+                                                    : 8
+                                            }
+                                            className="text-center text-muted-foreground py-8"
+                                        >
+                                            No branches
+                                            found
+                                        </TableCell>
+                                    </TableRow>
+                                )}
                         </TableBody>
                     </Table>
                 </div>

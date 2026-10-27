@@ -23,6 +23,7 @@ const Users = () => {
     const [showPassword, setShowPassword] = React.useState(false);
     const [isLoading, setIsLoading] = React.useState(true);
     const [isRefreshing, setIsRefreshing] = React.useState(false);
+    const [searchQuery, setSearchQuery] = React.useState("");
 
     React.useEffect(() => {
         loadUsers();
@@ -46,6 +47,13 @@ const Users = () => {
             setIsRefreshing(false);
         }
     };
+    const filteredCompaniesUsers = users.filter((user) => {
+        return (
+            user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            user.company?.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    });
 
     //  Toggle Active/Inactive
     const handleToggleStatus = async (user: CompanyUser) => {
@@ -141,7 +149,17 @@ const Users = () => {
             </Dialog>
 
             {/* Refresh */}
-            <div className="flex justify-end mb-2">
+            <div className="flex justify-between items-center mb-2">
+
+                <Input
+                    type="search"
+                    name="category-search"
+                    autoComplete="off"
+                    placeholder="Search category name..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-64"
+                />
                 <Button className="cursor-pointer gap-2"
                     variant="add"
                     size="sm"
@@ -183,7 +201,7 @@ const Users = () => {
                             </TableRow>
                         ) : (
                             <>
-                                {users.map((user, index) => (
+                                {filteredCompaniesUsers.map((user, index) => (
                                     <TableRow key={user.id}>
                                         <TableCell>{index + 1}</TableCell>
                                         <TableCell>{user.name}</TableCell>

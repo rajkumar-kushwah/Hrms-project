@@ -8,6 +8,15 @@ import {
     activateHoliday,
 } from "../services/holiday.service.js";
 
+// ─────────────────────────────────────────────
+// Error Message Helper
+// ─────────────────────────────────────────────
+
+const getErrorMessage = (error: unknown): string => {
+    return error instanceof Error
+        ? error.message
+        : "An unexpected error occurred";
+};
 
 // ─────────────────────────────────────────────
 // Create Holiday
@@ -18,7 +27,7 @@ export const createHolidayController = async (
     res: Response
 ) => {
     try {
-        const { name, date } = req.body;
+        const { name, startDate, endDate } = req.body;
 
         const companyId = req.user?.companyId;
 
@@ -29,9 +38,21 @@ export const createHolidayController = async (
             });
         }
 
+        if (
+            typeof name !== "string" ||
+            typeof startDate !== "string" ||
+            typeof endDate !== "string"
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Name, start date and end date are required",
+            });
+        }
+
         const holiday = await createHoliday(companyId, {
             name,
-            date,
+            startDate,
+            endDate,
         });
 
         return res.status(201).json({
@@ -39,17 +60,16 @@ export const createHolidayController = async (
             message: "Holiday created successfully",
             data: holiday,
         });
-
-    } catch (error: any) {
-        console.error("Create Holiday Error:", error);
+    } catch (error: unknown) {
+        const message = getErrorMessage(error);
+        console.error("Create Holiday Error:", message);
 
         return res.status(400).json({
             success: false,
-            message: error.message || "Failed to create holiday",
+            message: message || "Failed to create holiday",
         });
     }
 };
-
 
 // ─────────────────────────────────────────────
 // Get Holidays
@@ -61,7 +81,6 @@ export const getHolidaysController = async (
 ) => {
     try {
         const companyId = req.user?.companyId ?? null;
-
         const holidays = await getHolidays(companyId);
 
         return res.status(200).json({
@@ -69,17 +88,16 @@ export const getHolidaysController = async (
             message: "Holidays fetched successfully",
             data: holidays,
         });
-
-    } catch (error: any) {
-        console.error("Get Holidays Error:", error);
+    } catch (error: unknown) {
+        const message = getErrorMessage(error);
+        console.error("Get Holidays Error:", message);
 
         return res.status(500).json({
             success: false,
-            message: error.message || "Failed to fetch holidays",
+            message: message || "Failed to fetch holidays",
         });
     }
 };
-
 
 // ─────────────────────────────────────────────
 // Get Active Holidays
@@ -106,30 +124,28 @@ export const getActiveHolidaysController = async (
             message: "Active holidays fetched successfully",
             data: holidays,
         });
-
-    } catch (error: any) {
-        console.error("Get Active Holidays Error:", error);
+    } catch (error: unknown) {
+        const message = getErrorMessage(error);
+        console.error("Get Active Holidays Error:", message);
 
         return res.status(500).json({
             success: false,
-            message: error.message || "Failed to fetch holidays",
+            message: message || "Failed to fetch active holidays",
         });
     }
 };
 
-
 // ─────────────────────────────────────────────
 // Update Holiday
 // ─────────────────────────────────────────────
 
-// Update Holiday
 export const updateHolidayController = async (
     req: Request,
     res: Response
 ) => {
     try {
         const { id } = req.params;
-        const { name, date } = req.body;
+        const { name, startDate, endDate } = req.body;
 
         if (typeof id !== "string") {
             return res.status(400).json({
@@ -138,9 +154,21 @@ export const updateHolidayController = async (
             });
         }
 
+        if (
+            (name !== undefined && typeof name !== "string") ||
+            (startDate !== undefined && typeof startDate !== "string") ||
+            (endDate !== undefined && typeof endDate !== "string")
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid holiday update data",
+            });
+        }
+
         const holiday = await updateHoliday(id, {
-            name,
-            date,
+            ...(name !== undefined ? { name } : {}),
+            ...(startDate !== undefined ? { startDate } : {}),
+            ...(endDate !== undefined ? { endDate } : {}),
         });
 
         return res.status(200).json({
@@ -148,19 +176,21 @@ export const updateHolidayController = async (
             message: "Holiday updated successfully",
             data: holiday,
         });
-
-    } catch (error: any) {
-        console.error("Update Holiday Error:", error);
+    } catch (error: unknown) {
+        const message = getErrorMessage(error);
+        console.error("Update Holiday Error:", message);
 
         return res.status(400).json({
             success: false,
-            message: error.message || "Failed to update holiday",
+            message: message || "Failed to update holiday",
         });
     }
 };
 
-
+// ─────────────────────────────────────────────
 // Deactivate Holiday
+// ─────────────────────────────────────────────
+
 export const deactivateHolidayController = async (
     req: Request,
     res: Response
@@ -181,19 +211,21 @@ export const deactivateHolidayController = async (
             success: true,
             message: result.message,
         });
-
-    } catch (error: any) {
-        console.error("Deactivate Holiday Error:", error);
+    } catch (error: unknown) {
+        const message = getErrorMessage(error);
+        console.error("Deactivate Holiday Error:", message);
 
         return res.status(400).json({
             success: false,
-            message: error.message || "Failed to deactivate holiday",
+            message: message || "Failed to deactivate holiday",
         });
     }
 };
 
-
+// ─────────────────────────────────────────────
 // Activate Holiday
+// ─────────────────────────────────────────────
+
 export const activateHolidayController = async (
     req: Request,
     res: Response
@@ -214,13 +246,13 @@ export const activateHolidayController = async (
             success: true,
             message: result.message,
         });
-
-    } catch (error: any) {
-        console.error("Activate Holiday Error:", error);
+    } catch (error: unknown) {
+        const message = getErrorMessage(error);
+        console.error("Activate Holiday Error:", message);
 
         return res.status(400).json({
             success: false,
-            message: error.message || "Failed to activate holiday",
+            message: message || "Failed to activate holiday",
         });
     }
 };

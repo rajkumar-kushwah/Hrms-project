@@ -20,11 +20,33 @@ export const getAllAttendance = (date?: string) => api.get("/attendance/all", { 
 export const getLiveAttendance = () => api.get("/attendance/live");
 
 //  monthly attendance
-export const getEmployeeAttendance = (userId: string, month?: number, year?: number) =>
-    api.get(`/attendance/employee/${userId}`, { params: { month, year } });
+export const getEmployeeAttendance = (
+    userId: string,
+    month?: number,
+    year?: number,
+    companyId?: string
+) =>
+    api.get(`/attendance/employee/${userId}`, {
+        params: {
+            month,
+            year,
+            ...(companyId ? { companyId } : {}),
+        },
+    });
 
-export const getMonthlyAttendanceSheet = (month: number, year: number) =>
-    api.get("/attendance/monthly-sheet", { params: { month, year } });
+// Monthly attendance sheet
+export const getMonthlyAttendanceSheet = (
+    month: number,
+    year: number,
+    companyId?: string
+) =>
+    api.get("/attendance/monthly-sheet", {
+        params: {
+            month,
+            year,
+            ...(companyId ? { companyId } : {}),
+        },
+    });
 
 export const getEmployeeBasicInfo = (userId: string) =>
     api.get(`/employees/${userId}/basic-info`);

@@ -388,6 +388,7 @@ function CompanyList() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-64 pr-8"
+              autoComplete='off'
             />
             {searchQuery && (
               <button
@@ -560,7 +561,7 @@ function CompanyList() {
           </DialogHeader>
           <div>
             <Label>Name</Label>
-            <Input type="text" placeholder="Admin Name" name="name" value={adminForm.name} onChange={handleAdminChange} />
+            <Input type="text"  placeholder="Enter admin name" name="name" id="adminName" autoComplete="new-password" value={adminForm.name} onChange={handleAdminChange} />
             {adminErrors.name && (
               <p className="mt-1 text-sm text-red-500">{adminErrors.name}</p>
             )}
