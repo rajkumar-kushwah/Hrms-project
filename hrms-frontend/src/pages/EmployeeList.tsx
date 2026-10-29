@@ -35,10 +35,11 @@ import type {
 } from "@/types/employee.types";
 
 import {
+  deleteEmployee,
   getEmployeeById,
   getEmployees,
   resetEmployeePassword,
-  updateEmployee,
+  updateEmployeeStatus,
 } from "@/services/employee.service";
 
 import AddEmployeeDialog from "@/pages/AddEmployeeDialog";
@@ -132,6 +133,18 @@ const EmployeeList = () => {
 
   const [notes, setNotes] =
     React.useState("");
+
+  const [deleteDialogOpen, setDeleteDialogOpen] =
+    React.useState(false);
+
+  const [selectedForDelete, setSelectedForDelete] =
+    React.useState<Employee | null>(null);
+
+  const [isDeleting, setIsDeleting] =
+    React.useState(false);
+
+  const [deleteConfirmed, setDeleteConfirmed] =
+    React.useState(false);
 
   React.useEffect(() => {
     loadEmployees();
@@ -266,42 +279,68 @@ const EmployeeList = () => {
   const handleToggleStatus = async () => {
     if (!selectedEmployee) return;
 
+    const isActive = !selectedEmployee.isActive;
+
     try {
-      await updateEmployee(
+      await updateEmployeeStatus(
         selectedEmployee.id,
-        {
-          isActive: !selectedEmployee.isActive,
-        },
-        isSuperAdmin ? selectedCompanyId : undefined
+        isActive
       );
 
       toast.success(
-        `Employee ${!selectedEmployee.isActive
-          ? "activated"
-          : "deactivated"
-        } successfully!`
+        `Employee ${isActive ? "activated" : "deactivated"} successfully!`
       );
 
       setEmployees((prev) =>
         prev.map((employee) =>
           employee.id === selectedEmployee.id
-            ? {
-              ...employee,
-              isActive: !employee.isActive,
-            }
+            ? { ...employee, isActive }
             : employee
         )
       );
 
       setStatusDialogOpen(false);
       setSelectedEmployee(null);
-    } catch (err: any) {
-      const message = err?.message || "Failed to update employee";
-
-      toast.error(message);
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to update employee status"
+      );
     }
   };
 
+  //  delete Employee
+  const handleDeleteEmployee = async () => {
+    if (!selectedForDelete || isDeleting || !deleteConfirmed) {
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      await deleteEmployee(selectedForDelete.id);
+
+      setEmployees((prev) =>
+        prev.filter(
+          (employee) => employee.id !== selectedForDelete.id
+        )
+      );
+
+      toast.success("Employee deleted successfully");
+
+      setDeleteDialogOpen(false);
+      setSelectedForDelete(null);
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : "Failed to delete employee"
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
   // --------------------------------------------------
   // Edit Employee
   // --------------------------------------------------
@@ -535,6 +574,73 @@ const EmployeeList = () => {
 
 
       </div>
+
+      {/* Delete Employee Dialog */}
+
+      <Dialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!isDeleting) {
+            setDeleteDialogOpen(open);
+
+            if (!open) {
+              setSelectedForDelete(null);
+              setDeleteConfirmed(false);
+            }
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Employee</DialogTitle>
+
+            <DialogDescription>
+              Are you sure you want to permanently delete{" "}
+              <strong>{selectedForDelete?.name}</strong>?
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex items-start gap-2 py-2">
+            <input
+              id="confirm-delete"
+              type="checkbox"
+              checked={deleteConfirmed}
+              onChange={(e) => setDeleteConfirmed(e.target.checked)}
+              className="mt-1 h-4 w-4 cursor-pointer accent-destructive"
+            />
+
+            <Label
+              htmlFor="confirm-delete"
+              className="cursor-pointer text-sm leading-5"
+            >
+              I understand that this employee will be permanently deleted.
+            </Label>
+          </div>
+
+          <DialogFooter>
+            <Button className="cursor-pointer"
+              variant="add"
+              disabled={isDeleting}
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setSelectedForDelete(null);
+                setDeleteConfirmed(false);
+              }}
+            >
+              Cancel
+            </Button>
+
+            <Button className="cursor-pointer"
+              variant="destructive"
+              disabled={!deleteConfirmed || isDeleting}
+              onClick={handleDeleteEmployee}
+            >
+              {isDeleting ? "Deleting..." : "Delete Employee"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Employee Dialog */}
       <AddEmployeeDialog
@@ -1036,6 +1142,19 @@ const EmployeeList = () => {
                                 }}
                               >
                                 Reset Password
+                              </DropdownMenuItem>
+                            )}
+
+                            {canChangeStatus && (
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onClick={() => {
+                                  setSelectedForDelete(emp);
+                                  setDeleteDialogOpen(true);
+                                }}
+                              >
+
+                                Delete
                               </DropdownMenuItem>
                             )}
 

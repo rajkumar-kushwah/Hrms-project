@@ -927,6 +927,12 @@ export const updateEmployee = async (
         },
 
         include: {
+            company: {
+                select: {
+                    id: true,
+                    name: true,
+                },
+            },
             role: {
                 select: {
                     id: true,
@@ -960,12 +966,42 @@ export const updateEmployee = async (
 // Delete Employee (Soft Delete)
 // ─────────────────────────────────────────────
 
-export const deleteEmployee = async (
-    id: string
+export const updateEmployeeStatus = async (
+    id: string,
+    isActive: boolean
 ) => {
     const existing = await prisma.user.findUnique({
-        where: {
-            id,
+        where: { id },
+    });
+
+    if (!existing) {
+        throw new Error("Employee not found");
+    }
+
+    const employee = await prisma.user.update({
+        where: { id },
+        data: { isActive },
+        select: {
+            id: true,
+            name: true,
+            isActive: true,
+        },
+    });
+
+    return {
+        message: isActive
+            ? "Employee activated successfully"
+            : "Employee deactivated successfully",
+        employee,
+    };
+};
+// Permanently delete employee
+export const deleteEmployee = async (id: string) => {
+    const existing = await prisma.user.findUnique({
+        where: { id },
+        select: {
+            id: true,
+            name: true,
         },
     });
 
@@ -973,18 +1009,12 @@ export const deleteEmployee = async (
         throw new Error("Employee not found");
     }
 
-    await prisma.user.update({
-        where: {
-            id,
-        },
-
-        data: {
-            isActive: false,
-        },
+    await prisma.user.delete({
+        where: { id },
     });
 
     return {
-        message: "Employee deactivated successfully",
+        message: "Employee deleted successfully",
     };
 };
 

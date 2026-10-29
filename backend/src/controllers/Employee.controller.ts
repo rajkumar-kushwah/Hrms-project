@@ -205,7 +205,55 @@ export const updateEmployee = async (req: Request, res: Response) => {
 };
 
 // Delete employee
-export const deleteEmployee = async (req: Request, res: Response) => {
+export const updateEmployeeStatus = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const id = req.params.id;
+        const isActive: unknown = req.body?.isActive;
+
+        if (typeof id !== "string" || !id) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid employee id",
+            });
+        }
+
+        if (typeof isActive !== "boolean") {
+            return res.status(400).json({
+                success: false,
+                message: "isActive must be true or false",
+            });
+        }
+
+        const employee = await EmployeeService.updateEmployeeStatus(
+            id,
+            isActive
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: employee.message,
+            data: employee.employee,
+        });
+    } catch (error: unknown) {
+        const message =
+            error instanceof Error
+                ? error.message
+                : "Failed to update employee status";
+
+        return res.status(400).json({
+            success: false,
+            message,
+        });
+    }
+};
+// Delete employee
+export const deleteEmployee = async (
+    req: Request,
+    res: Response
+) => {
     try {
         const id = req.params.id;
 
@@ -216,11 +264,11 @@ export const deleteEmployee = async (req: Request, res: Response) => {
             });
         }
 
-        const employee = await EmployeeService.deleteEmployee(id);
+        const result = await EmployeeService.deleteEmployee(id);
 
         return res.status(200).json({
             success: true,
-            message: employee.message,
+            message: result.message,
         });
     } catch (error: unknown) {
         const message =

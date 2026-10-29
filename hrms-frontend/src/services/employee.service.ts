@@ -22,6 +22,11 @@ export const updateEmployee = (
             : {},
     });
 
+// Activate / Deactivate employee
+export const updateEmployeeStatus = (id: string, isActive: boolean) =>
+    api.patch(`/employee/${id}/status`, { isActive });
+
+// Permanently delete employee
 export const deleteEmployee = (id: string) => api.delete(`/employee/${id}`);
 
 export const resetEmployeePassword = (id: string, password: string) =>
