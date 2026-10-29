@@ -1,5 +1,5 @@
 import React from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
     ArrowLeft,
     Mail,
@@ -31,6 +31,10 @@ const EmployeeView = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
 
+
+    const [searchParams] = useSearchParams();
+
+    const companyId = searchParams.get("companyId") ?? undefined;
     const [employee, setEmployee] = React.useState<EmployeeDetail | null>(null);
     const [loading, setLoading] = React.useState(true);
 
@@ -41,7 +45,7 @@ const EmployeeView = () => {
             try {
                 setLoading(true);
 
-                const res = await getEmployeeById(id);
+                const res = await getEmployeeById(id,companyId);
                 setEmployee(res.data.data);
             } catch (err: any) {
                 const message = err?.message ||

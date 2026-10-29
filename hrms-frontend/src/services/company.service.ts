@@ -1,31 +1,31 @@
 import { api } from "../api/axios";
 import type { CreateCompanyPayload, UpdateCompanyPayload, AssignAdminPayload } from "@/types/company.types";
 
-export const getCompanies = () => {
-  return api.get("/company");
+export const getCompanies = (companyId?: string) => {
+  return api.get("/company",{params:companyId && {companyId}});
 };
 
-export const createCompany = (data: CreateCompanyPayload) => {
-  return api.post("/company", data);
+export const createCompany = (data: CreateCompanyPayload,companyId?: string) => {
+  return api.post("/company", data,{params:companyId && {companyId}});
 };
 
-export const updateCompany = (id: string, data: UpdateCompanyPayload) => {
-  return api.put(`/company/${id}`, data);
+export const updateCompany = (id: string, data: UpdateCompanyPayload,companyId?: string) => {
+  return api.put(`/company/${id}`, data,{params:companyId && {companyId}});
 };
 
-export const getCompanyById = (id: string) => {
-  return api.get(`/company/${id}`);
+export const getCompanyById = (id: string,companyId?: string) => {
+  return api.get(`/company/${id}`,{params:companyId && {companyId}});
 };
 
 // delete company
-export const deactivateCompany = (id: string) => api.delete(`/company/${id}`);
+export const deactivateCompany = (id: string,companyId?: string) => api.delete(`/company/${id}`,{params:companyId && {companyId}});
 
 // permanent delete
-export const permanentDeleteCompany = (id: string) => api.delete(`/company/${id}/permanent`);
+export const permanentDeleteCompany = (id: string,companyId?: string) => api.delete(`/company/${id}/permanent`,{params:companyId && {companyId}});
 
 // me company
-export const getMyCompany = () => {
-  return api.get("/company/me");
+export const getMyCompany = (companyId?: string) => {
+  return api.get("/company/me",{params:companyId && {companyId}});
 };
 
 export const assignCompanyAdmin = ( companyId: string, data: AssignAdminPayload) => {

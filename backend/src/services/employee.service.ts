@@ -708,7 +708,11 @@ export const updateEmployee = async (
     const isSelf =
         requestingUserId === id;
 
-
+    if (existing.companyId !== requestingCompanyId) {
+        throw new Error(
+            "Employee does not belong to the selected company"
+        );
+    }
     // ─────────────────────────────────────────
     // Access Check
     // ─────────────────────────────────────────

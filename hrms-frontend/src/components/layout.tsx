@@ -66,6 +66,9 @@ export default function Layout() {
             case "/attendance/list":
                 return "Attendance List";
 
+            case "/reports/attendance":
+                return "Attendance Report";
+
             case "/company":
                 return "Company";
 

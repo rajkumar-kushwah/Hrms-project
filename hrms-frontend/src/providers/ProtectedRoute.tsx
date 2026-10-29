@@ -1,5 +1,6 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuthStore } from "../store/auth.store";
+import FullScreenLoader from "@/pages/common/FullScreenLoader";
 
 
 export const ProtectedRoute = () => {
@@ -8,7 +9,7 @@ export const ProtectedRoute = () => {
     // console.log("ProtectedRoute state:", { isAuthenticated, isInitialized, loading });
 
     if (!isInitialized || loading) {
-        return <div className="text-center py-8 text-muted-foreground">Loading...</div>
+        return <FullScreenLoader />
     }
 
     if (!isAuthenticated) {

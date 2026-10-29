@@ -1,5 +1,7 @@
 import React from "react";
 import {
+  Eye,
+  EyeOff,
   MoreVertical,
   PlusIcon,
 } from "lucide-react";
@@ -33,6 +35,7 @@ import type {
 } from "@/types/employee.types";
 
 import {
+  getEmployeeById,
   getEmployees,
   resetEmployeePassword,
   updateEmployee,
@@ -60,19 +63,30 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { isAdminRole } from "@/utilis/roleUtils";
+import { isAdminRole, isSuperAdminRole } from "@/utilis/roleUtils";
 import { startOnboarding } from "@/services/onboarding.service";
 import { Textarea } from "@/components/ui/textarea";
+import { CompanySelector } from "@/pages/common/CompanySelector";
+import { passwordSchema } from "@/validation/employee.validation";
 
 const EmployeeList = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+
+  const isSuperAdmin = isSuperAdminRole(
+    user?.role?.name
+  );
+
+  const [selectedCompanyId, setSelectedCompanyId] =
+    React.useState<string>("");
 
   // Super Admin / Company Admin can activate/deactivate
   const canChangeStatus = isAdminRole(user?.role?.name);
 
   const [employees, setEmployees] = React.useState<Employee[]>([]);
   const [open, setOpen] = React.useState(false);
+
+  const [passwordError, setPasswordError] = React.useState("");
 
   // Selected employee is only used for status dialog
   const [selectedEmployee, setSelectedEmployee] =
@@ -83,6 +97,7 @@ const EmployeeList = () => {
 
   const [editEmployee, setEditEmployee] =
     React.useState<EmployeeDetail | null>(null);
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const [editOpen, setEditOpen] = React.useState(false);
 
@@ -120,15 +135,19 @@ const EmployeeList = () => {
 
   React.useEffect(() => {
     loadEmployees();
-  }, []);
+  }, [selectedCompanyId, isSuperAdmin]);
 
   // --------------------------------------------------
   // Load Employees
   // --------------------------------------------------
 
   const loadEmployees = async () => {
+    if (isSuperAdmin && !selectedCompanyId) {
+      setEmployees([]);
+      return;
+    }
     try {
-      const res = await getEmployees();
+      const res = await getEmployees(isSuperAdmin ? selectedCompanyId : undefined);
 
       setEmployees(res.data.data);
     } catch (err: any) {
@@ -143,13 +162,37 @@ const EmployeeList = () => {
   // Reset Employee Password
   // --------------------------------------------------
 
-  const handleResetPassword = async () => {
-    if (!selectedForReset) return;
+  const validatePassword = (value: string) => {
+    const result = passwordSchema.safeParse(value);
 
-    if (!newPassword || newPassword.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (!result.success) {
+      setPasswordError(
+        result.error.issues[0]?.message ?? "Invalid password"
+      );
+      return false;
+    }
+
+    setPasswordError("");
+    return true;
+  };
+
+  const handleClose = () => {
+    setResetOpen(false);
+    setNewPassword("");
+    setSelectedForReset(null);
+    setPasswordError("");
+  };
+  const handleResetPassword = async () => {
+    if (!validatePassword(newPassword)) {
       return;
     }
+
+    if (!selectedForReset) return;
+
+    // if (!newPassword || newPassword.length < 6) {
+    //   toast.error("Password must be at least 6 characters");
+    //   return;
+    // }
 
     try {
       await resetEmployeePassword(
@@ -179,6 +222,7 @@ const EmployeeList = () => {
     try {
       await startOnboarding(
         selectedOnboardingEmployee.id,
+        isSuperAdmin ? selectedCompanyId : undefined,
         {
           targetDate: targetDate || undefined,
           notes: notes.trim() || undefined,
@@ -227,7 +271,8 @@ const EmployeeList = () => {
         selectedEmployee.id,
         {
           isActive: !selectedEmployee.isActive,
-        }
+        },
+        isSuperAdmin ? selectedCompanyId : undefined
       );
 
       toast.success(
@@ -262,15 +307,24 @@ const EmployeeList = () => {
   // --------------------------------------------------
 
   const handleEditClick = async (id: string) => {
+    if (isSuperAdmin && !selectedCompanyId) {
+      toast.error("Please select a company first.");
+      return;
+    }
+
     try {
-      const res = await import("@/services/employee.service").then(
-        (module) => module.getEmployeeById(id)
+      const res = await getEmployeeById(
+        id,
+        isSuperAdmin ? selectedCompanyId : undefined
       );
 
       setEditEmployee(res.data.data);
       setEditOpen(true);
-    } catch (err: any) {
-      const message = err?.message || "Failed to load employee details";
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to load employee details";
 
       toast.error(message);
     }
@@ -281,7 +335,16 @@ const EmployeeList = () => {
   // --------------------------------------------------
 
   const handleViewDetails = (id: string) => {
-    navigate(`/employee/${id}`);
+    if (isSuperAdmin && !selectedCompanyId) {
+      toast.error("Please select a company first.");
+      return;
+    }
+
+    const url = isSuperAdmin
+      ? `/employee/${id}?companyId=${encodeURIComponent(selectedCompanyId)}`
+      : `/employee/${id}`;
+
+    navigate(url);
   };
 
   // --------------------------------------------------
@@ -326,6 +389,20 @@ const EmployeeList = () => {
     );
   });
 
+  // superadmin company Id is required for onboarding
+  const navigateToOnboarding = (employeeId: string) => {
+    if (isSuperAdmin && !selectedCompanyId) {
+      toast.error("Please select a company first.");
+      return;
+    }
+
+    const url = isSuperAdmin
+      ? `/onboarding/${employeeId}?companyId=${encodeURIComponent(selectedCompanyId)}`
+      : `/onboarding/${employeeId}`;
+
+    navigate(url);
+  };
+
   // --------------------------------------------------
   // Employee Created
   // --------------------------------------------------
@@ -349,126 +426,114 @@ const EmployeeList = () => {
     <div className="flex flex-col gap-4">
 
       {/* Filters + Add Employee */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3 flex-wrap">
+      {/* Header + Filters */}
+      <div className="flex flex-col gap-3">
+        {/* Company Selector + Add Employee */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            {isSuperAdmin && (
+              <div className="w-full max-w-60">
+                <CompanySelector
+                  selectedCompanyId={selectedCompanyId}
+                  onCompanyChange={(companyId) => {
+                    setSelectedCompanyId(companyId);
+                    setEmployees([]);
+                    setBranchFilter("all");
+                    setRoleFilter("all");
+                    setStatusFilter("all");
+                    setSearchQuery("");
+                  }}
+                />
+              </div>
+            )}
+          </div>
 
-          {/* Search */}
+          {canChangeStatus && (
+            <Button
+              size="sm"
+              variant="add"
+              className="h-9 w-auto shrink-0 cursor-pointer px-3"
+              disabled={isSuperAdmin && !selectedCompanyId}
+              onClick={() => setOpen(true)}
+            >
+              <PlusIcon className="mr-2 h-4 w-4" />
+              Add Employee
+            </Button>
+          )}
+        </div>
+
+        {/* Search + Filters */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <Input
             type="search"
             name="employee-search"
             placeholder="Search name, code or email..."
             value={searchQuery}
-            onChange={(e) =>
-              setSearchQuery(e.target.value)
-            }
+            onChange={(e) => setSearchQuery(e.target.value)}
             autoComplete="off"
-            className="w-64"
+            className="h-9 w-full sm:w-60"
           />
+          <div className="flex flex-wrap gap-2">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="h-9  sm:w-32">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
 
-          {/* Status Filter */}
-          <Select
-            value={statusFilter}
-            onValueChange={setStatusFilter}
-          >
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
+            <Select value={branchFilter} onValueChange={setBranchFilter}>
+              <SelectTrigger className="h-9  sm:w-40">
+                <SelectValue placeholder="All Branches" />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectItem value="all">All Branches</SelectItem>
+                {[
+                  ...new Map(
+                    employees
+                      .filter((employee) => employee.branch)
+                      .map((employee) => [
+                        employee.branch!.id,
+                        employee.branch!,
+                      ])
+                  ).values(),
+                ].map((branch) => (
+                  <SelectItem key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-            <SelectContent position="popper">
-              <SelectItem value="all">
-                All Status
-              </SelectItem>
-
-              <SelectItem value="active">
-                Active
-              </SelectItem>
-
-              <SelectItem value="inactive">
-                Inactive
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* Branch Filter */}
-          <Select
-            value={branchFilter}
-            onValueChange={setBranchFilter}
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="All Branches" />
-            </SelectTrigger>
-
-            <SelectContent position="popper">
-              <SelectItem value="all">
-                All Branches
-              </SelectItem>
-
-              {[
-                ...new Map(
-                  employees
-                    .filter((employee) => employee.branch)
-                    .map((employee) => [
-                      employee.branch!.id,
-                      employee.branch,
-                    ])
-                ).values(),
-              ].map((branch) => (
-                <SelectItem
-                  key={branch!.id}
-                  value={branch!.id}
-                >
-                  {branch!.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* Role Filter */}
-          <Select
-            value={roleFilter}
-            onValueChange={setRoleFilter}
-          >
-            <SelectTrigger className="w-36">
-              <SelectValue placeholder="All Roles" />
-            </SelectTrigger>
-
-            <SelectContent position="popper">
-              <SelectItem value="all">
-                All Roles
-              </SelectItem>
-
-              {[
-                ...new Map(
-                  employees
-                    .filter((employee) => employee.role)
-                    .map((employee) => [
-                      employee.role!.id,
-                      employee.role,
-                    ])
-                ).values(),
-              ].map((role) => (
-                <SelectItem
-                  key={role!.id}
-                  value={String(role!.id)}
-                >
-                  {role!.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger className="h-9  sm:w-36">
+                <SelectValue placeholder="All Roles" />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectItem value="all">All Roles</SelectItem>
+                {[
+                  ...new Map(
+                    employees
+                      .filter((employee) => employee.role)
+                      .map((employee) => [
+                        employee.role!.id,
+                        employee.role!,
+                      ])
+                  ).values(),
+                ].map((role) => (
+                  <SelectItem key={role.id} value={String(role.id)}>
+                    {role.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        {/* Add Employee */}
-        {canChangeStatus && (
-          <Button
-            size="sm"
-            variant="add"
-            onClick={() => setOpen(true)}
-          >
-            <PlusIcon className="h-4 w-4 mr-2" />
-            Add Employee
-          </Button>
-        )}
+
       </div>
 
       {/* Add Employee Dialog */}
@@ -476,6 +541,7 @@ const EmployeeList = () => {
         open={open}
         onOpenChange={setOpen}
         onSuccess={handleEmployeeCreated}
+        selectedCompanyId={selectedCompanyId}
       />
 
       {/* Edit Employee Dialog */}
@@ -495,6 +561,7 @@ const EmployeeList = () => {
           setEditEmployee(null);
         }}
         editEmployee={editEmployee}
+        selectedCompanyId={selectedCompanyId}
       />
 
       {/* Activate / Deactivate Dialog */}
@@ -618,7 +685,14 @@ const EmployeeList = () => {
       {/* Reset Password Dialog */}
       <Dialog
         open={resetOpen}
-        onOpenChange={setResetOpen}
+        onOpenChange={(value) => {
+          if (value) {
+            setResetOpen(true);
+            setPasswordError("");
+          } else {
+            handleClose();
+          }
+        }}
       >
         <DialogContent>
           <DialogHeader>
@@ -632,19 +706,46 @@ const EmployeeList = () => {
             <Label>
               New Password
             </Label>
+            <div className="relative mt-2">
+              <Input
+                type={showPassword ? "text" : "password"}
+                placeholder="Min 6 characters"
+                value={newPassword}
+                autoComplete="new-password"
+                aria-invalid={!!passwordError}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setNewPassword(value);
+                  validatePassword(value);
+                }
+                }
+              />
 
-            <Input
-              type="password"
-              placeholder="Min 6 characters"
-              value={newPassword}
-              onChange={(e) =>
-                setNewPassword(e.target.value)
-              }
-            />
-
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            {passwordError && (
+              <p className="text-xs text-red-500">
+                {passwordError}
+              </p>
+            )}
             <Button
               variant="add"
-              onClick={handleResetPassword}
+              onClick={() => {
+                if (!validatePassword(newPassword)) return;
+                handleResetPassword();
+              }}
+              disabled={!newPassword.trim() || !!passwordError}
             >
               Reset Password
             </Button>
@@ -863,9 +964,7 @@ const EmployeeList = () => {
                               "IN_PROGRESS" && (
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    navigate(
-                                      `/onboarding/${emp.id}`
-                                    );
+                                    navigateToOnboarding(emp.id);
                                   }}
                                 >
                                   View Onboarding
@@ -878,7 +977,7 @@ const EmployeeList = () => {
                                 <>
                                   <DropdownMenuItem
                                     onClick={() => {
-                                      navigate(`/onboarding/${emp.id}`);
+                                      navigateToOnboarding(emp.id);
                                     }}
                                   >
                                     Resume Onboarding
@@ -886,9 +985,7 @@ const EmployeeList = () => {
 
                                   <DropdownMenuItem
                                     onClick={() => {
-                                      navigate(
-                                        `/onboarding/${emp.id}`
-                                      );
+                                      navigateToOnboarding(emp.id);
                                     }}
                                   >
                                     View Onboarding
@@ -901,9 +998,7 @@ const EmployeeList = () => {
                               "COMPLETED" && (
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    navigate(
-                                      `/onboarding/${emp.id}`
-                                    );
+                                    navigateToOnboarding(emp.id);
                                   }}
                                 >
                                   View Onboarding
@@ -962,7 +1057,15 @@ const EmployeeList = () => {
                     }
                     className="text-center text-muted-foreground py-8"
                   >
-                    No employees found
+                    {isSuperAdmin && !selectedCompanyId ? (
+                      <p className="text-sm text-muted-foreground">
+                        Select a company to view and manage employees.
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        No employees found
+                      </p>
+                    )}
                   </TableCell>
                 </TableRow>
               )}

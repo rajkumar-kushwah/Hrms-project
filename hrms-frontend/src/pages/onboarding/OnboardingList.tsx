@@ -43,9 +43,22 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useAuthStore } from "@/store/auth.store";
+import { isSuperAdminRole } from "@/utilis/roleUtils";
+import { CompanySelector } from "../common/CompanySelector";
 
 const OnboardingList = () => {
     const navigate = useNavigate();
+    const { user } = useAuthStore();
+
+    const isSuperAdmin = isSuperAdminRole(
+        user?.role?.name
+    );
+
+    const [selectedCompanyId, setSelectedCompanyId] =
+        React.useState("");
+
+
     const [onboardings, setOnboardings] = React.useState<OnboardingEmployee[]>(
         []
     );
@@ -58,46 +71,49 @@ const OnboardingList = () => {
     const [resetDialogOpen, setResetDialogOpen] = React.useState(false);
     const [selectedOnboarding, setSelectedOnboarding] = React.useState<OnboardingEmployee | null>(null);
 
-    const loadOnboardings = async () => {
-        try {
-            setLoading(true);
-
-            const res = await getOnboardingList();
-
-            setOnboardings(res.data);
-        } catch (err: any) {
-            toast.error(err?.message || "Failed to load onboarding records");
-        } finally {
+    const loadOnboardings = React.useCallback(async () => {
+        if (isSuperAdmin && !selectedCompanyId) {
+            setOnboardings([]);
             setLoading(false);
+            return;
         }
-    };
-
-    React.useEffect(() => {
-        loadOnboardings();
-    }, []);
-
-    const handleStatusFilter = async (value: string) => {
-        setStatusFilter(value);
 
         try {
             setLoading(true);
 
             const res = await getOnboardingList(
-                value === "all" ? undefined : value
+                isSuperAdmin ? selectedCompanyId : undefined,
+                statusFilter === "all" ? undefined : statusFilter
             );
 
-            console.log("ONBOARDING RESPONSE:", res);
             setOnboardings(res.data ?? []);
-        } catch (err: any) {
-            toast.error(err?.message || "Failed to load onboarding records");
+        } catch (err: unknown) {
+            const message =
+                err instanceof Error
+                    ? err.message
+                    : "Failed to load onboarding records";
+
+            toast.error(message);
+            setOnboardings([]);
         } finally {
             setLoading(false);
         }
+    }, [isSuperAdmin, selectedCompanyId, statusFilter]);
+
+    React.useEffect(() => {
+        void loadOnboardings();
+    }, [loadOnboardings]);
+    React.useEffect(() => {
+        loadOnboardings();
+    }, [selectedCompanyId, isSuperAdmin]);
+
+    const handleStatusFilter = (value: string) => {
+        setStatusFilter(value);
     };
 
     const handleStartOnboarding = async (userId: string) => {
         try {
-            await startOnboarding(userId);
+            await startOnboarding(userId, isSuperAdmin ? selectedCompanyId : undefined);
 
             toast.success("Onboarding started successfully");
 
@@ -110,7 +126,7 @@ const OnboardingList = () => {
     const handleResetOnboarding = async () => {
         if (!selectedOnboarding) return
         try {
-            await resetOnboarding(selectedOnboarding.userId);
+            await resetOnboarding(selectedOnboarding.userId, isSuperAdmin ? selectedCompanyId : undefined);
 
             toast.success("Onboarding reset successfully");
             setResetDialogOpen(false);
@@ -174,9 +190,19 @@ const OnboardingList = () => {
         <div className="flex flex-col gap-4">
 
             {/* Filters */}
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-
+            <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-3 flex-wrap">
+                    {isSuperAdmin && (
+                        <div className="w-full max-w-60">
+                            <CompanySelector
+                                selectedCompanyId={selectedCompanyId}
+                                onCompanyChange={(companyId) => {
+                                    setSelectedCompanyId(companyId);
+                                    setOnboardings([]);
+                                }}
+                            />
+                        </div>
+                    )}
 
                     <Input
                         type="search"
@@ -184,38 +210,31 @@ const OnboardingList = () => {
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         autoComplete="off"
-                        className="w-72"
+                        className="h-9 w-full sm:w-72"
                     />
 
                     <Select
                         value={statusFilter}
                         onValueChange={handleStatusFilter}
                     >
-                        <SelectTrigger className="w-40">
+                        <SelectTrigger className="h-9 w-40">
                             <SelectValue placeholder="Status" />
                         </SelectTrigger>
 
                         <SelectContent position="popper">
-                            <SelectItem value="all">
-                                All Status
-                            </SelectItem>
-
-                            <SelectItem value="IN_PROGRESS">
-                                In Progress
-                            </SelectItem>
-
-                            <SelectItem value="ON_HOLD">
-                                On Hold
-                            </SelectItem>
-
-                            <SelectItem value="COMPLETED">
-                                Completed
-                            </SelectItem>
+                            <SelectItem value="all">All Status</SelectItem>
+                            <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                            <SelectItem value="ON_HOLD">On Hold</SelectItem>
+                            <SelectItem value="COMPLETED">Completed</SelectItem>
                         </SelectContent>
                     </Select>
-
                 </div>
 
+                {isSuperAdmin && !selectedCompanyId && (
+                    <p className="text-sm text-muted-foreground">
+                        Select a company to view and manage onboarding records.
+                    </p>
+                )}
             </div>
             <AlertDialog
                 open={resetDialogOpen}
@@ -367,7 +386,13 @@ const OnboardingList = () => {
                                             <DropdownMenuContent align="end">
 
                                                 <DropdownMenuItem
-                                                    onClick={() => navigate(`/onboarding/${item.userId}`)}
+                                                    onClick={() => {
+                                                        const detailUrl = isSuperAdmin
+                                                            ? `/onboarding/${item.userId}?companyId=${encodeURIComponent(selectedCompanyId)}`
+                                                            : `/onboarding/${item.userId}`;
+
+                                                        navigate(detailUrl);
+                                                    }}
                                                 >
                                                     View Details
                                                 </DropdownMenuItem>
@@ -410,19 +435,21 @@ const OnboardingList = () => {
                                         className="py-10 text-center"
                                     >
                                         <div className="flex flex-col items-center gap-1">
-                                            <p className="font-medium text-gray-900">
-                                                No onboarding records found
+                                            <p className="font-medium">
+                                                {isSuperAdmin && !selectedCompanyId
+                                                    ? "Select a company first"
+                                                    : "No onboarding records found"}
                                             </p>
 
                                             <p className="text-sm text-muted-foreground">
-                                                Configure onboarding checklist templates and start
-                                                onboarding for an employee.
+                                                {isSuperAdmin && !selectedCompanyId
+                                                    ? "Choose a company to view its onboarding records."
+                                                    : "Configure onboarding checklist templates and start onboarding for an employee."}
                                             </p>
                                         </div>
                                     </TableCell>
                                 </TableRow>
                             )}
-
                             {loading && (
 
                                 <TableRow>

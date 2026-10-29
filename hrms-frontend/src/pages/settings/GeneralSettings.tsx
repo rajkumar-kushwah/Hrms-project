@@ -1,4 +1,3 @@
-
 import React from "react";
 import {
     Card,
@@ -10,74 +9,140 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
-import { getMyCompany, getCompanies, updateCompany } from "@/services/company.service";
+
+import {
+    getMyCompany,
+    getCompanies,
+    updateCompany,
+} from "@/services/company.service";
+
 import { useAuthStore } from "@/store/auth.store";
+import { useCompanyStore } from "@/store/company.store";
+import { CompanySelector } from "@/pages/common/CompanySelector";
+
 import type { Company } from "@/types/company.types";
 
 const GeneralSettings = () => {
     const { user } = useAuthStore();
-    const isSuperAdmin = user?.role?.name === "super_admin";
+
+    const [selectedCompanyId, setSelectedCompanyId] = React.useState("");
+
+    const roleName = user?.role?.name
+        ?.trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_");
+
+    const isSuperAdmin = roleName === "super_admin";
 
     const [company, setCompany] = React.useState<Company | null>(null);
-    const [companies, setCompanies] = React.useState<Company[]>([]);
-    const [selectedCompanyId, setSelectedCompanyId] = React.useState("");
     const [loading, setLoading] = React.useState(true);
     const [saving, setSaving] = React.useState(false);
 
+    const requestIdRef = React.useRef(0);
+
+    // Load company details whenever the selected company changes.
     React.useEffect(() => {
-        const load = async () => {
+        const requestId = ++requestIdRef.current;
+
+        const loadCompany = async () => {
+            if (!user) {
+                setCompany(null);
+                setLoading(false);
+                return;
+            }
+
+            if (isSuperAdmin && !selectedCompanyId) {
+                setCompany(null);
+                setLoading(false);
+                return;
+            }
+
             setLoading(true);
 
             try {
-                if (isSuperAdmin) {
-                    const res = await getCompanies();
-                    const list = res.data.data;
-                    setCompanies(list);
+                let companyData: Company | null = null;
 
-                    if (list.length === 1) {
-                        setSelectedCompanyId(list[0].id);
-                        setCompany(list[0]);
-                    }
+                if (isSuperAdmin) {
+                    const response = await getCompanies();
+
+                    if (requestId !== requestIdRef.current) return;
+
+                    const companies: Company[] = Array.isArray(
+                        response.data?.data
+                    )
+                        ? response.data.data
+                        : [];
+
+                    companyData =
+                        companies.find(
+                            (item) => item.id === selectedCompanyId
+                        ) ?? null;
                 } else {
-                    const res = await getMyCompany();
-                    setCompany(res.data.data);
+                    const response = await getMyCompany();
+
+                    if (requestId !== requestIdRef.current) return;
+
+                    companyData = response.data?.data ?? null;
+                }
+
+                if (requestId !== requestIdRef.current) return;
+
+                setCompany(companyData);
+
+                if (!companyData) {
+                    toast.error("Company details not found.");
                 }
             } catch (error: unknown) {
+                if (requestId !== requestIdRef.current) return;
+
+                setCompany(null);
+
                 const message =
                     error instanceof Error
                         ? error.message
                         : "Failed to load company details";
+
                 toast.error(message);
             } finally {
-                setLoading(false);
+                if (requestId === requestIdRef.current) {
+                    setLoading(false);
+                }
             }
         };
 
-        void load();
-    }, [isSuperAdmin]);
+        void loadCompany();
 
-    const handleCompanySelect = (companyId: string) => {
-        const selected = companies.find((item) => item.id === companyId);
-
-        setSelectedCompanyId(companyId);
-        setCompany(selected ?? null);
-    };
+        return () => {
+            requestIdRef.current += 1;
+        };
+    }, [user, isSuperAdmin, selectedCompanyId]);
 
     const handleSave = async () => {
-        if (!company) return;
+        if (!company) {
+            toast.error("Company details not found.");
+            return;
+        }
+
+        const companyIdAtSubmit = company.id;
+
+        if (isSuperAdmin && !selectedCompanyId) {
+            toast.error("Please select a company first.");
+            return;
+        }
+
+        if (
+            isSuperAdmin &&
+            selectedCompanyId !== companyIdAtSubmit
+        ) {
+            toast.error("The selected company has changed. Please try again.");
+            return;
+        }
 
         setSaving(true);
 
         try {
-            await updateCompany(company.id, {
+            await updateCompany(companyIdAtSubmit, {
                 name: company.name,
                 email: company.email,
                 phone: company.phone,
@@ -85,22 +150,36 @@ const GeneralSettings = () => {
                 address: company.address,
             });
 
+            // Avoid showing success for an outdated company selection.
+            if (
+                isSuperAdmin &&
+                useCompanyStore.getState().selectedCompanyId !==
+                companyIdAtSubmit
+            ) {
+                return;
+            }
+
             toast.success("Company details updated successfully!");
-        } catch (error: any) {
-            const message = (error?.message || "Failed to update company details") as string;
+        } catch (error: unknown) {
+            const message =
+                error instanceof Error
+                    ? error.message
+                    : "Failed to update company details";
+
             toast.error(message);
         } finally {
             setSaving(false);
         }
     };
 
-    if (loading) {
-        return (
-            <div className="py-8 text-center text-muted-foreground">
-                Loading...
-            </div>
+    const updateCompanyField = <K extends keyof Company>(
+        field: K,
+        value: Company[K]
+    ) => {
+        setCompany((current) =>
+            current ? { ...current, [field]: value } : current
         );
-    }
+    };
 
     return (
         <Card>
@@ -112,31 +191,15 @@ const GeneralSettings = () => {
             </CardHeader>
 
             <CardContent className="flex flex-col gap-4">
-                {isSuperAdmin && (
-                    <div className="space-y-2">
-                        <Label>Select Company</Label>
-                        <Select
-                            value={selectedCompanyId}
-                            onValueChange={handleCompanySelect}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Choose a company" />
-                            </SelectTrigger>
-                            <SelectContent position="popper">
-                                {companies.map((item) => (
-                                    <SelectItem
-                                        key={item.id}
-                                        value={item.id}
-                                    >
-                                        {item.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )}
+                {isSuperAdmin && <CompanySelector
+                    selectedCompanyId={selectedCompanyId}
+                    onCompanyChange={setSelectedCompanyId} />}
 
-                {!company ? (
+                {loading ? (
+                    <div className="py-8 text-center text-muted-foreground">
+                        Loading company details...
+                    </div>
+                ) : !company ? (
                     <p className="py-4 text-sm text-muted-foreground">
                         {isSuperAdmin
                             ? "Select a company to manage its settings."
@@ -145,75 +208,88 @@ const GeneralSettings = () => {
                 ) : (
                     <>
                         <div className="space-y-2">
-                            <Label>Company Name</Label>
+                            <Label htmlFor="company-name">
+                                Company Name
+                            </Label>
                             <Input
+                                id="company-name"
                                 value={company.name}
-                                onChange={(e) =>
-                                    setCompany({
-                                        ...company,
-                                        name: e.target.value,
-                                    })
+                                onChange={(event) =>
+                                    updateCompanyField(
+                                        "name",
+                                        event.target.value
+                                    )
                                 }
                             />
                         </div>
 
-                        <div className="flex gap-3">
-                            <div className="flex-1 space-y-2">
-                                <Label>Email</Label>
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                            <div className="min-w-0 flex-1 space-y-2">
+                                <Label htmlFor="company-email">Email</Label>
                                 <Input
+                                    id="company-email"
+                                    type="email"
                                     value={company.email ?? ""}
-                                    onChange={(e) =>
-                                        setCompany({
-                                            ...company,
-                                            email: e.target.value,
-                                        })
+                                    onChange={(event) =>
+                                        updateCompanyField(
+                                            "email",
+                                            event.target.value
+                                        )
                                     }
                                 />
                             </div>
 
-                            <div className="flex-1 space-y-2">
-                                <Label>Phone</Label>
+                            <div className="min-w-0 flex-1 space-y-2">
+                                <Label htmlFor="company-phone">Phone</Label>
                                 <Input
+                                    id="company-phone"
                                     value={company.phone ?? ""}
-                                    onChange={(e) =>
-                                        setCompany({
-                                            ...company,
-                                            phone: e.target.value,
-                                        })
+                                    onChange={(event) =>
+                                        updateCompanyField(
+                                            "phone",
+                                            event.target.value
+                                        )
                                     }
                                 />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Website</Label>
+                            <Label htmlFor="company-website">Website</Label>
                             <Input
+                                id="company-website"
                                 value={company.website ?? ""}
-                                onChange={(e) =>
-                                    setCompany({
-                                        ...company,
-                                        website: e.target.value,
-                                    })
+                                onChange={(event) =>
+                                    updateCompanyField(
+                                        "website",
+                                        event.target.value
+                                    )
                                 }
                             />
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Address</Label>
+                            <Label htmlFor="company-address">Address</Label>
                             <Input
+                                id="company-address"
                                 value={company.address ?? ""}
-                                onChange={(e) =>
-                                    setCompany({
-                                        ...company,
-                                        address: e.target.value,
-                                    })
+                                onChange={(event) =>
+                                    updateCompanyField(
+                                        "address",
+                                        event.target.value
+                                    )
                                 }
                             />
                         </div>
 
                         <Button
                             onClick={handleSave}
-                            disabled={saving}
+                            disabled={
+                                saving ||
+                                loading ||
+                                (isSuperAdmin &&
+                                    !selectedCompanyId)
+                            }
                             className="w-fit"
                         >
                             {saving ? "Saving..." : "Save Changes"}

@@ -2,7 +2,9 @@ import { api } from "../api/axios";
 import type { CreateCategoryPayload, UpdateCategoryPayload } from "@/types/category.types";
 
 // get Categories
-export const getCategories = () => api.get("/category");
+export const getCategories = (companyId?: string) => api.get("/category", {
+    params: companyId ? { companyId } : {},
+});
 
 // get Category by id
 export const getCategoryById = (id: string) => api.get(`/category/${id}`);

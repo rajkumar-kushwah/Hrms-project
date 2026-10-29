@@ -59,6 +59,7 @@ import PhoneInput, {
 } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { branchSchema } from "@/validation/branch.validation";
+import { CompanySelector } from "@/pages/common/CompanySelector";
 
 type EditForm = {
     name?: string;
@@ -97,6 +98,9 @@ const BranchList = () => {
     const isSuperAdmin = isSuperAdminRole(
         user?.role?.name
     );
+
+    const [selectedCompanyId, setSelectedCompanyId] =
+        React.useState("");
 
     const [branches, setBranches] = React.useState<
         Branch[]
@@ -174,13 +178,19 @@ const BranchList = () => {
         React.useState<EditForm>({});
 
     React.useEffect(() => {
-        loadBranches();
-    }, []);
+        void loadBranches();
+    }, [selectedCompanyId, isSuperAdmin]);
 
     // LOAD BRANCHES
     const loadBranches = async () => {
+        if (isSuperAdmin && !selectedCompanyId) {
+            setBranches([])
+            return
+        }
         try {
-            const res = await getBranches();
+            const res = await getBranches(
+                isSuperAdmin ? selectedCompanyId : undefined
+            );
 
             setBranches(res.data.data);
         } catch (err: any) {
@@ -527,46 +537,53 @@ const BranchList = () => {
             {/* HEADER */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 flex-wrap">
-                    <Input
-                        type="search"
-                        name="branch-search"
-                        autoComplete="off"
-                        placeholder="Search branch name or code..."
-                        value={searchQuery}
-                        onChange={(e) =>
-                            setSearchQuery(
-                                e.target.value
-                            )
-                        }
-                        className="w-64"
-                    />
+                    {isSuperAdmin && (
+                        <CompanySelector
+                            selectedCompanyId={selectedCompanyId}
+                            onCompanyChange={setSelectedCompanyId}
+                        />
+                    )}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <Input
+                            type="search"
+                            name="branch-search"
+                            autoComplete="off"
+                            placeholder="Search branch name or code..."
+                            value={searchQuery}
+                            onChange={(e) =>
+                                setSearchQuery(
+                                    e.target.value
+                                )
+                            }
+                            className="w-64"
+                        />
 
-                    <Select
-                        value={statusFilter}
-                        onValueChange={
-                            setStatusFilter
-                        }
-                    >
-                        <SelectTrigger className="w-36">
-                            <SelectValue placeholder="Status" />
-                        </SelectTrigger>
+                        <Select
+                            value={statusFilter}
+                            onValueChange={
+                                setStatusFilter
+                            }
+                        >
+                            <SelectTrigger className="w-36">
+                                <SelectValue placeholder="Status" />
+                            </SelectTrigger>
 
-                        <SelectContent position="popper">
-                            <SelectItem value="all">
-                                All Status
-                            </SelectItem>
+                            <SelectContent position="popper">
+                                <SelectItem value="all">
+                                    All Status
+                                </SelectItem>
 
-                            <SelectItem value="active">
-                                Active
-                            </SelectItem>
+                                <SelectItem value="active">
+                                    Active
+                                </SelectItem>
 
-                            <SelectItem value="inactive">
-                                Inactive
-                            </SelectItem>
-                        </SelectContent>
-                    </Select>
+                                <SelectItem value="inactive">
+                                    Inactive
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
-
                 <Button
                     size="sm"
                     variant="add"
@@ -1724,8 +1741,15 @@ const BranchList = () => {
                                             }
                                             className="text-center text-muted-foreground py-8"
                                         >
-                                            No branches
-                                            found
+                                            {isSuperAdmin && !selectedCompanyId ? (
+                                                <p className="text-sm text-muted-foreground">
+                                                    Select a company to view and manage employees.
+                                                </p>
+                                            ) : (
+                                                <p className="text-sm text-muted-foreground">
+                                                    No branches found
+                                                </p>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 )}

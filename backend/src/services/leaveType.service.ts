@@ -89,7 +89,8 @@ export const updateLeaveType = async (
         daysPerYear?: number;
         isPaid?: boolean;
         isActive?: boolean;
-    }
+    },
+    companyId: string | null,
 ) => {
     const existing = await prisma.leaveType.findUnique({
         where: {
@@ -99,6 +100,11 @@ export const updateLeaveType = async (
 
     if (!existing) {
         throw new Error("Leave type not found");
+    }
+
+    // companyId check must be here, not in controller.
+    if (existing.companyId !== companyId) {
+        throw new Error("Leave type does not belong to this company");
     }
 
     return await prisma.leaveType.update({
@@ -111,11 +117,33 @@ export const updateLeaveType = async (
 };
 
 
+
+// Permanently Delete Leave Type
+export const deleteLeaveType = async (
+    id: string,
+    companyId: string | null
+) => {
+    const existing = await prisma.leaveType.findUnique({
+        where: { id },
+    });
+
+    if (!existing) {
+        throw new Error("Leave type not found");
+    }
+
+    if (!companyId || existing.companyId !== companyId) {
+        throw new Error("Leave type does not belong to this company");
+    }
+
+    return await prisma.leaveType.delete({
+        where: { id },
+    });
+};
 // ─────────────────────────────────────────────
-// Deactivate Leave Type
+// Activate Leave Type
 // ─────────────────────────────────────────────
 
-export const deleteLeaveType = async (id: string) => {
+export const activateLeaveType = async (id: string, companyId: string | null) => {
     const existing = await prisma.leaveType.findUnique({
         where: {
             id,
@@ -126,35 +154,8 @@ export const deleteLeaveType = async (id: string) => {
         throw new Error("Leave type not found");
     }
 
-    await prisma.leaveType.update({
-        where: {
-            id,
-        },
-
-        data: {
-            isActive: false,
-        },
-    });
-
-    return {
-        message: "Leave type deactivated successfully",
-    };
-};
-
-
-// ─────────────────────────────────────────────
-// Activate Leave Type
-// ─────────────────────────────────────────────
-
-export const activateLeaveType = async (id: string) => {
-    const existing = await prisma.leaveType.findUnique({
-        where: {
-            id,
-        },
-    });
-
-    if (!existing) {
-        throw new Error("Leave type not found");
+    if (existing.companyId !== companyId) {
+        throw new Error("Leave type does not belong to this company");
     }
 
     await prisma.leaveType.update({
@@ -171,3 +172,4 @@ export const activateLeaveType = async (id: string) => {
         message: "Leave type activated successfully",
     };
 };
+

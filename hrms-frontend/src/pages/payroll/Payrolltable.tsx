@@ -16,6 +16,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
+
 import {
   downloadBulkSalarySlips,
   confirmPayroll,
@@ -23,11 +24,9 @@ import {
   revertPayrollToDraft,
 } from "@/services/payroll.service";
 import { downloadBlobAsFile } from "@/utilis/downloadFile";
+import { useCompanyStore } from "@/store/company.store";
+import { CompanySelector } from "@/pages/common/CompanySelector";
 
-export interface PayrollCompany {
-  id: string;
-  name: string;
-}
 
 interface PayrollEmployee {
   userId: string;
@@ -40,9 +39,6 @@ interface PayrollTableProps {
   year: number;
   onMonthChange: (month: number) => void;
   onYearChange: (year: number) => void;
-  companies: PayrollCompany[];
-  selectedCompanyId: string;
-  onCompanyChange: (companyId: string) => void;
   isSuperAdmin: boolean;
   selectedDraftEmployees: PayrollEmployee[];
   selectedConfirmedEmployees: PayrollEmployee[];
@@ -52,8 +48,18 @@ interface PayrollTableProps {
 }
 
 const months = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 export default function PayrollTable({
@@ -62,9 +68,6 @@ export default function PayrollTable({
   year,
   onMonthChange,
   onYearChange,
-  companies,
-  selectedCompanyId,
-  onCompanyChange,
   isSuperAdmin,
   selectedDraftEmployees,
   selectedConfirmedEmployees,
@@ -74,31 +77,78 @@ export default function PayrollTable({
 }: PayrollTableProps) {
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
-  const companyRequired = isSuperAdmin && !selectedCompanyId;
-  const actionDisabled =
-    loadingAction !== null || selectedIds.size === 0 || companyRequired;
+  const selectedCompanyId = useCompanyStore(
+    (state) => state.selectedCompanyId
+  );
 
-  const companyId = selectedCompanyId || undefined;
+  const setSelectedCompanyId = useCompanyStore(
+    (state) => state.setSelectedCompanyId
+  );
+
+  const companyRequired = isSuperAdmin && !selectedCompanyId;
+
+  const actionDisabled =
+    loadingAction !== null ||
+    selectedIds.size === 0 ||
+    companyRequired;
+
 
   const runAction = async (
     action: string,
-    operation: () => Promise<unknown>,
-    successMessage: string,
+    operation: (companyIdAtSubmit?: string) => Promise<unknown>,
+    successMessage: string
   ) => {
-    if (companyRequired) {
+    if (isSuperAdmin && !selectedCompanyId) {
       toast.error("Please select a company first.");
       return;
     }
 
+    const companyIdAtSubmit = selectedCompanyId;
+
     setLoadingAction(action);
+
     try {
-      await operation();
+      await operation(companyIdAtSubmit || undefined);
+
+      // Do not refresh or report success for a different selection.
+      if (
+        isSuperAdmin &&
+        useCompanyStore.getState().selectedCompanyId !==
+        companyIdAtSubmit
+      ) {
+        return;
+      }
+
       toast.success(successMessage);
       onActionComplete();
     } catch (error: unknown) {
+      if (
+        isSuperAdmin &&
+        useCompanyStore.getState().selectedCompanyId !==
+        companyIdAtSubmit
+      ) {
+        return;
+      }
+
       const message =
-        error instanceof Error ? error.message : "Something went wrong.";
-      toast.error(message);
+        typeof error === "object" &&
+          error !== null &&
+          "response" in error
+          ? (
+            error as {
+              response?: {
+                data?: { message?: string };
+              };
+            }
+          ).response?.data?.message
+          : undefined;
+
+      toast.error(
+        message ??
+        (error instanceof Error
+          ? error.message
+          : "Something went wrong.")
+      );
     } finally {
       setLoadingAction(null);
     }
@@ -107,76 +157,80 @@ export default function PayrollTable({
   const handleDownloadSlips = () =>
     runAction(
       "download",
-      async () => {
+      async (companyIdAtSubmit) => {
         const response = await downloadBulkSalarySlips(
           Array.from(selectedIds),
           month,
           year,
-          companyId,
+          companyIdAtSubmit
         );
+
+        // Prevent downloading a response for a company no longer selected.
+        if (
+          isSuperAdmin &&
+          useCompanyStore.getState().selectedCompanyId !==
+          companyIdAtSubmit
+        ) {
+          return;
+        }
+
         downloadBlobAsFile(
           response.data,
-          `salary-slips-${months[month - 1]}-${year}.zip`,
+          `salary-slips-${months[month - 1]}-${year}.zip`
         );
       },
-      "Salary slips downloaded successfully.",
+      "Salary slips downloaded successfully."
     );
 
   const handleConfirm = () =>
     runAction(
       "confirm",
-      () => confirmPayroll(selectedDraftIds, month, year, companyId),
-      "Payroll confirmed successfully.",
+      (companyIdAtSubmit) =>
+        confirmPayroll(
+          selectedDraftIds,
+          month,
+          year,
+          isSuperAdmin ? companyIdAtSubmit : undefined
+        ),
+      "Payroll confirmed successfully."
     );
 
   const handleMarkPaid = () =>
     runAction(
       "paid",
-      () =>
+      (companyIdAtSubmit) =>
         markPayrollAsPaid(
           selectedConfirmedIds,
           month,
           year,
           undefined,
-          companyId,
+          isSuperAdmin ? companyIdAtSubmit : undefined
         ),
-      "Payroll marked as paid successfully.",
+      "Payroll marked as paid successfully."
     );
 
   const handleRevert = () =>
     runAction(
       "revert",
-      async () => {
+      async (companyIdAtSubmit) => {
         await Promise.all(
           selectedDraftEmployees.map((employee) =>
-            revertPayrollToDraft(employee.userId, month, year, companyId),
-          ),
+            revertPayrollToDraft(
+              employee.userId,
+              month,
+              year,
+              isSuperAdmin ? companyIdAtSubmit : undefined
+            )
+          )
         );
       },
-      "Payroll reverted successfully.",
+      "Payroll reverted successfully."
     );
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
-
       <div className="flex flex-wrap items-center gap-2">
-        {isSuperAdmin && (
-          <Select
-            value={selectedCompanyId}
-            onValueChange={onCompanyChange}
-          >
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Select Company" />
-            </SelectTrigger>
-            <SelectContent position="popper">
-              {companies.map((company) => (
-                <SelectItem key={company.id} value={company.id}>
-                  {company.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        {isSuperAdmin && <CompanySelector selectedCompanyId={selectedCompanyId} onCompanyChange={setSelectedCompanyId} />}
 
         <Select
           value={String(month)}
@@ -187,7 +241,10 @@ export default function PayrollTable({
           </SelectTrigger>
           <SelectContent position="popper">
             {months.map((name, index) => (
-              <SelectItem key={name} value={String(index + 1)}>
+              <SelectItem
+                key={name}
+                value={String(index + 1)}
+              >
                 {name}
               </SelectItem>
             ))}
@@ -202,13 +259,17 @@ export default function PayrollTable({
             <SelectValue placeholder="Select year" />
           </SelectTrigger>
           <SelectContent position="popper">
-            {Array.from({ length: 6 }, (_, index) => year - 2 + index).map(
-              (itemYear) => (
-                <SelectItem key={itemYear} value={String(itemYear)}>
-                  {itemYear}
-                </SelectItem>
-              ),
-            )}
+            {Array.from(
+              { length: 6 },
+              (_, index) => year - 2 + index
+            ).map((itemYear) => (
+              <SelectItem
+                key={itemYear}
+                value={String(itemYear)}
+              >
+                {itemYear}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -227,7 +288,8 @@ export default function PayrollTable({
           Download Slips
         </Button>
 
-        <Button variant="add"
+        <Button
+          variant="add"
           onClick={handleConfirm}
           disabled={
             loadingAction !== null ||
@@ -243,7 +305,8 @@ export default function PayrollTable({
           Confirm Payroll
         </Button>
 
-        <Button variant="add"
+        <Button
+          variant="add"
           onClick={handleMarkPaid}
           disabled={
             loadingAction !== null ||
@@ -279,7 +342,8 @@ export default function PayrollTable({
 
       {selectedConfirmedEmployees.length > 0 && (
         <span className="text-sm text-muted-foreground">
-          {selectedConfirmedEmployees.length} confirmed employee(s) selected
+          {selectedConfirmedEmployees.length} confirmed employee(s)
+          selected
         </span>
       )}
     </div>

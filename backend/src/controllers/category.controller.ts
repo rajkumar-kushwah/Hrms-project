@@ -10,8 +10,8 @@ import {
     sendDatabaseUnavailable,
 } from "../utilis/dbErrors.js";
 
-const resolveCompanyId = (req: Request): string | null =>
-    isSuperAdminRole(req.user?.role?.name) ? null : getCompanyId(req);
+// const resolveCompanyId = (req: Request): string | null =>
+//     isSuperAdminRole(req.user?.role?.name) ? null : getCompanyId(req);
 
 const handleCategoryError = (
     res: Response,
@@ -62,7 +62,7 @@ export const createCategory = async (req: Request, res: Response) => {
 export const getCategories = async (req: Request, res: Response) => {
     try {
         const categories = await CategoryService.getCategories(
-            resolveCompanyId(req)
+            getCompanyId(req)
         );
 
         return res.status(200).json({
@@ -88,7 +88,7 @@ export const getCategoryById = async (req: Request, res: Response) => {
 
         const category = await CategoryService.getCategoryById(
             id,
-            resolveCompanyId(req)
+            getCompanyId(req)
         );
 
         return res.status(200).json({
@@ -114,7 +114,7 @@ export const updateCategory = async (req: Request, res: Response) => {
 
         const category = await CategoryService.updateCategory(
             id,
-            resolveCompanyId(req),
+            getCompanyId(req),
             req.body
         );
 
@@ -142,7 +142,7 @@ export const deleteCategory = async (req: Request, res: Response) => {
 
         const result = await CategoryService.deleteCategory(
             id,
-            resolveCompanyId(req)
+            getCompanyId(req)
         );
 
         return res.status(200).json({
@@ -171,7 +171,7 @@ export const permanentDeleteCategory = async (
 
         const result = await CategoryService.permanentDeleteCategory(
             id,
-            resolveCompanyId(req)
+            getCompanyId(req)
         );
 
         return res.status(200).json({

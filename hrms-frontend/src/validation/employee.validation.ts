@@ -153,3 +153,4 @@ export const employeeSchema = z.object({
 export const updateEmployeeSchema = employeeSchema.omit({
   password: true,
 });
+export const passwordSchema = employeeSchema.shape.password;

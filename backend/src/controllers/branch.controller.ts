@@ -1,18 +1,11 @@
 
 import type { Request, Response } from "express";
 import * as BranchService from "../services/branch.service.js";
-import {
-    getCompanyId,
-    isSuperAdminRole,
-} from "../utilis/roleUtils.js";
+import { getCompanyId } from "../utilis/roleUtils.js";
 import {
     isDatabaseUnavailable,
     sendDatabaseUnavailable,
 } from "../utilis/dbErrors.js";
-
-// Resolve company context from the logged-in user.
-const resolveCompanyId = (req: Request): string | null =>
-    isSuperAdminRole(req.user?.role?.name) ? null : getCompanyId(req);
 
 // Handle controller errors consistently.
 const handleBranchError = (
@@ -25,7 +18,9 @@ const handleBranchError = (
     }
 
     const message =
-        error instanceof Error ? error.message : "An unexpected error occurred";
+        error instanceof Error
+            ? error.message
+            : "An unexpected error occurred";
 
     return res.status(statusCode).json({
         success: false,
@@ -41,11 +36,14 @@ export const createBranch = async (req: Request, res: Response) => {
         if (!companyId) {
             return res.status(400).json({
                 success: false,
-                message: "Company not found in session",
+                message: "Please select a company",
             });
         }
 
-        const branch = await BranchService.createBranch(companyId, req.body);
+        const branch = await BranchService.createBranch(
+            companyId,
+            req.body
+        );
 
         return res.status(201).json({
             success: true,
@@ -60,7 +58,15 @@ export const createBranch = async (req: Request, res: Response) => {
 // Get all branches
 export const getBranches = async (req: Request, res: Response) => {
     try {
-        const companyId = resolveCompanyId(req);
+        const companyId = getCompanyId(req);
+
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Please select a company",
+            });
+        }
+
         const branches = await BranchService.getAllBranches(companyId);
 
         return res.status(200).json({
@@ -76,6 +82,7 @@ export const getBranches = async (req: Request, res: Response) => {
 export const getBranchById = async (req: Request, res: Response) => {
     try {
         const id = req.params.id as string;
+        const companyId = getCompanyId(req);
 
         if (!id) {
             return res.status(400).json({
@@ -84,9 +91,16 @@ export const getBranchById = async (req: Request, res: Response) => {
             });
         }
 
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Please select a company",
+            });
+        }
+
         const branch = await BranchService.getBranchById(
             id,
-            resolveCompanyId(req)
+            companyId
         );
 
         return res.status(200).json({
@@ -102,6 +116,7 @@ export const getBranchById = async (req: Request, res: Response) => {
 export const updateBranch = async (req: Request, res: Response) => {
     try {
         const id = req.params.id as string;
+        const companyId = getCompanyId(req);
 
         if (!id) {
             return res.status(400).json({
@@ -110,9 +125,16 @@ export const updateBranch = async (req: Request, res: Response) => {
             });
         }
 
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Please select a company",
+            });
+        }
+
         const branch = await BranchService.updateBranch(
             id,
-            resolveCompanyId(req),
+            companyId,
             req.body
         );
 
@@ -130,6 +152,7 @@ export const updateBranch = async (req: Request, res: Response) => {
 export const deleteBranch = async (req: Request, res: Response) => {
     try {
         const id = req.params.id as string;
+        const companyId = getCompanyId(req);
 
         if (!id) {
             return res.status(400).json({
@@ -138,9 +161,16 @@ export const deleteBranch = async (req: Request, res: Response) => {
             });
         }
 
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Please select a company",
+            });
+        }
+
         const result = await BranchService.deleteBranch(
             id,
-            resolveCompanyId(req)
+            companyId
         );
 
         return res.status(200).json({
@@ -159,6 +189,7 @@ export const permanentDeleteBranch = async (
 ) => {
     try {
         const id = req.params.id as string;
+        const companyId = getCompanyId(req);
 
         if (!id) {
             return res.status(400).json({
@@ -167,9 +198,16 @@ export const permanentDeleteBranch = async (
             });
         }
 
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Please select a company",
+            });
+        }
+
         const result = await BranchService.permanentDeleteBranch(
             id,
-            resolveCompanyId(req)
+            companyId
         );
 
         return res.status(200).json({
@@ -187,8 +225,17 @@ export const getGeoFencingOverview = async (
     res: Response
 ) => {
     try {
+        const companyId = getCompanyId(req);
+
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Please select a company",
+            });
+        }
+
         const result = await BranchService.getGeoFencingOverview(
-            resolveCompanyId(req)
+            companyId
         );
 
         return res.status(200).json({

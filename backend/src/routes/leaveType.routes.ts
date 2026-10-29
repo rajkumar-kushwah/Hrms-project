@@ -12,4 +12,5 @@ router.post("/", protect, authorize("leave_policy", "canCreate"), validate(creat
 router.put("/:id", protect, authorize("leave_policy", "canEdit"), validate(updateLeaveTypeSchema), updateLeaveType);
 router.delete("/:id", protect, authorize("leave_policy", "canDelete"), deleteLeaveType);
 
+
 export default router;

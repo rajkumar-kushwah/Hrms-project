@@ -12,6 +12,8 @@ import { getCategories } from '@/services/category.service';
 import { getEmployees } from '@/services/employee.service';
 import { getTodayAttendance } from '@/services/attendance.service';
 import type { Attendance } from '@/types/attendance.types';
+import type { Category } from "@/types/category.types";
+import type { Employee } from "@/types/employee.types";
 import {
     Building2,
     Users,
@@ -35,8 +37,8 @@ const DashboardStats = () => {
     const [companies, setCompanies] = useState<Company[]>([]);
     const [companyUsers, setCompanyUsers] = useState<CompanyUser[]>([]);
     const [branches, setBranches] = useState<Branch[]>([]);
-    const [categories, setCategories] = useState([]);
-    const [employees, setEmployees] = useState([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [employees, setEmployees] = useState<Employee[]>([]);
     const [attendance, setAttendance] = useState<Attendance | null>(null);
 
     // React.useEffect(() => {
@@ -78,48 +80,93 @@ const DashboardStats = () => {
     }, [user])
 
     React.useEffect(() => {
-        const fetchData = async () => {
+        let cancelled = false;
 
+        const fetchData = async () => {
             try {
                 if (isSuperAdmin) {
-                    const [companyRes, userRes, branchRes, categoryRes, employeeRes] = await Promise.all([
-                        getCompanies(),
-                        getCompanyUsers(),
-                        getBranches(),
-                        getCategories(),
-                        getEmployees()
-                    ])
+                    // Super Admin: first fetch all companies
+                    const companyRes = await getCompanies();
+                    const allCompanies: Company[] = companyRes.data.data ?? [];
 
-                    setCompanies(companyRes.data.data);
-                    setCompanyUsers(userRes.data.data);
-                    setBranches(branchRes.data.data);
-                    setCategories(categoryRes.data.data);
-                    setEmployees(employeeRes.data.data);
+                    if (cancelled) return;
+
+                    setCompanies(allCompanies);
+
+                    // Fetch each company's data using its company ID
+                    const companyData = await Promise.all(
+                        allCompanies.map(async (company) => {
+                            const [
+                                userRes,
+                                branchRes,
+                                categoryRes,
+                                employeeRes,
+                            ] = await Promise.all([
+                                getCompanyUsers(company.id),
+                                getBranches(company.id),
+                                getCategories(company.id),
+                                getEmployees(company.id),
+                            ]);
+
+                            return {
+                                users: userRes.data.data ?? [],
+                                branches: branchRes.data.data ?? [],
+                                categories: categoryRes.data.data ?? [],
+                                employees: employeeRes.data.data ?? [],
+                            };
+                        })
+                    );
+
+                    if (cancelled) return;
+
+                    setCompanyUsers(companyData.flatMap((item) => item.users));
+                    setBranches(companyData.flatMap((item) => item.branches));
+                    setCategories(companyData.flatMap((item) => item.categories));
+                    setEmployees(companyData.flatMap((item) => item.employees));
                 } else if (isCompanyAdmin) {
-                    const [companyRes, branchRes, userRes, categoryRes, employeeRes] = await Promise.all([
+                    // Company Admin: only their own company
+                    const [
+                        companyRes,
+                        branchRes,
+                        userRes,
+                        categoryRes,
+                        employeeRes,
+                    ] = await Promise.all([
                         getMyCompany(),
                         getBranches(),
                         getCompanyUsers(),
                         getCategories(),
-                        getEmployees()
-                    ])
-                    // const companyRes = await getMyCompany();
+                        getEmployees(),
+                    ]);
 
+                    if (cancelled) return;
 
-                    setCompanyUsers(userRes.data.data);
-                    setBranches(branchRes.data.data);
                     setCompanies([companyRes.data.data]);
-                    setCategories(categoryRes.data.data);
-                    setEmployees(employeeRes.data.data);
+                    setBranches(branchRes.data.data ?? []);
+                    setCompanyUsers(userRes.data.data ?? []);
+                    setCategories(categoryRes.data.data ?? []);
+                    setEmployees(employeeRes.data.data ?? []);
                 }
-            } catch (err: any) {
-                toast.error(err.message || "Failed to fetch data");
+            } catch (error: unknown) {
+                if (cancelled) return;
+
+                const message =
+                    error instanceof Error
+                        ? error.message
+                        : "Failed to fetch dashboard data";
+
+                toast.error(message);
             }
-        }
+        };
+
         if (user) {
-            fetchData();
+            void fetchData();
         }
-    }, [user, isSuperAdmin, isCompanyAdmin])
+
+        return () => {
+            cancelled = true;
+        };
+    }, [user, isSuperAdmin, isCompanyAdmin]);
 
     const totalCompanies = companies.length;
     const activeUsers = companyUsers.filter((user) => user.isActive).length;

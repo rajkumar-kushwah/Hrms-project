@@ -5,8 +5,10 @@ import { api } from "../api/axios";
 // getUsers company
 // const res = await api.get("/api/users");
 
-export const getCompanyUsers = () => {
-    return api.get("/companyusers");
+export const getCompanyUsers = (companyId?: string) => {
+    return api.get("/companyusers", {
+        params: companyId ? { companyId } : {},
+    });
 };
 
 // fatch toggle 

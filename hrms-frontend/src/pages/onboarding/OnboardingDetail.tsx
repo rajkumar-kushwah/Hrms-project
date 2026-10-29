@@ -1,6 +1,6 @@
 
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+
 
 import {
   getOnboardingDetail,
@@ -176,6 +177,9 @@ const getStatusBadge = (status: OnboardingDetailData["status"]) => {
 export default function OnboardingDetail() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const companyId = searchParams.get("companyId") ?? undefined;
 
   const [data, setData] = useState<OnboardingDetailData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -200,9 +204,11 @@ export default function OnboardingDetail() {
 
       try {
         if (showLoader) setLoading(true);
-        const response = await getOnboardingDetail(userId);
-        setData(response.data);
+
+        const response = await getOnboardingDetail(userId, companyId);
+        setData(response.data ?? null);
       } catch (error: unknown) {
+        setData(null);
         toast.error(
           getErrorMessage(error, "Failed to load onboarding details.")
         );
@@ -210,7 +216,7 @@ export default function OnboardingDetail() {
         setLoading(false);
       }
     },
-    [userId]
+    [userId, companyId]
   );
 
   useEffect(() => {
@@ -556,10 +562,10 @@ export default function OnboardingDetail() {
               <div
                 key={stage}
                 className={`flex flex-col items-center justify-center rounded-lg border p-4 text-center ${completed
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                    : current
-                      ? "border-primary bg-primary/5 text-primary"
-                      : "text-muted-foreground"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                  : current
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "text-muted-foreground"
                   }`}
               >
                 {completed ? (
@@ -670,8 +676,8 @@ export default function OnboardingDetail() {
                               <label
                                 htmlFor={item.id}
                                 className={`break-words text-sm font-medium ${item.isCompleted
-                                    ? "text-muted-foreground line-through"
-                                    : ""
+                                  ? "text-muted-foreground line-through"
+                                  : ""
                                   }`}
                               >
                                 {item.title}
@@ -835,8 +841,8 @@ export default function OnboardingDetail() {
                                           <label
                                             htmlFor={`${item.id}-file`}
                                             className={`flex min-h-40 flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center transition-colors ${canEdit && !isBusy
-                                                ? "cursor-pointer hover:border-primary hover:bg-muted/30"
-                                                : "cursor-not-allowed opacity-50"
+                                              ? "cursor-pointer hover:border-primary hover:bg-muted/30"
+                                              : "cursor-not-allowed opacity-50"
                                               }`}
                                           >
                                             <Upload className="mb-3 h-8 w-8 text-muted-foreground" />

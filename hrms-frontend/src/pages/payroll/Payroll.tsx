@@ -1,5 +1,5 @@
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
     Table,
@@ -9,28 +9,22 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-
 import { Search, RefreshCw, Check } from "lucide-react";
 import { toast } from "sonner";
 
 import type { PayrollSummary } from "@/types/payroll.types";
-import { getCompanies } from "@/services/company.service";
 import { getPayrollSummary } from "@/services/payroll.service";
 import { useAuthStore } from "@/store/auth.store";
+import { useCompanyStore } from "@/store/company.store";
 
-import PayrollTable, {
-    type PayrollCompany,
-} from "./Payrolltable";
+import PayrollTable from "./Payrolltable";
 
-// Currency formatter
 const formatCurrency = (amount: number) =>
     `₹${Math.round(amount).toLocaleString("en-IN")}`;
 
-// Status badge
 const STATUS_STYLES: Record<string, string> = {
     DRAFT: "bg-gray-200 text-gray-700",
     CONFIRMED: "bg-yellow-100 text-yellow-700",
@@ -47,120 +41,79 @@ const StatusBadge = ({ status }: { status: string }) => (
     </span>
 );
 
-type CompanyApiResponse = {
-    id: string;
-    name: string;
-};
-
 const Payroll = () => {
     const { user } = useAuthStore();
 
-    const isSuperAdmin =
-        user?.role?.name?.trim().toLowerCase().replace(/\s+/g, "_") ===
-        "super_admin";
+    const selectedCompanyId = useCompanyStore(
+        (state) => state.selectedCompanyId
+    );
+
+    const roleName = user?.role?.name
+        ?.trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_");
+
+    const isSuperAdmin = roleName === "super_admin";
 
     const currentDate = new Date();
 
     const [search, setSearch] = useState("");
-
     const [month, setMonth] = useState(currentDate.getMonth() + 1);
     const [year, setYear] = useState(currentDate.getFullYear());
 
     const [payrollData, setPayrollData] = useState<PayrollSummary[]>([]);
-    const [loading, setLoading] = useState(true);
-
+    const [loading, setLoading] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [reloadKey, setReloadKey] = useState(0);
 
-    const [companies, setCompanies] = useState<PayrollCompany[]>([]);
-    const [selectedCompanyId, setSelectedCompanyId] = useState("");
-    const [companiesLoading, setCompaniesLoading] = useState(false);
+    const requestIdRef = useRef(0);
 
-    // Load companies for Super Admin
+    // Fetch payroll for the current company and period.
     useEffect(() => {
-        if (!isSuperAdmin) {
-            setCompanies([]);
-            setSelectedCompanyId("");
-            return;
-        }
+        const requestId = ++requestIdRef.current;
 
-        let cancelled = false;
-
-        const fetchCompanies = async () => {
-            setCompaniesLoading(true);
-
-            try {
-                const response = await getCompanies();
-
-                const result = response.data as
-                    | CompanyApiResponse[]
-                    | {
-                          data?: CompanyApiResponse[];
-                      };
-
-                const companyList = Array.isArray(result)
-                    ? result
-                    : Array.isArray(result.data)
-                      ? result.data
-                      : [];
-
-                if (!cancelled) {
-                    setCompanies(
-                        companyList.filter(
-                            (company) =>
-                                typeof company.id === "string" &&
-                                typeof company.name === "string",
-                        ),
-                    );
-                }
-            } catch (error: unknown) {
-                if (!cancelled) {
-                    const message =
-                        error instanceof Error
-                            ? error.message
-                            : "Unable to load companies.";
-
-                    toast.error(message);
-                    setCompanies([]);
-                }
-            } finally {
-                if (!cancelled) {
-                    setCompaniesLoading(false);
-                }
+        const loadPayroll = async () => {
+            if (!user || (isSuperAdmin && !selectedCompanyId)) {
+                setPayrollData([]);
+                setSelectedIds(new Set());
+                setLoading(false);
+                return;
             }
-        };
 
-        void fetchCompanies();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [isSuperAdmin]);
-
-    // Load payroll whenever company, month, or year changes
-    const fetchPayroll = useCallback(async () => {
-        if (isSuperAdmin && !selectedCompanyId) {
+            setLoading(true);
             setPayrollData([]);
             setSelectedIds(new Set());
-            setLoading(false);
-            return;
-        }
 
-        let cancelled = false;
-        setLoading(true);
+            try {
+                const response = await getPayrollSummary(
+                    month,
+                    year,
+                    isSuperAdmin ? selectedCompanyId : undefined
+                );
 
-        try {
-            const response = await getPayrollSummary(
-                month,
-                year,
-                isSuperAdmin ? selectedCompanyId : undefined,
-            );
+                if (requestId !== requestIdRef.current) return;
 
-            if (!cancelled) {
+                // Ignore results if the Super Admin changed companies.
+                if (
+                    isSuperAdmin &&
+                    useCompanyStore.getState().selectedCompanyId !==
+                        selectedCompanyId
+                ) {
+                    return;
+                }
+
                 setPayrollData(response.data.data ?? []);
-                setSelectedIds(new Set());
-            }
-        } catch (error: unknown) {
-            if (!cancelled) {
+            } catch (error: unknown) {
+                if (requestId !== requestIdRef.current) return;
+
+                if (
+                    isSuperAdmin &&
+                    useCompanyStore.getState().selectedCompanyId !==
+                        selectedCompanyId
+                ) {
+                    return;
+                }
+
                 const responseMessage =
                     typeof error === "object" &&
                     error !== null &&
@@ -174,78 +127,17 @@ const Payroll = () => {
                           ).response?.data?.message
                         : undefined;
 
-                const message =
+                toast.error(
                     responseMessage ??
-                    (error instanceof Error
-                        ? error.message
-                        : "Failed to load payroll.");
-
-                toast.error(message);
-                setPayrollData([]);
-                setSelectedIds(new Set());
-            }
-        } finally {
-            if (!cancelled) {
-                setLoading(false);
-            }
-        }
-
-        return () => {
-            cancelled = true;
-        };
-    }, [month, year, isSuperAdmin, selectedCompanyId]);
-
-    useEffect(() => {
-        let cancelled = false;
-
-        const loadPayroll = async () => {
-            if (isSuperAdmin && !selectedCompanyId) {
-                setPayrollData([]);
-                setSelectedIds(new Set());
-                setLoading(false);
-                return;
-            }
-
-            setLoading(true);
-
-            try {
-                const response = await getPayrollSummary(
-                    month,
-                    year,
-                    isSuperAdmin ? selectedCompanyId : undefined,
+                        (error instanceof Error
+                            ? error.message
+                            : "Failed to load payroll.")
                 );
 
-                if (!cancelled) {
-                    setPayrollData(response.data.data ?? []);
-                    setSelectedIds(new Set());
-                }
-            } catch (error: unknown) {
-                if (!cancelled) {
-                    const responseMessage =
-                        typeof error === "object" &&
-                        error !== null &&
-                        "response" in error
-                            ? (
-                                  error as {
-                                      response?: {
-                                          data?: { message?: string };
-                                      };
-                                  }
-                              ).response?.data?.message
-                            : undefined;
-
-                    toast.error(
-                        responseMessage ??
-                            (error instanceof Error
-                                ? error.message
-                                : "Failed to load payroll."),
-                    );
-
-                    setPayrollData([]);
-                    setSelectedIds(new Set());
-                }
+                setPayrollData([]);
+                setSelectedIds(new Set());
             } finally {
-                if (!cancelled) {
+                if (requestId === requestIdRef.current) {
                     setLoading(false);
                 }
             }
@@ -254,33 +146,37 @@ const Payroll = () => {
         void loadPayroll();
 
         return () => {
-            cancelled = true;
+            requestIdRef.current += 1;
         };
-    }, [month, year, isSuperAdmin, selectedCompanyId]);
+    }, [
+        user,
+        month,
+        year,
+        isSuperAdmin,
+        selectedCompanyId,
+        reloadKey,
+    ]);
 
-    // Filter employees
     const filteredEmployees = useMemo(() => {
         const searchValue = search.toLowerCase().trim();
 
-        if (!searchValue) {
-            return payrollData;
-        }
+        if (!searchValue) return payrollData;
 
-        return payrollData.filter((emp) =>
-            emp.user.name.toLowerCase().includes(searchValue) ||
-            (emp.user.employeeCode ?? "")
-                .toLowerCase()
-                .includes(searchValue) ||
-            (emp.user.designation ?? "")
-                .toLowerCase()
-                .includes(searchValue),
+        return payrollData.filter(
+            (employee) =>
+                employee.user.name.toLowerCase().includes(searchValue) ||
+                (employee.user.employeeCode ?? "")
+                    .toLowerCase()
+                    .includes(searchValue) ||
+                (employee.user.designation ?? "")
+                    .toLowerCase()
+                    .includes(searchValue)
         );
     }, [payrollData, search]);
 
-    // Employee selection
     const filteredEmployeeIds = useMemo(
         () => filteredEmployees.map((employee) => employee.userId),
-        [filteredEmployees],
+        [filteredEmployees]
     );
 
     const allFilteredSelected =
@@ -315,48 +211,48 @@ const Payroll = () => {
         });
     };
 
-    // Selected employees by payroll status
     const selectedDraftEmployees = useMemo(
         () =>
             payrollData.filter(
-                (emp) =>
-                    selectedIds.has(emp.userId) && emp.status === "DRAFT",
+                (employee) =>
+                    selectedIds.has(employee.userId) &&
+                    employee.status === "DRAFT"
             ),
-        [payrollData, selectedIds],
+        [payrollData, selectedIds]
     );
 
     const selectedConfirmedEmployees = useMemo(
         () =>
             payrollData.filter(
-                (emp) =>
-                    selectedIds.has(emp.userId) &&
-                    emp.status === "CONFIRMED",
+                (employee) =>
+                    selectedIds.has(employee.userId) &&
+                    employee.status === "CONFIRMED"
             ),
-        [payrollData, selectedIds],
+        [payrollData, selectedIds]
     );
 
     const selectedDraftIds = useMemo(
-        () => selectedDraftEmployees.map((emp) => emp.userId),
-        [selectedDraftEmployees],
+        () => selectedDraftEmployees.map((employee) => employee.userId),
+        [selectedDraftEmployees]
     );
 
     const selectedConfirmedIds = useMemo(
-        () => selectedConfirmedEmployees.map((emp) => emp.userId),
-        [selectedConfirmedEmployees],
+        () =>
+            selectedConfirmedEmployees.map((employee) => employee.userId),
+        [selectedConfirmedEmployees]
     );
 
-    // Payroll summary cards
     const payrollSummary = useMemo(
         () =>
             payrollData.reduce(
-                (acc, emp) => {
+                (acc, employee) => {
                     acc.totalEmployees += 1;
-                    acc.totalGrossSalary += emp.grossSalary;
-                    acc.totalHolidayDays += emp.holidayDays;
-                    acc.totalUnpaidLeaveDays += emp.unpaidLeaveDays;
-                    acc.totalDeduction += emp.deductionAmount;
-                    acc.totalNetSalary += emp.netSalary;
-                    acc.absentDays += emp.absentDays;
+                    acc.totalGrossSalary += employee.grossSalary;
+                    acc.totalHolidayDays += employee.holidayDays;
+                    acc.totalUnpaidLeaveDays += employee.unpaidLeaveDays;
+                    acc.totalDeduction += employee.deductionAmount;
+                    acc.totalNetSalary += employee.netSalary;
+                    acc.absentDays += employee.absentDays;
 
                     return acc;
                 },
@@ -368,22 +264,19 @@ const Payroll = () => {
                     totalDeduction: 0,
                     totalNetSalary: 0,
                     absentDays: 0,
-                },
+                }
             ),
-        [payrollData],
+        [payrollData]
     );
 
-    // UI
     return (
         <div className="space-y-6 p-1">
-            {/* Header */}
             <div>
                 <p className="text-sm text-muted-foreground">
                     Manage employee salary and payroll
                 </p>
             </div>
 
-            {/* Summary cards */}
             <div className="grid grid-cols-2 gap-3 md:grid-cols-7">
                 <Card className="p-3">
                     <p className="text-xs text-muted-foreground">
@@ -404,9 +297,7 @@ const Payroll = () => {
                 </Card>
 
                 <Card className="p-3">
-                    <p className="text-xs text-muted-foreground">
-                        Holiday
-                    </p>
+                    <p className="text-xs text-muted-foreground">Holiday</p>
                     <p className="text-2xl font-bold text-blue-600">
                         {payrollSummary.totalHolidayDays}
                     </p>
@@ -449,7 +340,6 @@ const Payroll = () => {
                 </Card>
             </div>
 
-            {/* Search */}
             <div className="flex items-center justify-between gap-3">
                 <div className="relative w-full max-w-sm">
                     <Search
@@ -468,40 +358,28 @@ const Payroll = () => {
                 </div>
             </div>
 
-            {/* Company selection and payroll actions */}
             <PayrollTable
                 selectedIds={selectedIds}
                 month={month}
                 year={year}
                 onMonthChange={setMonth}
                 onYearChange={setYear}
-                companies={companies}
-                selectedCompanyId={selectedCompanyId}
-                onCompanyChange={(companyId) => {
-                    setSelectedCompanyId(companyId);
-                    setSelectedIds(new Set());
-                }}
                 isSuperAdmin={isSuperAdmin}
                 selectedDraftEmployees={selectedDraftEmployees}
                 selectedConfirmedEmployees={selectedConfirmedEmployees}
                 selectedDraftIds={selectedDraftIds}
                 selectedConfirmedIds={selectedConfirmedIds}
-                onActionComplete={() => {
-                    // The effect reloads payroll when its filters change.
-                    // This callback also needs to refresh after payroll actions.
-                    void fetchPayroll();
-                }}
+                onActionComplete={() =>
+                    setReloadKey((previous) => previous + 1)
+                }
             />
 
             {isSuperAdmin && !selectedCompanyId && (
                 <p className="text-sm text-muted-foreground">
-                    {companiesLoading
-                        ? "Loading companies..."
-                        : "Please select a company to view payroll."}
+                    Please select a company to view payroll.
                 </p>
             )}
 
-            {/* Payroll table */}
             <div className="grid w-full grid-cols-1 overflow-x-auto rounded border bg-card">
                 <Table className="table-auto">
                     <TableHeader className="bg-muted">
@@ -526,7 +404,6 @@ const Payroll = () => {
                                     )}
                                 </button>
                             </TableHead>
-
                             <TableHead>Employee</TableHead>
                             <TableHead>Designation</TableHead>
                             <TableHead>Gross Salary</TableHead>
@@ -562,17 +439,19 @@ const Payroll = () => {
                                     className="py-8 text-center text-muted-foreground"
                                 >
                                     {isSuperAdmin && !selectedCompanyId
-                                        ? "Select a company to view payroll"
-                                        : "No employees found"}
+                                        ? "Select a company to view payroll."
+                                        : "No employees found."}
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            filteredEmployees.map((emp) => {
-                                const isSelected = selectedIds.has(emp.userId);
+                            filteredEmployees.map((employee) => {
+                                const isSelected = selectedIds.has(
+                                    employee.userId
+                                );
 
                                 return (
                                     <TableRow
-                                        key={emp.userId}
+                                        key={employee.userId}
                                         className={
                                             isSelected ? "bg-muted/50" : ""
                                         }
@@ -581,14 +460,16 @@ const Payroll = () => {
                                             <button
                                                 type="button"
                                                 onClick={() =>
-                                                    toggleEmployee(emp.userId)
+                                                    toggleEmployee(
+                                                        employee.userId
+                                                    )
                                                 }
                                                 className={`flex h-4 w-4 items-center justify-center rounded-sm border transition-colors ${
                                                     isSelected
                                                         ? "border-[var(--themePrimary)] bg-[var(--themePrimary)] text-white"
                                                         : "border-input bg-background"
                                                 }`}
-                                                aria-label={`Select ${emp.user.name}`}
+                                                aria-label={`Select ${employee.user.name}`}
                                             >
                                                 {isSelected && (
                                                     <Check className="h-3 w-3" />
@@ -598,68 +479,60 @@ const Payroll = () => {
 
                                         <TableCell>
                                             <p className="font-medium">
-                                                {emp.user.name}
+                                                {employee.user.name}
                                             </p>
                                             <p className="text-xs text-muted-foreground">
-                                                {emp.user.employeeCode}
+                                                {employee.user.employeeCode}
                                             </p>
                                         </TableCell>
 
                                         <TableCell>
-                                            {emp.user.designation ?? "—"}
+                                            {employee.user.designation ?? "—"}
                                         </TableCell>
-
                                         <TableCell>
-                                            {formatCurrency(emp.grossSalary)}
+                                            {formatCurrency(employee.grossSalary)}
                                         </TableCell>
-
                                         <TableCell>
-                                            {emp.totalWorkingDays}
+                                            {employee.totalWorkingDays}
                                         </TableCell>
-
                                         <TableCell>
                                             <Badge variant="secondary">
-                                                {emp.holidayDays || 0}
+                                                {employee.holidayDays || 0}
                                             </Badge>
                                         </TableCell>
-
                                         <TableCell>
-                                            {emp.presentDays} /{" "}
-                                            {emp.totalWorkingDays}
+                                            {employee.presentDays} /{" "}
+                                            {employee.totalWorkingDays}
                                         </TableCell>
-
                                         <TableCell>
-                                            {emp.paidLeaveDays}
+                                            {employee.paidLeaveDays}
                                         </TableCell>
-
                                         <TableCell>
                                             <Badge
                                                 variant={
-                                                    emp.unpaidLeaveDays > 0
+                                                    employee.unpaidLeaveDays > 0
                                                         ? "destructive"
                                                         : "secondary"
                                                 }
                                             >
-                                                {emp.unpaidLeaveDays} days
+                                                {employee.unpaidLeaveDays} days
                                             </Badge>
                                         </TableCell>
-
-                                        <TableCell>{emp.absentDays}</TableCell>
-
+                                        <TableCell>
+                                            {employee.absentDays}
+                                        </TableCell>
                                         <TableCell>
                                             {formatCurrency(
-                                                emp.deductionAmount,
+                                                employee.deductionAmount
                                             )}
                                         </TableCell>
-
                                         <TableCell>
                                             <span className="font-semibold">
-                                                {formatCurrency(emp.netSalary)}
+                                                {formatCurrency(employee.netSalary)}
                                             </span>
                                         </TableCell>
-
                                         <TableCell>
-                                            <StatusBadge status={emp.status} />
+                                            <StatusBadge status={employee.status} />
                                         </TableCell>
                                     </TableRow>
                                 );

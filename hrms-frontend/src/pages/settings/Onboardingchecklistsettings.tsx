@@ -1,5 +1,6 @@
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import { toast } from "sonner";
 import {
   Plus,
@@ -16,7 +17,6 @@ import {
   Upload,
   Hash,
   Layers3,
-  Building2,
 } from "lucide-react";
 
 import { onboardingChecklistSchema } from "@/validation/onboardingChecklist.validation";
@@ -58,8 +58,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+import { CompanySelector } from "@/pages/common/CompanySelector";
+import { useCompanyStore } from "@/store/company.store";
+
 import {
-  getCompaniesForChecklist,
   getChecklistTemplates,
   createChecklistItem,
   updateChecklistItem,
@@ -79,11 +81,6 @@ type DocumentInputType =
   | "DOCUMENT_NUMBER"
   | "EITHER";
 
-interface CompanyOption {
-  id: string;
-  name: string;
-}
-
 interface ChecklistItem {
   id: string;
   stage: Stage;
@@ -96,9 +93,7 @@ interface ChecklistItem {
 }
 
 type GroupedTemplates = Record<Stage, ChecklistItem[]>;
-
 type ItemForm = OnboardingChecklistFormValues;
-
 type FormErrors = Partial<Record<keyof ItemForm, string>>;
 
 const STAGES: { value: Stage; label: string }[] = [
@@ -117,38 +112,38 @@ const EMPTY_FORM: ItemForm = {
   documentInputType: "FILE_UPLOAD",
 };
 
-const EMPTY_GROUPED: GroupedTemplates = {
+const createEmptyGrouped = (): GroupedTemplates => ({
   OFFER: [],
   JOINING: [],
   DOCUMENTS: [],
   TRAINING: [],
   ACTIVE: [],
-};
+});
 
 const DOCUMENT_TYPES: {
   value: DocumentInputType;
   label: string;
-  description: string;
 }[] = [
     {
       value: "FILE_UPLOAD",
       label: "File Upload",
-      description: "Employee uploads a document file.",
     },
     {
       value: "DOCUMENT_NUMBER",
       label: "Document Number",
-      description: "Employee enters a document number.",
     },
     {
       value: "EITHER",
       label: "File or Number",
-      description: "Employee can provide either one.",
     },
   ];
 
 function getErrorMessage(error: unknown): string {
-  if (typeof error === "object" && error !== null && "response" in error) {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error
+  ) {
     const response = error.response;
 
     if (
@@ -201,15 +196,11 @@ function getFormErrors(
 }
 
 function normalizeGroupedTemplates(data: unknown): GroupedTemplates {
-  const grouped: GroupedTemplates = {
-    OFFER: [],
-    JOINING: [],
-    DOCUMENTS: [],
-    TRAINING: [],
-    ACTIVE: [],
-  };
+  const grouped = createEmptyGrouped();
 
-  if (typeof data !== "object" || data === null) return grouped;
+  if (typeof data !== "object" || data === null) {
+    return grouped;
+  }
 
   const record = data as Record<string, unknown>;
 
@@ -235,16 +226,15 @@ function normalizeGroupedTemplates(data: unknown): GroupedTemplates {
 }
 
 export default function OnboardingChecklistSettings() {
-  const [activeStage, setActiveStage] = useState<Stage>("OFFER");
 
-  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
-  const [companiesLoading, setCompaniesLoading] = useState(true);
 
+  const [activeStage, setActiveStage] = useState<Stage>("OFFER");
   const [grouped, setGrouped] =
-    useState<GroupedTemplates>(EMPTY_GROUPED);
+    useState<GroupedTemplates>(createEmptyGrouped);
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -261,81 +251,34 @@ export default function OnboardingChecklistSettings() {
     useState<ChecklistItem | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const requestInProgress = useRef(false);
+  // Prevent outdated requests from overwriting the latest company's data.
   const requestIdRef = useRef(0);
 
-  // Load companies
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadCompanies() {
-      setCompaniesLoading(true);
-
-      try {
-        const response = await getCompaniesForChecklist();
-        const data: unknown = response.data.data;
-
-        if (!Array.isArray(data)) {
-          throw new Error("Invalid company list response");
-        }
-
-        const validCompanies = data.filter(
-          (company): company is CompanyOption =>
-            typeof company === "object" &&
-            company !== null &&
-            "id" in company &&
-            typeof company.id === "string" &&
-            "name" in company &&
-            typeof company.name === "string"
-        );
-
-        if (cancelled) return;
-
-        setCompanies(validCompanies);
-        setSelectedCompanyId((current) =>
-          validCompanies.some((company) => company.id === current)
-            ? current
-            : validCompanies[0]?.id ?? ""
-        );
-
-        if (validCompanies.length === 0) {
-          setGrouped({ ...EMPTY_GROUPED });
-        }
-      } catch (error: unknown) {
-        if (!cancelled) {
-          toast.error(getErrorMessage(error));
-          setCompanies([]);
-          setGrouped({ ...EMPTY_GROUPED });
-        }
-      } finally {
-        if (!cancelled) setCompaniesLoading(false);
-      }
-    }
-
-    void loadCompanies();
-
-    return () => {
-      cancelled = true;
-    };
+  const resetForm = useCallback(() => {
+    setForm({ ...EMPTY_FORM });
+    setErrors({});
+    setHasValidated(false);
   }, []);
 
-  // Load templates for selected company
+  const closeDialog = useCallback(() => {
+    if (saving) return;
+
+    setDialogOpen(false);
+    setEditingItem(null);
+    resetForm();
+  }, [saving, resetForm]);
+
+  // Load checklist templates for the currently selected company.
   const loadTemplates = useCallback(
     async (showRefresh = false) => {
+      const requestId = ++requestIdRef.current;
+
       if (!selectedCompanyId) {
-        setGrouped({ ...EMPTY_GROUPED });
+        setGrouped(createEmptyGrouped());
         setLoading(false);
         setRefreshing(false);
         return;
       }
-
-      if (requestInProgress.current) {
-        if (!showRefresh) return;
-        setRefreshing(true);
-      }
-
-      requestInProgress.current = true;
-      const requestId = ++requestIdRef.current;
 
       if (showRefresh) {
         setRefreshing(true);
@@ -351,6 +294,7 @@ export default function OnboardingChecklistSettings() {
         setGrouped(normalizeGroupedTemplates(response.data.data));
       } catch (error: unknown) {
         if (requestId === requestIdRef.current) {
+          setGrouped(createEmptyGrouped());
           toast.error(getErrorMessage(error));
         }
       } finally {
@@ -358,22 +302,33 @@ export default function OnboardingChecklistSettings() {
           setLoading(false);
           setRefreshing(false);
         }
-
-        requestInProgress.current = false;
       }
     },
     [selectedCompanyId]
   );
 
+  // Reload when the shared company selection changes.
   useEffect(() => {
-    setGrouped({ ...EMPTY_GROUPED });
+    setGrouped(createEmptyGrouped());
+    setDeleteItem(null);
+    setDialogOpen(false);
+    setEditingItem(null);
+    resetForm();
 
-    if (selectedCompanyId) {
-      void loadTemplates();
-    } else {
+    if (!selectedCompanyId) {
+      // Invalidate any request belonging to the previous company.
+      requestIdRef.current += 1;
       setLoading(false);
+      setRefreshing(false);
+      return;
     }
-  }, [selectedCompanyId, loadTemplates]);
+
+    void loadTemplates();
+
+    return () => {
+      requestIdRef.current += 1;
+    };
+  }, [selectedCompanyId, loadTemplates, resetForm]);
 
   const allItems = useMemo(
     () => STAGES.flatMap((stage) => grouped[stage.value]),
@@ -381,14 +336,16 @@ export default function OnboardingChecklistSettings() {
   );
 
   const totalItems = allItems.length;
-  const requiredItems = allItems.filter((item) => item.isRequired).length;
+  const requiredItems = allItems.filter(
+    (item) => item.isRequired
+  ).length;
   const documentItems = allItems.filter(
     (item) => item.requiresDocument
   ).length;
 
   const currentItems = grouped[activeStage] ?? [];
 
-  // Live validation using the existing imported schema
+  // Live form validation.
   const updateForm = <K extends keyof ItemForm>(
     key: K,
     value: ItemForm[K]
@@ -403,12 +360,6 @@ export default function OnboardingChecklistSettings() {
     }
   };
 
-  const resetForm = () => {
-    setForm({ ...EMPTY_FORM });
-    setErrors({});
-    setHasValidated(false);
-  };
-
   const openAddDialog = () => {
     setEditingItem(null);
     resetForm();
@@ -417,6 +368,7 @@ export default function OnboardingChecklistSettings() {
 
   const openEditDialog = (item: ChecklistItem) => {
     setEditingItem(item);
+
     setForm({
       title: item.title,
       description: item.description ?? "",
@@ -424,31 +376,22 @@ export default function OnboardingChecklistSettings() {
       requiresDocument: item.requiresDocument,
       documentInputType: item.documentInputType ?? "FILE_UPLOAD",
     });
+
     setErrors({});
     setHasValidated(false);
     setDialogOpen(true);
   };
 
-  const closeDialog = () => {
-    if (saving) return;
-    setDialogOpen(false);
-    setEditingItem(null);
-    resetForm();
-  };
-
-  const handleCompanyChange = (companyId: string) => {
-    setSelectedCompanyId(companyId);
-    setGrouped({ ...EMPTY_GROUPED });
-    setDeleteItem(null);
-    setDialogOpen(false);
-    setEditingItem(null);
-    resetForm();
-  };
-
-  // Create / update
-  const handleSave = async (event: React.FormEvent<HTMLFormElement>) => {
+  // Create / update checklist item.
+  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
     if (saving) return;
+
+    if (!selectedCompanyId) {
+      toast.error("Please select a company");
+      return;
+    }
 
     setHasValidated(true);
 
@@ -460,12 +403,9 @@ export default function OnboardingChecklistSettings() {
       return;
     }
 
-    if (!selectedCompanyId) {
-      toast.error("Please select a company");
-      return;
-    }
-
+    const companyIdAtSubmit = selectedCompanyId;
     const data = result.data;
+
     setErrors({});
     setSaving(true);
 
@@ -478,7 +418,7 @@ export default function OnboardingChecklistSettings() {
         documentInputType: data.requiresDocument
           ? data.documentInputType
           : null,
-        companyId: selectedCompanyId,
+        companyId: companyIdAtSubmit,
       };
 
       if (editingItem) {
@@ -489,13 +429,17 @@ export default function OnboardingChecklistSettings() {
           ...payload,
           stage: activeStage,
         });
+
         toast.success("Checklist item created successfully");
       }
 
       setDialogOpen(false);
       setEditingItem(null);
       resetForm();
-      await loadTemplates(true);
+
+      if (useCompanyStore.getState().selectedCompanyId === companyIdAtSubmit) {
+        await loadTemplates(true);
+      }
     } catch (error: unknown) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -503,25 +447,31 @@ export default function OnboardingChecklistSettings() {
     }
   };
 
-  // Delete
+  // Delete checklist item.
   const handleDelete = async () => {
-    if (!deleteItem || deleting) return;
+    if (!deleteItem || deleting || !selectedCompanyId) return;
 
     const item = deleteItem;
+    const companyIdAtSubmit = selectedCompanyId;
+
     setDeleting(true);
 
     try {
-      await deleteChecklistItem(item.id, selectedCompanyId);
+      await deleteChecklistItem(item.id, companyIdAtSubmit);
 
-      setGrouped((previous) => ({
-        ...previous,
-        [item.stage]: previous[item.stage].filter(
-          (entry) => entry.id !== item.id
-        ),
-      }));
+      if (
+        useCompanyStore.getState().selectedCompanyId === companyIdAtSubmit
+      ) {
+        setGrouped((previous) => ({
+          ...previous,
+          [item.stage]: previous[item.stage].filter(
+            (entry) => entry.id !== item.id
+          ),
+        }));
 
-      toast.success("Checklist item deleted successfully");
-      setDeleteItem(null);
+        toast.success("Checklist item deleted successfully");
+        setDeleteItem(null);
+      }
     } catch (error: unknown) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -529,25 +479,20 @@ export default function OnboardingChecklistSettings() {
     }
   };
 
-  // Reorder
+  // Reorder checklist items.
   const handleMove = async (
     index: number,
     direction: "up" | "down"
   ) => {
+    if (!selectedCompanyId || movingId || saving || deleting) return;
+
     const items = [...currentItems];
     const targetIndex = direction === "up" ? index - 1 : index + 1;
 
-    if (
-      targetIndex < 0 ||
-      targetIndex >= items.length ||
-      movingId ||
-      saving ||
-      deleting
-    ) {
-      return;
-    }
+    if (targetIndex < 0 || targetIndex >= items.length) return;
 
     const originalItems = [...items];
+    const companyIdAtSubmit = selectedCompanyId;
     const itemId = items[index].id;
 
     [items[index], items[targetIndex]] = [
@@ -565,22 +510,33 @@ export default function OnboardingChecklistSettings() {
       await reorderChecklistItems(
         activeStage,
         items.map((item) => item.id),
-        selectedCompanyId
+        companyIdAtSubmit
       );
 
-      toast.success("Checklist order updated");
+      if (
+        useCompanyStore.getState().selectedCompanyId === companyIdAtSubmit
+      ) {
+        toast.success("Checklist order updated");
+      }
     } catch (error: unknown) {
-      setGrouped((previous) => ({
-        ...previous,
-        [activeStage]: originalItems,
-      }));
-      toast.error(getErrorMessage(error));
+      if (
+        useCompanyStore.getState().selectedCompanyId === companyIdAtSubmit
+      ) {
+        setGrouped((previous) => ({
+          ...previous,
+          [activeStage]: originalItems,
+        }));
+
+        toast.error(getErrorMessage(error));
+      }
     } finally {
       setMovingId(null);
     }
   };
 
-  const getDocumentLabel = (type?: DocumentInputType | null) =>
+  const getDocumentLabel = (
+    type?: DocumentInputType | null
+  ) =>
     DOCUMENT_TYPES.find((option) => option.value === type)?.label ??
     "Not configured";
 
@@ -595,6 +551,7 @@ export default function OnboardingChecklistSettings() {
               Onboarding Checklist
             </h1>
           </div>
+
           <p className="max-w-2xl text-sm text-muted-foreground">
             Configure the default tasks and document requirements for each
             onboarding stage.
@@ -607,12 +564,7 @@ export default function OnboardingChecklistSettings() {
             variant="add"
             className="cursor-pointer"
             onClick={() => void loadTemplates(true)}
-            disabled={
-              !selectedCompanyId ||
-              loading ||
-              refreshing ||
-              companiesLoading
-            }
+            disabled={!selectedCompanyId || loading || refreshing}
           >
             <RefreshCw
               className={`mr-2 h-4 w-4 ${loading || refreshing ? "animate-spin" : ""
@@ -634,40 +586,11 @@ export default function OnboardingChecklistSettings() {
         </div>
       </div>
 
-      {/* Company selector */}
-      <div className="max-w-sm space-y-2">
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <Building2 className="h-4 w-4" />
-          Select Company
-        </label>
-
-        <Select
-          value={selectedCompanyId}
-          onValueChange={handleCompanyChange}
-          disabled={companiesLoading || companies.length === 0}
-        >
-          <SelectTrigger>
-            <SelectValue
-              placeholder={
-                companiesLoading ? "Loading companies..." : "Select company"
-              }
-            />
-          </SelectTrigger>
-          <SelectContent position="popper">
-            {companies.map((company) => (
-              <SelectItem key={company.id} value={company.id}>
-                {company.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {!companiesLoading && companies.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No companies available.
-          </p>
-        )}
-      </div>
+      {/* Shared company selector */}
+      <CompanySelector
+        selectedCompanyId={selectedCompanyId}
+        onCompanyChange={setSelectedCompanyId}
+      />
 
       {/* Summary */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -710,7 +633,7 @@ export default function OnboardingChecklistSettings() {
       </div>
 
       {/* Stage tabs */}
-      {companiesLoading || loading ? (
+      {loading ? (
         <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-muted-foreground">
           <RefreshCw className="h-4 w-4 animate-spin" />
           Loading checklist templates...
@@ -783,8 +706,8 @@ export default function OnboardingChecklistSettings() {
                     </div>
                     <h3 className="font-medium">No checklist items yet</h3>
                     <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                      Add the first item for the {stage.label.toLowerCase()}{" "}
-                      stage.
+                      Add the first item for the{" "}
+                      {stage.label.toLowerCase()} stage.
                     </p>
                     <Button
                       type="button"
@@ -817,6 +740,7 @@ export default function OnboardingChecklistSettings() {
                             <div className="min-w-0 flex-1 space-y-2">
                               <div className="flex flex-wrap items-center gap-2">
                                 <h3 className="font-medium">{item.title}</h3>
+
                                 {item.isRequired ? (
                                   <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
                                     Required
@@ -870,7 +794,10 @@ export default function OnboardingChecklistSettings() {
                               title="Move up"
                               aria-label="Move item up"
                               disabled={
-                                index === 0 || !!movingId || deleting || saving
+                                index === 0 ||
+                                !!movingId ||
+                                deleting ||
+                                saving
                               }
                               onClick={() => void handleMove(index, "up")}
                             >
@@ -940,10 +867,12 @@ export default function OnboardingChecklistSettings() {
               template? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
+
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>
               Cancel
             </AlertDialogCancel>
+
             <AlertDialogAction
               disabled={deleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -996,7 +925,9 @@ export default function OnboardingChecklistSettings() {
 
             {!editingItem && (
               <div className="space-y-2">
-                <label className="text-sm font-medium">Onboarding Stage</label>
+                <label className="text-sm font-medium">
+                  Onboarding Stage
+                </label>
                 <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
                   {STAGES.find((stage) => stage.value === activeStage)?.label}
                 </div>
@@ -1185,6 +1116,7 @@ export default function OnboardingChecklistSettings() {
                 <X className="mr-2 h-4 w-4" />
                 Cancel
               </Button>
+
               <Button
                 type="submit"
                 variant="add"

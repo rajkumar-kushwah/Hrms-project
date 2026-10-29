@@ -1,111 +1,281 @@
+
 import type { Request, Response } from "express";
 import * as EmployeeService from "../services/employee.service.js";
+import {
+    getCompanyId,
+    normalizeRoleName,
+} from "../utilis/roleUtils.js";
 
-
-// create employee controller
+// Create employee
 export const createEmployee = async (req: Request, res: Response) => {
     try {
-        const companyId = req.user?.companyId!;
-        const createdBy = req.user?.id!;
-        // const requestingUserRole = req.user?.role?.name!;
+        const companyId = getCompanyId(req);
+        const createdBy = req.user?.id;
+        const roleName = normalizeRoleName(req.user?.role?.name);
 
-        const roleName = req.user?.role?.name
-            ?.trim()
-            .toLowerCase()
-            .replace(/\s+/g, "_");
-
-        const employee = await EmployeeService.createEmployee(companyId, createdBy, roleName!, req.body);
-
-        res.status(201).json({
-            success: true,
-            message: "Employee created successfully",
-            data: employee
-        });
-    } catch (error: any) {
-        res.status(400).json({ success: false, message: error.message });
-    }
-}
-
-// get all employees controller
-export const getEmployees = async (req: Request, res: Response) => {
-    try {
-        const companyId = req.user?.role.name === "super_admin" ? null : req.user?.companyId!;
-        const requestingUserId = req.user?.id!;
-        const requestingUserRole = req.user?.role?.name!;
-
-        const employees = await EmployeeService.getEmployees(companyId, requestingUserId, requestingUserRole);
-
-        return res.status(200).json({ success: true, data: employees });
-    } catch (error: any) {
-        return res.status(500).json({ success: false, message: error.message });
-    }
-}
-
-// get single employee controller
-export const getEmployeeById = async (req: Request, res: Response) => {
-    try {
-        const id = (req.params.id as string);
-        const requestingUserId = req.user?.id!;
-        const requestingUserRole = req.user?.role?.name!;
-        const requestingCompanyId = req.user?.companyId!;
-        if (!id) return res.status(400).json({ success: false, message: "Invalid employee id" });
-
-        const employee = await EmployeeService.getEmployeeById(id, requestingUserId, requestingUserRole, requestingCompanyId);
-
-        return res.status(200).json({ success: true, data: employee });
-    } catch (error: any) {
-        return res.status(404).json({ success: false, message: error.message });
-    }
-}
-
-// update employee controller
-export const updateEmployee = async (req: Request, res: Response) => {
-    try {
-        const id = (req.params.id as string);
-        const requestingUserId = req.user?.id!;
-        const requestingUserRole = req.user?.role?.name!;
-        const requestingCompanyId = req.user?.companyId!;
-        if (!id) return res.status(400).json({ success: false, message: "Invalid employee id" });
-
-        const employee = await EmployeeService.updateEmployee(id, requestingUserId, requestingUserRole, requestingCompanyId, req.body);
-
-        return res.status(200).json({ success: true, message: "Employee updated successfully", data: employee });
-    } catch (error: any) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-}
-
-export const deleteEmployee = async (req: Request, res: Response) => {
-    try {
-        const id = (req.params.id as string);
-        if (!id) return res.status(400).json({ success: false, message: "Invalid employee id" });
-
-        const employee = await EmployeeService.deleteEmployee(id);
-
-        return res.status(200).json({ success: true, message: employee.message });
-    } catch (error: any) {
-        return res.status(400).json({ success: false, message: error.message });
-    }
-}
-
-export const resetEmployeePassword = async (req: Request, res: Response) => {
-    try {
-        const id = (req.params.id as string);
-        const { password } = req.body
-
-        if (!id) return res.status(400).json({ success: false, message: "Invalid employee id" });
-
-        if (!password || password.length < 6) {
+        if (!companyId) {
             return res.status(400).json({
                 success: false,
-                message: "Password must be at least 6 characters"
+                message: "Please select a company before creating an employee.",
             });
         }
 
-        const employee = await EmployeeService.resetEmployeePassword(id, password);
+        if (!createdBy || !roleName) {
+            return res.status(401).json({
+                success: false,
+                message: "User authentication is required.",
+            });
+        }
 
-        return res.status(200).json({ success: true, message: employee.message });
-    } catch (error: any) {
-        return res.status(400).json({ success: false, message: error.message });
+        const employee = await EmployeeService.createEmployee(
+            companyId,
+            createdBy,
+            roleName,
+            req.body
+        );
+
+        return res.status(201).json({
+            success: true,
+            message: "Employee created successfully",
+            data: employee,
+        });
+    } catch (error: unknown) {
+        const message =
+            error instanceof Error
+                ? error.message
+                : "Failed to create employee";
+
+        return res.status(400).json({
+            success: false,
+            message,
+        });
     }
-}
+};
+
+// Get all employees
+export const getEmployees = async (req: Request, res: Response) => {
+    try {
+        const companyId = getCompanyId(req);
+        const requestingUserId = req.user?.id;
+        const requestingUserRole = normalizeRoleName(req.user?.role?.name);
+
+        if (!requestingUserId || !requestingUserRole) {
+            return res.status(401).json({
+                success: false,
+                message: "User authentication is required.",
+            });
+        }
+
+        if (!companyId && requestingUserRole === "super_admin") {
+            return res.status(200).json({
+                success: true,
+                data: [],
+            });
+        }
+
+        const employees = await EmployeeService.getEmployees(
+            companyId,
+            requestingUserId,
+            requestingUserRole
+        );
+
+        return res.status(200).json({
+            success: true,
+            data: employees,
+        });
+    } catch (error: unknown) {
+        const message =
+            error instanceof Error
+                ? error.message
+                : "Failed to fetch employees";
+
+        return res.status(500).json({
+            success: false,
+            message,
+        });
+    }
+};
+
+// Get single employee
+export const getEmployeeById = async (req: Request, res: Response) => {
+    try {
+        const id = req.params.id;
+        const requestingUserId = req.user?.id;
+        const requestingUserRole = normalizeRoleName(req.user?.role?.name);
+        const requestingCompanyId = getCompanyId(req);
+
+        if (typeof id !== "string" || !id) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid employee id",
+            });
+        }
+
+        if (!requestingUserId || !requestingUserRole) {
+            return res.status(401).json({
+                success: false,
+                message: "User authentication is required.",
+            });
+        }
+
+        if (!requestingCompanyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Please select a company.",
+            });
+        }
+
+        const employee = await EmployeeService.getEmployeeById(
+            id,
+            requestingUserId,
+            requestingUserRole,
+            requestingCompanyId
+        );
+
+        return res.status(200).json({
+            success: true,
+            data: employee,
+        });
+    } catch (error: unknown) {
+        const message =
+            error instanceof Error
+                ? error.message
+                : "Failed to fetch employee";
+
+        return res.status(404).json({
+            success: false,
+            message,
+        });
+    }
+};
+
+// Update employee
+export const updateEmployee = async (req: Request, res: Response) => {
+    try {
+        const id = req.params.id;
+        const requestingUserId = req.user?.id;
+        const requestingUserRole = normalizeRoleName(req.user?.role?.name);
+        const requestingCompanyId = getCompanyId(req);
+
+        if (typeof id !== "string" || !id) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid employee id",
+            });
+        }
+
+        if (!requestingUserId || !requestingUserRole) {
+            return res.status(401).json({
+                success: false,
+                message: "User authentication is required.",
+            });
+        }
+
+        if (!requestingCompanyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Please select a company.",
+            });
+        }
+
+        const employee = await EmployeeService.updateEmployee(
+            id,
+            requestingUserId,
+            requestingUserRole,
+            requestingCompanyId,
+            req.body
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "Employee updated successfully",
+            data: employee,
+        });
+    } catch (error: unknown) {
+        const message =
+            error instanceof Error
+                ? error.message
+                : "Failed to update employee";
+
+        return res.status(400).json({
+            success: false,
+            message,
+        });
+    }
+};
+
+// Delete employee
+export const deleteEmployee = async (req: Request, res: Response) => {
+    try {
+        const id = req.params.id;
+
+        if (typeof id !== "string" || !id) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid employee id",
+            });
+        }
+
+        const employee = await EmployeeService.deleteEmployee(id);
+
+        return res.status(200).json({
+            success: true,
+            message: employee.message,
+        });
+    } catch (error: unknown) {
+        const message =
+            error instanceof Error
+                ? error.message
+                : "Failed to delete employee";
+
+        return res.status(400).json({
+            success: false,
+            message,
+        });
+    }
+};
+
+// Reset employee password
+export const resetEmployeePassword = async (
+    req: Request,
+    res: Response
+) => {
+    try {
+        const id = req.params.id;
+        const password: unknown = req.body?.password;
+
+        if (typeof id !== "string" || !id) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid employee id",
+            });
+        }
+
+        if (typeof password !== "string" || password.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: "Password must be at least 6 characters",
+            });
+        }
+
+        const employee = await EmployeeService.resetEmployeePassword(
+            id,
+            password
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: employee.message,
+        });
+    } catch (error: unknown) {
+        const message =
+            error instanceof Error
+                ? error.message
+                : "Failed to reset employee password";
+
+        return res.status(400).json({
+            success: false,
+            message,
+        });
+    }
+};
