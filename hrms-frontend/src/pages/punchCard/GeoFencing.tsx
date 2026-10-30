@@ -221,6 +221,7 @@ const GeoFencing = () => {
                         <div className="relative w-full max-w-sm">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
+                                type="search"
                                 placeholder="Search branch, city or location..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
@@ -299,7 +300,7 @@ const GeoFencing = () => {
                                                             <span className="text-xs truncate">
                                                                 {hasLocation
                                                                     ? branch.locationName ??
-                                                                      `${branch.latitude!.toFixed(4)}, ${branch.longitude!.toFixed(4)}`
+                                                                    `${branch.latitude!.toFixed(4)}, ${branch.longitude!.toFixed(4)}`
                                                                     : "Not configured"}
                                                             </span>
                                                         </div>
