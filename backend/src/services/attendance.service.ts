@@ -958,15 +958,24 @@ export const resolveMonthDays = (
 
     const days: DayStatus[] = [];
 
+
     for (let day = 1; day <= daysInMonth; day++) {
         const date = new Date(year, month - 1, day);
         const key = getDateKey(date);
 
+        // 1. Holiday should have priority, even for future dates.
+        if (holidayKeys.has(key)) {
+            days.push("Holiday");
+            continue;
+        }
+
+        // 2. Future date
         if (key > todayKey) {
             days.push("Future");
             continue;
         }
 
+        // 3. Week Off
         if (weekOffDays.includes(date.getDay())) {
             days.push(
                 hasAttendanceInWeek(date)
@@ -976,11 +985,7 @@ export const resolveMonthDays = (
             continue;
         }
 
-        if (holidayKeys.has(key)) {
-            days.push("Holiday");
-            continue;
-        }
-
+        // 4. Attendance
         const attendanceStatus = attendanceByKey.get(key);
 
         if (attendanceStatus !== undefined) {
@@ -994,6 +999,7 @@ export const resolveMonthDays = (
             continue;
         }
 
+        // 5. Approved Leave
         const isPaidLeave = leaveByKey.get(key);
 
         if (isPaidLeave !== undefined) {
@@ -1003,8 +1009,10 @@ export const resolveMonthDays = (
             continue;
         }
 
+        // 6. Default
         days.push("Absent");
     }
+
 
     return days;
 };
