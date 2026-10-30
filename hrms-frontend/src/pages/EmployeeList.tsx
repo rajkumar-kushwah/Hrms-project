@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import {
   Eye,
   EyeOff,
@@ -91,7 +91,7 @@ const EmployeeList = () => {
 
   // Selected employee is only used for status dialog
   const [selectedEmployee, setSelectedEmployee] =
-    React.useState<EmployeeDetail | null>(null);
+    React.useState<Employee | null>(null);
 
   const [statusDialogOpen, setStatusDialogOpen] =
     React.useState(false);
@@ -126,7 +126,7 @@ const EmployeeList = () => {
     React.useState(false);
 
   const [selectedOnboardingEmployee, setSelectedOnboardingEmployee] =
-    React.useState<EmployeeDetail | null>(null);
+    React.useState<Employee | null>(null);
 
   const [targetDate, setTargetDate] =
     React.useState("");
@@ -146,15 +146,12 @@ const EmployeeList = () => {
   const [deleteConfirmed, setDeleteConfirmed] =
     React.useState(false);
 
-  React.useEffect(() => {
-    loadEmployees();
-  }, [selectedCompanyId, isSuperAdmin]);
 
   // --------------------------------------------------
   // Load Employees
   // --------------------------------------------------
 
-  const loadEmployees = async () => {
+  const loadEmployees = useCallback(async () => {
     if (isSuperAdmin && !selectedCompanyId) {
       setEmployees([]);
       return;
@@ -169,7 +166,11 @@ const EmployeeList = () => {
 
       toast.error(message);
     }
-  };
+  }, [isSuperAdmin, selectedCompanyId]);
+
+  React.useEffect(() => {
+    loadEmployees();
+  }, [loadEmployees]);
 
   // --------------------------------------------------
   // Reset Employee Password
@@ -328,6 +329,7 @@ const EmployeeList = () => {
       );
 
       toast.success("Employee deleted successfully");
+      setDeleteConfirmed(false);
 
       setDeleteDialogOpen(false);
       setSelectedForDelete(null);
@@ -339,6 +341,7 @@ const EmployeeList = () => {
       );
     } finally {
       setIsDeleting(false);
+      setDeleteConfirmed(false);
     }
   };
   // --------------------------------------------------
@@ -1168,21 +1171,24 @@ const EmployeeList = () => {
               )}
 
               {/* No Employees */}
-              {employees.length === 0 && (
+              {/* Empty States */}
+              {filteredEmployees.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={
-                      canChangeStatus ? 12 : 11
-                    }
+                    colSpan={canChangeStatus ? 12 : 11}
                     className="text-center text-muted-foreground py-8"
                   >
                     {isSuperAdmin && !selectedCompanyId ? (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm">
                         Select a company to view and manage employees.
                       </p>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
+                    ) : employees.length === 0 ? (
+                      <p className="text-sm">
                         No employees found
+                      </p>
+                    ) : (
+                      <p className="text-sm">
+                        No matching employees found
                       </p>
                     )}
                   </TableCell>

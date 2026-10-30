@@ -179,7 +179,9 @@ export const getEmployeePayrollDetail = async (
 
         const requestedUserId = req.params.userId;
 
-        if (isAdmin && !requestedUserId) {
+        if (isAdmin &&
+            (typeof requestedUserId !== "string" ||
+                requestedUserId.trim() === "")) {
             return res.status(400).json({
                 success: false,
                 message: "Valid employee ID is required",

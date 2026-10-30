@@ -20,9 +20,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     isAuthenticated: false,
     loading: false,
     isInitialized: false,
-    
 
-    setUser: (user) => { console.log(" SETTING USER (FULL DATA):", user); set({ user, isAuthenticated: true, loading: false, isInitialized: true }) },
+
+    setUser: (user) => { if (import.meta.env.DEV) { console.log(" SETTING USER (FULL DATA):", user); } set({ user, isAuthenticated: true, loading: false, isInitialized: true }) },
 
     setLoading: (val: boolean) => set({ loading: val }),
 

@@ -1,5 +1,5 @@
 import "dotenv/config";
-import dotenv from "dotenv";
+// import dotenv from "dotenv";
 import express from "express";
 import cors from 'cors'
 import { prisma } from "./config/db.js";
@@ -29,10 +29,11 @@ import type { Request, Response, NextFunction } from "express";
 import attendanceReportRoutes from "./routes/Attendancereport.route.js";
 
 
-dotenv.config();
+// dotenv.config();
 const app = express();
 app.set("trust proxy", 1);
-const port = 5000;
+// port is used for local development and production on render.
+const port = Number(process.env.PORT) || 5000;
 
 
 app.use(cors({
@@ -47,16 +48,19 @@ app.use(express.urlencoded({ extended: true }));  // parse application/x-www-for
 
 app.use(sessionMiddleware); // Session middleware to handle session management
 
-app.use((req, res, next) => {
-    console.log("SESSION CHECK:", {
-        path: req.originalUrl,
-        hasSession: Boolean(req.session),
-        hasUserId: Boolean(req.session?.userId),
-        cookieReceived: Boolean(req.headers.cookie),
-    });
+// This will only run in development mode local machine not in production on render
+if (process.env.NODE_ENV !== "production") {
+    app.use((req, res, next) => {
+        console.log("SESSION CHECK:", {
+            path: req.originalUrl,
+            hasSession: Boolean(req.session),
+            hasUserId: Boolean(req.session?.userId),
+            cookieReceived: Boolean(req.headers.cookie),
+        });
 
-    next(); // Move to the next middleware or route handler
-});
+        next();
+    });
+}
 
 app.get("/", (req, res) => {
     res.send("HRMS Backend API is running");
@@ -107,16 +111,20 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     });
 });
 
+
+
 async function start() {
     try {
         await prisma.$connect();
-        // await prisma.$queryRaw`SELECT 1`;
-        // console.log("Prisma database connection verified");
+
+        console.log("Database connected successfully!");
+
         app.listen(port, () => {
             console.log(`Server running on port ${port}`);
         });
-    } catch (error) {
-        console.log("Error connecting to database")
+    } catch (error: unknown) {
+        console.error("Database connection failed:", error);
+        process.exit(1);
     }
 }
 

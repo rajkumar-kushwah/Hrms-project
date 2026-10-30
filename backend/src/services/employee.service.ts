@@ -88,7 +88,7 @@ export const createEmployee = async (
             },
         },
         orderBy: {
-            employeeCode: "desc",
+            createdAt: "desc",
         },
         select: {
             employeeCode: true,
@@ -728,17 +728,17 @@ export const updateEmployee = async (
     // Company Admin → Own Company Only
     // ─────────────────────────────────────────
 
-    if (
-        normalizedRequestingRole === "company_admin" &&
-        existing.companyId !== requestingCompanyId
-    ) {
-        throw new Error(
-            "Access denied — this employee doesn't belong to your company"
-        );
-    }
+    // if (
+    //     normalizedRequestingRole === "company_admin" &&
+    //     existing.companyId !== requestingCompanyId
+    // ) {
+    //     throw new Error(
+    //         "Access denied — this employee doesn't belong to your company"
+    //     );
+    // }
 
 
-    let safeData = { ...data };
+    const safeData: typeof data = { ...data };
 
 
     if (safeData.email && safeData.email !== existing.email) {
@@ -752,6 +752,162 @@ export const updateEmployee = async (
             throw new Error("Email already exists");
         }
     }
+
+
+    // ─────────────────────────────────────────
+    // Employee Self Edit
+    // ─────────────────────────────────────────
+
+    if (
+        !isAdminRole &&
+        isSelf &&
+        safeData.isActive !== undefined
+    ) {
+        throw new Error(
+            "You cannot change employee status"
+        );
+    }
+
+    if (
+        !isAdminRole &&
+        isSelf &&
+        safeData.roleId !== undefined
+    ) {
+        throw new Error(
+            "You cannot change your role"
+        );
+    }
+
+    if (
+        !isAdminRole &&
+        isSelf &&
+        safeData.branchId !== undefined
+    ) {
+        throw new Error(
+            "You cannot change your branch"
+        );
+    }
+
+    if (
+        !isAdminRole &&
+        isSelf &&
+        safeData.categoryId !== undefined
+    ) {
+        throw new Error(
+            "You cannot change your category"
+        );
+    }
+
+    if (
+        !isAdminRole &&
+        isSelf &&
+        safeData.reportingManagerId !== undefined
+    ) {
+        throw new Error(
+            "You cannot change your reporting manager"
+        );
+    }
+
+    if (
+        !isAdminRole &&
+        isSelf &&
+        safeData.panNumber !== undefined
+    ) {
+        throw new Error(
+            "You cannot change your pan number"
+        );
+    }
+
+    if (
+        !isAdminRole &&
+        isSelf &&
+        safeData.aadharNumber !== undefined
+    ) {
+        throw new Error(
+            "You cannot change your aadhar number"
+        );
+    }
+
+    if (
+        !isAdminRole &&
+        isSelf &&
+        safeData.bankAccountNumber !== undefined
+    ) {
+        throw new Error(
+            "You cannot change your bank account number"
+        );
+    }
+
+    if (
+        !isAdminRole &&
+        isSelf &&
+        safeData.bankIFSC !== undefined
+    ) {
+        throw new Error(
+            "You cannot change your bank IFSC"
+        );
+    }
+
+    if (
+        !isAdminRole &&
+        isSelf &&
+        safeData.bankName !== undefined
+    ) {
+        throw new Error(
+            "You cannot change your bank name"
+        );
+    }
+
+    if (
+        !isAdminRole &&
+        isSelf &&
+        safeData.pfNumber !== undefined
+    ) {
+        throw new Error(
+            "You cannot change your pf number"
+        );
+    }
+
+    if (
+        !isAdminRole &&
+        isSelf &&
+        safeData.esiNumber !== undefined
+    ) {
+        throw new Error(
+            "You cannot change your esi number"
+        );
+    }
+
+    if (
+        !isAdminRole &&
+        isSelf &&
+        safeData.grossSalary !== undefined
+    ) {
+        throw new Error(
+            "You cannot change your gross salary"
+        );
+    }
+
+    if (
+        !isAdminRole &&
+        isSelf &&
+        safeData.emergencyContactName !== undefined
+    ) {
+        throw new Error(
+            "You cannot change your emergency contact name"
+        );
+    }
+
+    if (
+        !isAdminRole &&
+        isSelf &&
+        safeData.emergencyContactPhone !== undefined
+    ) {
+        throw new Error(
+            "You cannot change your emergency contact phone"
+        );
+    }
+
     // ─────────────────────────────────────────
     // Role Validation
     // ─────────────────────────────────────────
@@ -789,61 +945,64 @@ export const updateEmployee = async (
     }
 
 
-    // ─────────────────────────────────────────
-    // Employee Self Edit
-    // ─────────────────────────────────────────
-    //
+
+
     // Employee sensitive fields edit nahi kar sakta
     // ─────────────────────────────────────────
+    const updateData: typeof data = (() => {
+        if (!isAdminRole && isSelf) {
+            const {
+                roleId,
+                branchId,
+                categoryId,
+                isActive,
+                designation,
+                joiningDate,
+                employmentType,
+                reportingManagerId,
+                panNumber,
+                aadharNumber,
+                bankAccountNumber,
+                bankIFSC,
+                bankName,
+                pfNumber,
+                esiNumber,
+                grossSalary,
+                emergencyContactName,
+                emergencyContactPhone,
 
-    if (!isAdminRole && isSelf) {
-        const {
-            roleId,
-            branchId,
-            categoryId,
-            isActive,
-            designation,
-            joiningDate,
-            employmentType,
-            reportingManagerId,
-            panNumber,
-            aadharNumber,
-            bankAccountNumber,
-            bankIFSC,
-            bankName,
-            pfNumber,
-            esiNumber,
-            grossSalary,
+                ...allowedSelfEdit
+            } = safeData;
 
-            ...allowedSelfEdit
-        } = safeData;
+            return allowedSelfEdit
+        }
+        return safeData
+    })()
 
-        safeData = allowedSelfEdit;
-    }
 
 
     // ─────────────────────────────────────────
     // Status Update
     // ─────────────────────────────────────────
 
-    if (
-        safeData.isActive !== undefined &&
-        !isAdminRole
-    ) {
-        throw new Error(
-            "You cannot change employee status"
-        );
-    }
+    // if (
+    //     safeData.isActive !== undefined &&
+    //     !isAdminRole
+    // ) {
+    //     throw new Error(
+    //         "You cannot change employee status"
+    //     );
+    // }
 
 
     // ─────────────────────────────────────────
     // Branch Validation
     // ─────────────────────────────────────────
 
-    if (safeData.branchId) {
+    if (updateData.branchId) {
         const branch = await prisma.branch.findUnique({
             where: {
-                id: safeData.branchId,
+                id: updateData.branchId,
             },
         });
 
@@ -867,11 +1026,11 @@ export const updateEmployee = async (
     // Category Validation
     // ─────────────────────────────────────────
 
-    if (safeData.categoryId) {
+    if (updateData.categoryId) {
         const category =
             await prisma.category.findUnique({
                 where: {
-                    id: safeData.categoryId,
+                    id: updateData.categoryId,
                 },
             });
 
@@ -902,7 +1061,7 @@ export const updateEmployee = async (
         dateOfBirth,
         joiningDate,
         ...rest
-    } = safeData;
+    } = updateData;
 
 
     // ─────────────────────────────────────────

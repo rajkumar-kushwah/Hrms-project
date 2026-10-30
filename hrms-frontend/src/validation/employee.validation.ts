@@ -31,13 +31,10 @@ export const employeeSchema = z.object({
         .number()
         .min(1, "Role is required"),
 
-    branchId: z
-        .string()
-        .min(1, "Branch is required"),
 
-    categoryId: z
-        .string()
-        .min(1, "Category is required"),
+    // these are optional for employee but required for admin
+    branchId: z.string().optional().or(z.literal("")),
+    categoryId: z.string().optional().or(z.literal("")),
 
     phone: z
         .string()
@@ -150,7 +147,12 @@ export const employeeSchema = z.object({
         .string(),
 });
 
-export const updateEmployeeSchema = employeeSchema.omit({
-  password: true,
-});
+export const updateEmployeeSchema = employeeSchema
+    .omit({ password: true })
+    .partial()
+    .extend({
+        name: employeeSchema.shape.name,
+        email: employeeSchema.shape.email,
+        roleId: employeeSchema.shape.roleId,
+    });
 export const passwordSchema = employeeSchema.shape.password;

@@ -2,6 +2,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../config/db.js";
 import { isDatabaseUnavailable, sendDatabaseUnavailable } from "../utilis/dbErrors.js";
+import { normalizeRoleName } from "../utilis/roleUtils.js";
 
 // export const protect = async (req: any, res: Response, next: NextFunction) => {
 //   try {
@@ -114,12 +115,12 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
     }
 
     if (
-      user.role?.name !== "super_admin" &&
+      normalizeRoleName(user.role?.name) !== "super_admin" &&
       (!user.companyId || !user.company?.isActive)
     ) {
       return res.status(403).json({
         success: false,
-        message: "User not found or inactive",
+        message: "Company is inactive or not assigned",
       });
     }
 

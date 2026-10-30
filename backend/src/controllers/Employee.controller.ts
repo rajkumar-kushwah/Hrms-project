@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import * as EmployeeService from "../services/employee.service.js";
 import {
     getCompanyId,
+    isAdminRole,
     normalizeRoleName,
 } from "../utilis/roleUtils.js";
 
@@ -65,11 +66,17 @@ export const getEmployees = async (req: Request, res: Response) => {
                 message: "User authentication is required.",
             });
         }
+        if (!companyId) {
+            if (normalizeRoleName(requestingUserRole) === "super_admin") {
+                return res.status(200).json({
+                    success: true,
+                    data: [],
+                });
+            }
 
-        if (!companyId && requestingUserRole === "super_admin") {
-            return res.status(200).json({
-                success: true,
-                data: [],
+            return res.status(400).json({
+                success: false,
+                message: "Company not found.",
             });
         }
 
@@ -140,11 +147,27 @@ export const getEmployeeById = async (req: Request, res: Response) => {
         const message =
             error instanceof Error
                 ? error.message
-                : "Failed to fetch employee";
+                : "Internal server error";
 
-        return res.status(404).json({
+        if (message === "Employee not found") {
+            return res.status(404).json({
+                success: false,
+                message,
+            });
+        }
+
+        if (message === "Access denied") {
+            return res.status(403).json({
+                success: false,
+                message,
+            });
+        }
+
+        console.error("Get employee error:", error);
+
+        return res.status(500).json({
             success: false,
-            message,
+            message: "Internal server error",
         });
     }
 };
@@ -289,6 +312,16 @@ export const resetEmployeePassword = async (
     res: Response
 ) => {
     try {
+        // Admin authorization check
+        const roleName = req.user?.role?.name;
+
+        if (!isAdminRole(roleName)) {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. Only administrators can reset employee passwords.",
+            });
+        }
+
         const id = req.params.id;
         const password: unknown = req.body?.password;
 

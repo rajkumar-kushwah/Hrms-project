@@ -27,10 +27,15 @@
 
 // })
 
-
 import session from "express-session";
 import pgSession from "connect-pg-simple";
 import { Pool } from "pg";
+
+const secret = process.env.SESSION_SECRET;
+
+if (!secret) {
+    throw new Error("SESSION_SECRET is not set");
+}
 
 const PgStore = pgSession(session);
 
@@ -50,7 +55,7 @@ export const sessionMiddleware = session({
         tableName: "sessions",
     }),
     name: "sid",
-    secret: process.env.SESSION_SECRET as string,
+    secret,
     resave: false,
     saveUninitialized: false,
     proxy: true,

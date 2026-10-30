@@ -1,4 +1,4 @@
-import { signin, logout } from "../controllers/auth.controlller.js";
+import { signin, logout } from "../controllers/auth.controller.js";
 import express from "express";
 import { protect } from "../middleware/auth.middleware.js";
 import { changePassword, getProfile, updateProfile } from "../controllers/profile.controller.js";

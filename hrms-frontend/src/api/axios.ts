@@ -50,24 +50,23 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Agar server se response aaya hai (jaise 503, 400, 401, etc.)
-    if (error.response) {
-      const serverMessage = error.response.data?.message;
-      const status = error.response.status;
-
-      // Agar backend ne koi message bheja hai (jaise DB down ya invalid credentials)
-      if (serverMessage) {
-        const customError = new Error(serverMessage) as any;
-        customError.status = status;
-        return Promise.reject(customError);
-      }
-    }
-
-    // Agar server band hai / render so raha hai (network error)
+    // Server unreachable / Network error
     if (!error.response) {
       return Promise.reject(
-        new Error("Cannot reach the server. It may be starting up, please try again in a minute.")
+        new Error(
+          "Cannot reach the server. It may be starting up, please try again in a minute."
+        )
       );
+    }
+
+    const serverMessage = error.response.data?.message;
+    const status = error.response.status;
+
+    // Backend error message
+    if (serverMessage) {
+      const customError = new Error(serverMessage) as any;
+      customError.status = status;
+      return Promise.reject(customError);
     }
 
     return Promise.reject(error);

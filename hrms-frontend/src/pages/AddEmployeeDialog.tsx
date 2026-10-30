@@ -215,6 +215,7 @@ const AddEmployeeDialog = ({
         setActiveTab("basic");
 
         if (editEmployee) {
+           
             setForm({
                 ...initialForm,
                 ...editEmployee,
@@ -408,8 +409,11 @@ const AddEmployeeDialog = ({
                 toast.success("Employee updated successfully!");
                 onSuccess(response.data.data);
                 onOpenChange(false);
+                setForm(initialForm);
+                setErrors({});
+                setActiveTab("basic");
             } else {
-                const response = await createEmployee(form);
+                const response = await createEmployee(form, isSuperAdmin ? companyId : undefined);
                 const newEmployee = response.data.data as Employee;
 
                 toast.success("Employee created successfully!");
@@ -417,10 +421,6 @@ const AddEmployeeDialog = ({
                 onSuccess(newEmployee);
                 setOnboardingConfirmOpen(true);
             }
-
-            setForm(initialForm);
-            setErrors({});
-            setActiveTab("basic");
         } catch (error: unknown) {
             const responseMessage = (
                 error as {
@@ -841,7 +841,7 @@ const AddEmployeeDialog = ({
                                     >
                                         <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                                         <SelectContent position="popper" align="start">
-                                            {["Full-time", "Part-time", "Contract", "Intern"].map((type) => (
+                                            {["Full Time", "Part Time", "Contract", "Intern"].map((type) => (
                                                 <SelectItem key={type} value={type}>{type}</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -850,7 +850,7 @@ const AddEmployeeDialog = ({
                                 <div className="flex-1">
                                     <Label>Work Shift</Label>
                                     <Select
-                                        value={form.workShift}
+                                        value={form.workShift ?? ""}
                                         onValueChange={(value) =>
                                             handleSelectChange("workShift", value)
                                         }
