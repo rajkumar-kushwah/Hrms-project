@@ -26,4 +26,4 @@ export const deleteBranch = (id: string, companyId?: string) => api.delete(`/bra
 export const permanentDeleteBranch = (id: string, companyId?: string) => api.delete(`/branch/${id}/permanent`, { params: { companyId } });
 
 // get geo fencing
-export const getGeoFencingOverview = () => api.get("/branch/geo-fencing/overview");
+export const getGeoFencingOverview = (companyId?: string) => api.get("/branch/geo-fencing/overview", { params: { companyId } });

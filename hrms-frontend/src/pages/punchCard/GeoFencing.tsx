@@ -1,10 +1,33 @@
-import React from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { MapPin, Users, CheckCircle, XCircle } from "lucide-react";
-import { toast } from "sonner";
-import { getGeoFencingOverview } from "@/services/branch.service";
 
+import React from "react";
+import {
+    MapPin,
+    Users,
+    CheckCircle,
+    XCircle,
+    Search,
+    RefreshCw,
+    Loader2,
+} from "lucide-react";
+import { toast } from "sonner";
+
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+
+import { getGeoFencingOverview } from "@/services/branch.service";
+import { useAuthStore } from "@/store/auth.store";
+import { isSuperAdminRole } from "@/utilis/roleUtils";
+import { CompanySelector } from "@/pages/common/CompanySelector";
+import { Button } from "@/components/ui/button";
 
 interface GeoFenceEmployee {
     id: string;
@@ -30,130 +53,340 @@ interface GeoFenceBranch {
 }
 
 const GeoFencing = () => {
+    const { user } = useAuthStore();
+    const isSuperAdmin = isSuperAdminRole(user?.role?.name);
+
     const [branches, setBranches] = React.useState<GeoFenceBranch[]>([]);
-    const [loading, setLoading] = React.useState(true);
+    const [loading, setLoading] = React.useState(false);
+    const [selectedCompanyId, setSelectedCompanyId] = React.useState("");
+    const [search, setSearch] = React.useState("");
 
-    React.useEffect(() => {
-        loadData();
-    }, []);
+    const loadData = React.useCallback(async () => {
+        if (isSuperAdmin && !selectedCompanyId) {
+            setBranches([]);
+            return;
+        }
 
-    const loadData = async () => {
+        setLoading(true);
+
         try {
-            const res = await getGeoFencingOverview();
+            const res = await getGeoFencingOverview(
+                isSuperAdmin ? selectedCompanyId : undefined
+            );
+
             setBranches(res.data.data);
-        } catch (err: any) {
+        } catch (error: unknown) {
             const message =
-                err?.message || "Failed to load geo fencing data";
+                error instanceof Error
+                    ? error.message
+                    : "Failed to load geo fencing data";
+
             toast.error(message);
+            setBranches([]);
         } finally {
             setLoading(false);
         }
-    };
+    }, [isSuperAdmin, selectedCompanyId]);
 
-    if (loading) {
-        return <div className="text-center py-8 text-muted-foreground">Loading...</div>;
-    }
+    React.useEffect(() => {
+        void loadData();
+    }, [loadData]);
+
+    const filteredBranches = React.useMemo(() => {
+        const query = search.trim().toLowerCase();
+
+        if (!query) return branches;
+
+        return branches.filter((branch) =>
+            [
+                branch.name,
+                branch.city,
+                branch.locationName,
+            ].some((value) => value?.toLowerCase().includes(query))
+        );
+    }, [branches, search]);
+
+    const totalEmployees = branches.reduce(
+        (total, branch) => total + branch.totalEmployees,
+        0
+    );
+
+    const totalInside = branches.reduce(
+        (total, branch) => total + branch.insideFence,
+        0
+    );
+
+    const totalOutside = branches.reduce(
+        (total, branch) => total + branch.outsideFence,
+        0
+    );
+
+    const totalPunchedIn = branches.reduce(
+        (total, branch) => total + branch.totalPunchedInToday,
+        0
+    );
 
     return (
         <div className="flex flex-col gap-4">
+            {isSuperAdmin && (
+                <CompanySelector
+                    selectedCompanyId={selectedCompanyId || null}
+                    onCompanyChange={(companyId) => {
+                        setSelectedCompanyId(companyId);
+                        setBranches([]);
+                    }}
+                />
+            )}
 
-            <div>
-                <h2 className="text-lg font-semibold">Geo Fencing Overview</h2>
-                <p className="text-xs text-muted-foreground">
-                    Branch-wise location settings and today's attendance validation
-                </p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                    <h2 className="text-lg font-semibold">
+                        Geo Fencing Overview
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                        Branch-wise location settings and today's attendance validation
+                    </p>
+                </div>
+
+                <Button variant="add"
+                    type="button"
+                    onClick={() => void loadData()}
+                    disabled={loading || (isSuperAdmin && !selectedCompanyId)}
+                    className="cursor-pointer"
+                >
+                    <RefreshCw
+                        className={` ${loading ? "animate-spin" : ""}`}
+                    />
+                    Refresh
+                </Button>
             </div>
 
-            {branches.length === 0 ? (
-                <Card className="p-8 text-center text-muted-foreground">
-                    No branches with location set. Add a location to your branches to enable geo fencing.
+            {isSuperAdmin && !selectedCompanyId ? (
+                <Card className="p-8 text-center text-sm text-muted-foreground">
+                    Please select a company to view geo fencing details.
                 </Card>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {branches.map((branch) => (
-                        <Card key={branch.id} className="p-4 transition-none duration-0 ease-none hover:opacity-100 hover:scale-100 active:scale-100">
-                            <CardContent className="p-0 flex flex-col gap-3">
-
-                                {/* Branch Name */}
-                                <div>
-                                    <p className="font-semibold">{branch.name}</p>
-                                    <p className="text-xs text-muted-foreground">{branch.city ?? "—"}</p>
-                                </div>
-
-                                {/* Location Status */}
-                                {branch.latitude && branch.longitude ? (
-                                    <div className="bg-muted rounded-lg p-3">
-                                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                            <MapPin className="h-3 w-3" /> Location Set
-                                        </p>
-                                        <p className="text-xs mt-1 line-clamp-2">
-                                            {branch.locationName ?? `${branch.latitude.toFixed(4)}, ${branch.longitude.toFixed(4)}`}
-                                        </p>
-                                        <Badge variant="outline" className="mt-2">
-                                            Radius: {branch.geoRadius ?? 0}m
-                                        </Badge>
-                                    </div>
-                                ) : (
-                                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                                        <p className="text-xs text-yellow-700 flex items-center gap-1">
-                                            <MapPin className="h-3 w-3" />
-                                            No location set — Geo Fencing disabled for this branch
-                                        </p>
-                                    </div>
-                                )}
-
-                                {/* Employee Count */}
-                                <div className="flex items-center gap-1 text-sm">
-                                    <Users className="h-4 w-4 text-muted-foreground" />
-                                    <span className="text-muted-foreground">Total Employees:</span>
-                                    <span className="font-medium">{branch.totalEmployees}</span>
-                                </div>
-
-                                {/* Today's Attendance Validation */}
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div className="bg-green-50 rounded-lg p-2 flex flex-col items-center">
-                                        <CheckCircle className="h-4 w-4 text-green-600" />
-                                        <p className="text-xs text-muted-foreground mt-1">Inside</p>
-                                        <p className="font-bold text-green-600">{branch.insideFence}</p>
-                                    </div>
-                                    <div className="bg-red-50 rounded-lg p-2 flex flex-col items-center">
-                                        <XCircle className="h-4 w-4 text-red-600" />
-                                        <p className="text-xs text-muted-foreground mt-1">Outside</p>
-                                        <p className="font-bold text-red-600">{branch.outsideFence}</p>
-                                    </div>
-                                </div>
-                                {/* Card ke andar, Inside/Outside count ke neeche add karo: */}
-
-                                {/* Employee List */}
-                                {branch.employees.length > 0 && (
-                                    <div className="border-t pt-2 mt-1">
-                                        <p className="text-xs text-muted-foreground mb-2">Punched In Today</p>
-                                        <div className="flex flex-col gap-1.5 max-h-32 overflow-y-auto">
-                                            {branch.employees.map((emp) => (
-                                                <div key={emp.id} className="flex items-center justify-between text-xs">
-                                                    <div>
-                                                        <span className="font-medium">{emp.name}</span>
-                                                        <span className="text-muted-foreground ml-1">({emp.employeeCode})</span>
-                                                    </div>
-                                                    <Badge className={emp.isWithinGeoFence
-                                                        ? "bg-green-100 text-green-700 text-[10px] px-1.5 py-0"
-                                                        : "bg-red-100 text-red-700 text-[10px] px-1.5 py-0"}>
-                                                        {emp.isWithinGeoFence ? "Inside" : "Outside"}
-                                                    </Badge>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                <p className="text-xs text-muted-foreground text-center">
-                                    {branch.totalPunchedInToday} punched in today
+                <>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <Card className="p-3">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs text-muted-foreground">
+                                    Total Employees
                                 </p>
-
-                            </CardContent>
+                                <Users className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                            <p className="text-xl font-semibold mt-2">
+                                {totalEmployees}
+                            </p>
                         </Card>
-                    ))}
-                </div>
+
+                        <Card className="p-3">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs text-muted-foreground">
+                                    Inside Fence
+                                </p>
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                            </div>
+                            <p className="text-xl font-semibold text-green-600 mt-2">
+                                {totalInside}
+                            </p>
+                        </Card>
+
+                        <Card className="p-3">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs text-muted-foreground">
+                                    Outside Fence
+                                </p>
+                                <XCircle className="h-4 w-4 text-red-600" />
+                            </div>
+                            <p className="text-xl font-semibold text-red-600 mt-2">
+                                {totalOutside}
+                            </p>
+                        </Card>
+
+                        <Card className="p-3">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs text-muted-foreground">
+                                    Punched In Today
+                                </p>
+                                <MapPin className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                            <p className="text-xl font-semibold mt-2">
+                                {totalPunchedIn}
+                            </p>
+                        </Card>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="relative w-full max-w-sm">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Search branch, city or location..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="pl-9 h-9"
+                            />
+                        </div>
+
+                        <p className="text-xs text-muted-foreground whitespace-nowrap">
+                            {filteredBranches.length} branches
+                        </p>
+                    </div>
+
+                    <Card className="overflow-hidden">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Branch</TableHead>
+                                    <TableHead>Location</TableHead>
+                                    <TableHead>Radius</TableHead>
+                                    <TableHead className="text-center">
+                                        Employees
+                                    </TableHead>
+                                    <TableHead className="text-center">
+                                        Inside
+                                    </TableHead>
+                                    <TableHead className="text-center">
+                                        Outside
+                                    </TableHead>
+                                    <TableHead className="text-center">
+                                        Punched In
+                                    </TableHead>
+                                </TableRow>
+                            </TableHeader>
+
+                            <TableBody>
+                                {loading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="h-32 text-center">
+                                            <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2 text-muted-foreground" />
+                                            <span className="text-sm text-muted-foreground">
+                                                Loading geo fencing data...
+                                            </span>
+                                        </TableCell>
+                                    </TableRow>
+                                ) : filteredBranches.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="h-32 text-center text-sm text-muted-foreground">
+                                            {branches.length === 0
+                                                ? "No branches with location set."
+                                                : "No matching branches found."}
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    filteredBranches.map((branch) => {
+                                        const hasLocation =
+                                            branch.latitude != null &&
+                                            branch.longitude != null;
+
+                                        return (
+                                            <React.Fragment key={branch.id}>
+                                                <TableRow>
+                                                    <TableCell>
+                                                        <div>
+                                                            <p className="font-medium text-sm">
+                                                                {branch.name}
+                                                            </p>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {branch.city ?? "—"}
+                                                            </p>
+                                                        </div>
+                                                    </TableCell>
+
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-1.5 max-w-52">
+                                                            <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                                            <span className="text-xs truncate">
+                                                                {hasLocation
+                                                                    ? branch.locationName ??
+                                                                      `${branch.latitude!.toFixed(4)}, ${branch.longitude!.toFixed(4)}`
+                                                                    : "Not configured"}
+                                                            </span>
+                                                        </div>
+                                                    </TableCell>
+
+                                                    <TableCell>
+                                                        {hasLocation ? (
+                                                            <Badge variant="outline">
+                                                                {branch.geoRadius ?? 0}m
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="destructive">
+                                                                Disabled
+                                                            </Badge>
+                                                        )}
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center font-medium">
+                                                        {branch.totalEmployees}
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        <span className="text-green-600 font-medium">
+                                                            {branch.insideFence}
+                                                        </span>
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center">
+                                                        <span className="text-red-600 font-medium">
+                                                            {branch.outsideFence}
+                                                        </span>
+                                                    </TableCell>
+
+                                                    <TableCell className="text-center font-medium">
+                                                        {branch.totalPunchedInToday}
+                                                    </TableCell>
+                                                </TableRow>
+
+                                                {branch.employees.length > 0 && (
+                                                    <TableRow className="bg-muted/30 hover:bg-muted/30">
+                                                        <TableCell colSpan={7} className="py-3">
+                                                            <div className="flex flex-col gap-2 pl-2">
+                                                                <p className="text-xs font-semibold text-muted-foreground">
+                                                                    PUNCHED-IN EMPLOYEES
+                                                                </p>
+
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {branch.employees.map((emp) => (
+                                                                        <div
+                                                                            key={emp.id}
+                                                                            className="flex items-center gap-2 rounded-md border bg-background px-2.5 py-1.5"
+                                                                        >
+                                                                            <div>
+                                                                                <p className="text-xs font-medium">
+                                                                                    {emp.name}
+                                                                                </p>
+                                                                                <p className="text-[10px] text-muted-foreground">
+                                                                                    {emp.employeeCode ?? "—"}
+                                                                                </p>
+                                                                            </div>
+
+                                                                            <Badge
+                                                                                className={
+                                                                                    emp.isWithinGeoFence
+                                                                                        ? "bg-green-100 text-green-700 hover:bg-green-100"
+                                                                                        : "bg-red-100 text-red-700 hover:bg-red-100"
+                                                                                }
+                                                                            >
+                                                                                {emp.isWithinGeoFence
+                                                                                    ? "Inside"
+                                                                                    : "Outside"}
+                                                                            </Badge>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })
+                                )}
+                            </TableBody>
+                        </Table>
+                    </Card>
+                </>
             )}
         </div>
     );
