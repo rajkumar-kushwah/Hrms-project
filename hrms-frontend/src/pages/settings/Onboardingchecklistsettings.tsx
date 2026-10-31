@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { toast } from "sonner";
@@ -26,12 +25,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+
 import {
   Select,
   SelectContent,
@@ -47,6 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,7 +62,6 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { CompanySelector } from "@/pages/common/CompanySelector";
-import { useCompanyStore } from "@/store/company.store";
 
 import {
   getChecklistTemplates,
@@ -112,6 +114,24 @@ const EMPTY_FORM: ItemForm = {
   documentInputType: "FILE_UPLOAD",
 };
 
+const DOCUMENT_TYPES: {
+  value: DocumentInputType;
+  label: string;
+}[] = [
+  {
+    value: "FILE_UPLOAD",
+    label: "File Upload",
+  },
+  {
+    value: "DOCUMENT_NUMBER",
+    label: "Document Number",
+  },
+  {
+    value: "EITHER",
+    label: "File or Number",
+  },
+];
+
 const createEmptyGrouped = (): GroupedTemplates => ({
   OFFER: [],
   JOINING: [],
@@ -119,24 +139,6 @@ const createEmptyGrouped = (): GroupedTemplates => ({
   TRAINING: [],
   ACTIVE: [],
 });
-
-const DOCUMENT_TYPES: {
-  value: DocumentInputType;
-  label: string;
-}[] = [
-    {
-      value: "FILE_UPLOAD",
-      label: "File Upload",
-    },
-    {
-      value: "DOCUMENT_NUMBER",
-      label: "Document Number",
-    },
-    {
-      value: "EITHER",
-      label: "File or Number",
-    },
-  ];
 
 function getErrorMessage(error: unknown): string {
   if (
@@ -226,11 +228,10 @@ function normalizeGroupedTemplates(data: unknown): GroupedTemplates {
 }
 
 export default function OnboardingChecklistSettings() {
-
-
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
 
   const [activeStage, setActiveStage] = useState<Stage>("OFFER");
+
   const [grouped, setGrouped] =
     useState<GroupedTemplates>(createEmptyGrouped);
 
@@ -247,18 +248,28 @@ export default function OnboardingChecklistSettings() {
   const [saving, setSaving] = useState(false);
 
   const [movingId, setMovingId] = useState<string | null>(null);
+
   const [deleteItem, setDeleteItem] =
     useState<ChecklistItem | null>(null);
+
   const [deleting, setDeleting] = useState(false);
 
-  // Prevent outdated requests from overwriting the latest company's data.
   const requestIdRef = useRef(0);
+  const selectedCompanyIdRef = useRef(selectedCompanyId);
+
+  // Keep the latest selected company available to async handlers.
+  selectedCompanyIdRef.current = selectedCompanyId;
 
   const resetForm = useCallback(() => {
     setForm({ ...EMPTY_FORM });
     setErrors({});
     setHasValidated(false);
   }, []);
+
+  const handleCompanyChange = (companyId: string) => {
+    selectedCompanyIdRef.current = companyId;
+    setSelectedCompanyId(companyId);
+  };
 
   const closeDialog = useCallback(() => {
     if (saving) return;
@@ -268,7 +279,7 @@ export default function OnboardingChecklistSettings() {
     resetForm();
   }, [saving, resetForm]);
 
-  // Load checklist templates for the currently selected company.
+  // Load checklist templates.
   const loadTemplates = useCallback(
     async (showRefresh = false) => {
       const requestId = ++requestIdRef.current;
@@ -294,7 +305,6 @@ export default function OnboardingChecklistSettings() {
         setGrouped(normalizeGroupedTemplates(response.data.data));
       } catch (error: unknown) {
         if (requestId === requestIdRef.current) {
-          setGrouped(createEmptyGrouped());
           toast.error(getErrorMessage(error));
         }
       } finally {
@@ -307,7 +317,7 @@ export default function OnboardingChecklistSettings() {
     [selectedCompanyId]
   );
 
-  // Reload when the shared company selection changes.
+  // Reload when company changes.
   useEffect(() => {
     setGrouped(createEmptyGrouped());
     setDeleteItem(null);
@@ -316,7 +326,6 @@ export default function OnboardingChecklistSettings() {
     resetForm();
 
     if (!selectedCompanyId) {
-      // Invalidate any request belonging to the previous company.
       requestIdRef.current += 1;
       setLoading(false);
       setRefreshing(false);
@@ -336,9 +345,11 @@ export default function OnboardingChecklistSettings() {
   );
 
   const totalItems = allItems.length;
+
   const requiredItems = allItems.filter(
     (item) => item.isRequired
   ).length;
+
   const documentItems = allItems.filter(
     (item) => item.requiresDocument
   ).length;
@@ -350,7 +361,11 @@ export default function OnboardingChecklistSettings() {
     key: K,
     value: ItemForm[K]
   ) => {
-    const nextForm: ItemForm = { ...form, [key]: value };
+    const nextForm: ItemForm = {
+      ...form,
+      [key]: value,
+    };
+
     setForm(nextForm);
 
     if (hasValidated) {
@@ -404,6 +419,8 @@ export default function OnboardingChecklistSettings() {
     }
 
     const companyIdAtSubmit = selectedCompanyId;
+    const stageAtSubmit = activeStage;
+    const itemBeingEdited = editingItem;
     const data = result.data;
 
     setErrors({});
@@ -421,23 +438,27 @@ export default function OnboardingChecklistSettings() {
         companyId: companyIdAtSubmit,
       };
 
-      if (editingItem) {
-        await updateChecklistItem(editingItem.id, payload);
-        toast.success("Checklist item updated successfully");
+      if (itemBeingEdited) {
+        await updateChecklistItem(itemBeingEdited.id, payload);
       } else {
         await createChecklistItem({
           ...payload,
-          stage: activeStage,
+          stage: stageAtSubmit,
         });
-
-        toast.success("Checklist item created successfully");
       }
 
       setDialogOpen(false);
       setEditingItem(null);
       resetForm();
 
-      if (useCompanyStore.getState().selectedCompanyId === companyIdAtSubmit) {
+      toast.success(
+        itemBeingEdited
+          ? "Checklist item updated successfully"
+          : "Checklist item created successfully"
+      );
+
+      // Reload only if the same company is still selected.
+      if (selectedCompanyIdRef.current === companyIdAtSubmit) {
         await loadTemplates(true);
       }
     } catch (error: unknown) {
@@ -447,7 +468,7 @@ export default function OnboardingChecklistSettings() {
     }
   };
 
-  // Delete checklist item.
+  // Permanently delete checklist item.
   const handleDelete = async () => {
     if (!deleteItem || deleting || !selectedCompanyId) return;
 
@@ -459,18 +480,24 @@ export default function OnboardingChecklistSettings() {
     try {
       await deleteChecklistItem(item.id, companyIdAtSubmit);
 
-      if (
-        useCompanyStore.getState().selectedCompanyId === companyIdAtSubmit
-      ) {
+      // Remove item immediately from the UI.
+      if (selectedCompanyIdRef.current === companyIdAtSubmit) {
         setGrouped((previous) => ({
           ...previous,
           [item.stage]: previous[item.stage].filter(
             (entry) => entry.id !== item.id
           ),
         }));
+      }
 
-        toast.success("Checklist item deleted successfully");
-        setDeleteItem(null);
+      // Close confirmation dialog.
+      setDeleteItem(null);
+
+      toast.success("Checklist item deleted successfully");
+
+      // Sync latest data from backend.
+      if (selectedCompanyIdRef.current === companyIdAtSubmit) {
+        await loadTemplates(true);
       }
     } catch (error: unknown) {
       toast.error(getErrorMessage(error));
@@ -487,12 +514,15 @@ export default function OnboardingChecklistSettings() {
     if (!selectedCompanyId || movingId || saving || deleting) return;
 
     const items = [...currentItems];
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
+
+    const targetIndex =
+      direction === "up" ? index - 1 : index + 1;
 
     if (targetIndex < 0 || targetIndex >= items.length) return;
 
     const originalItems = [...items];
     const companyIdAtSubmit = selectedCompanyId;
+    const stageAtSubmit = activeStage;
     const itemId = items[index].id;
 
     [items[index], items[targetIndex]] = [
@@ -501,30 +531,27 @@ export default function OnboardingChecklistSettings() {
     ];
 
     setMovingId(itemId);
+
     setGrouped((previous) => ({
       ...previous,
-      [activeStage]: items,
+      [stageAtSubmit]: items,
     }));
 
     try {
       await reorderChecklistItems(
-        activeStage,
+        stageAtSubmit,
         items.map((item) => item.id),
         companyIdAtSubmit
       );
 
-      if (
-        useCompanyStore.getState().selectedCompanyId === companyIdAtSubmit
-      ) {
+      if (selectedCompanyIdRef.current === companyIdAtSubmit) {
         toast.success("Checklist order updated");
       }
     } catch (error: unknown) {
-      if (
-        useCompanyStore.getState().selectedCompanyId === companyIdAtSubmit
-      ) {
+      if (selectedCompanyIdRef.current === companyIdAtSubmit) {
         setGrouped((previous) => ({
           ...previous,
-          [activeStage]: originalItems,
+          [stageAtSubmit]: originalItems,
         }));
 
         toast.error(getErrorMessage(error));
@@ -547,6 +574,7 @@ export default function OnboardingChecklistSettings() {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <ClipboardList className="h-6 w-6 text-primary" />
+
             <h1 className="text-xl font-semibold tracking-tight">
               Onboarding Checklist
             </h1>
@@ -567,8 +595,9 @@ export default function OnboardingChecklistSettings() {
             disabled={!selectedCompanyId || loading || refreshing}
           >
             <RefreshCw
-              className={`mr-2 h-4 w-4 ${loading || refreshing ? "animate-spin" : ""
-                }`}
+              className={`mr-2 h-4 w-4 ${
+                loading || refreshing ? "animate-spin" : ""
+              }`}
             />
             Refresh
           </Button>
@@ -586,10 +615,10 @@ export default function OnboardingChecklistSettings() {
         </div>
       </div>
 
-      {/* Shared company selector */}
+      {/* Company selector */}
       <CompanySelector
         selectedCompanyId={selectedCompanyId}
-        onCompanyChange={setSelectedCompanyId}
+        onCompanyChange={handleCompanyChange}
       />
 
       {/* Summary */}
@@ -601,7 +630,9 @@ export default function OnboardingChecklistSettings() {
             </p>
             <Layers3 className="h-5 w-5 text-muted-foreground" />
           </div>
+
           <p className="mt-2 text-2xl font-semibold">{totalItems}</p>
+
           <p className="mt-1 text-xs text-muted-foreground">
             Across all onboarding stages
           </p>
@@ -609,10 +640,14 @@ export default function OnboardingChecklistSettings() {
 
         <div className="rounded-xl border bg-card p-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Required items</p>
+            <p className="text-sm text-muted-foreground">
+              Required items
+            </p>
             <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
           </div>
+
           <p className="mt-2 text-2xl font-semibold">{requiredItems}</p>
+
           <p className="mt-1 text-xs text-muted-foreground">
             Must be completed by employees
           </p>
@@ -625,7 +660,9 @@ export default function OnboardingChecklistSettings() {
             </p>
             <FileText className="h-5 w-5 text-muted-foreground" />
           </div>
+
           <p className="mt-2 text-2xl font-semibold">{documentItems}</p>
+
           <p className="mt-1 text-xs text-muted-foreground">
             Items requiring document input
           </p>
@@ -659,6 +696,7 @@ export default function OnboardingChecklistSettings() {
                   className="gap-2"
                 >
                   {stage.label}
+
                   <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
                     {grouped[stage.value].length}
                   </span>
@@ -681,9 +719,11 @@ export default function OnboardingChecklistSettings() {
                     <h2 className="text-lg font-semibold">
                       {stage.label} Checklist
                     </h2>
+
                     <p className="text-sm text-muted-foreground">
-                      {items.length} item{items.length === 1 ? "" : "s"}{" "}
-                      configured for this stage.
+                      {items.length} item
+                      {items.length === 1 ? "" : "s"} configured for this
+                      stage.
                     </p>
                   </div>
 
@@ -704,11 +744,16 @@ export default function OnboardingChecklistSettings() {
                     <div className="mb-3 rounded-full bg-muted p-3">
                       <ClipboardList className="h-6 w-6 text-muted-foreground" />
                     </div>
-                    <h3 className="font-medium">No checklist items yet</h3>
+
+                    <h3 className="font-medium">
+                      No checklist items yet
+                    </h3>
+
                     <p className="mt-1 max-w-sm text-sm text-muted-foreground">
                       Add the first item for the{" "}
                       {stage.label.toLowerCase()} stage.
                     </p>
+
                     <Button
                       type="button"
                       variant="add"
@@ -739,7 +784,9 @@ export default function OnboardingChecklistSettings() {
 
                             <div className="min-w-0 flex-1 space-y-2">
                               <div className="flex flex-wrap items-center gap-2">
-                                <h3 className="font-medium">{item.title}</h3>
+                                <h3 className="font-medium">
+                                  {item.title}
+                                </h3>
 
                                 {item.isRequired ? (
                                   <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
@@ -853,12 +900,17 @@ export default function OnboardingChecklistSettings() {
       <AlertDialog
         open={!!deleteItem}
         onOpenChange={(open) => {
-          if (!open && !deleting) setDeleteItem(null);
+          if (!open && !deleting) {
+            setDeleteItem(null);
+          }
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Checklist Item?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Delete Checklist Item?
+            </AlertDialogTitle>
+
             <AlertDialogDescription>
               Are you sure you want to delete{" "}
               <strong>{deleteItem?.title}</strong> from the{" "}
@@ -897,7 +949,7 @@ export default function OnboardingChecklistSettings() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Add / edit dialog */}
+      {/* Add / Edit dialog */}
       <Dialog
         open={dialogOpen}
         onOpenChange={(open) => {
@@ -909,17 +961,25 @@ export default function OnboardingChecklistSettings() {
         }}
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-          <form onSubmit={handleSave} className="space-y-5" noValidate>
+          <form
+            onSubmit={handleSave}
+            className="space-y-5"
+            noValidate
+          >
             <DialogHeader>
               <DialogTitle>
-                {editingItem ? "Edit Checklist Item" : "Add Checklist Item"}
+                {editingItem
+                  ? "Edit Checklist Item"
+                  : "Add Checklist Item"}
               </DialogTitle>
+
               <DialogDescription>
                 {editingItem
                   ? "Update the checklist requirement and document settings."
-                  : `Create a default checklist item for the ${STAGES.find((stage) => stage.value === activeStage)
-                    ?.label
-                  } stage.`}
+                  : `Create a default checklist item for the ${
+                      STAGES.find((stage) => stage.value === activeStage)
+                        ?.label
+                    } stage.`}
               </DialogDescription>
             </DialogHeader>
 
@@ -928,6 +988,7 @@ export default function OnboardingChecklistSettings() {
                 <label className="text-sm font-medium">
                   Onboarding Stage
                 </label>
+
                 <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
                   {STAGES.find((stage) => stage.value === activeStage)?.label}
                 </div>
@@ -935,13 +996,20 @@ export default function OnboardingChecklistSettings() {
             )}
 
             <div className="space-y-2">
-              <label htmlFor="checklist-title" className="text-sm font-medium">
-                Checklist Title <span className="text-destructive">*</span>
+              <label
+                htmlFor="checklist-title"
+                className="text-sm font-medium"
+              >
+                Checklist Title{" "}
+                <span className="text-destructive">*</span>
               </label>
+
               <Input
                 id="checklist-title"
                 value={form.title}
-                onChange={(event) => updateForm("title", event.target.value)}
+                onChange={(event) =>
+                  updateForm("title", event.target.value)
+                }
                 placeholder="e.g. Aadhaar Card"
                 maxLength={150}
                 aria-invalid={!!errors.title}
@@ -950,11 +1018,16 @@ export default function OnboardingChecklistSettings() {
                 }
                 autoFocus
               />
+
               {errors.title && (
-                <p id="checklist-title-error" className="text-sm text-destructive">
+                <p
+                  id="checklist-title-error"
+                  className="text-sm text-destructive"
+                >
                   {errors.title}
                 </p>
               )}
+
               <p className="text-right text-xs text-muted-foreground">
                 {form.title.length}/150
               </p>
@@ -967,6 +1040,7 @@ export default function OnboardingChecklistSettings() {
               >
                 Description
               </label>
+
               <Textarea
                 id="checklist-description"
                 value={form.description}
@@ -983,6 +1057,7 @@ export default function OnboardingChecklistSettings() {
                     : undefined
                 }
               />
+
               {errors.description && (
                 <p
                   id="checklist-description-error"
@@ -991,6 +1066,7 @@ export default function OnboardingChecklistSettings() {
                   {errors.description}
                 </p>
               )}
+
               <p className="text-right text-xs text-muted-foreground">
                 {form.description.length}/1000
               </p>
@@ -1004,10 +1080,12 @@ export default function OnboardingChecklistSettings() {
                     updateForm("isRequired", checked === true)
                   }
                 />
+
                 <span className="space-y-1">
                   <span className="block text-sm font-medium">
                     Required item
                   </span>
+
                   <span className="block text-xs text-muted-foreground">
                     This item must be completed before onboarding can be
                     finalized.
@@ -1024,10 +1102,12 @@ export default function OnboardingChecklistSettings() {
                     updateForm("requiresDocument", checked === true)
                   }
                 />
+
                 <span className="space-y-1">
                   <span className="block text-sm font-medium">
                     Requires document
                   </span>
+
                   <span className="block text-xs text-muted-foreground">
                     The employee must provide document information for this
                     item.
@@ -1042,6 +1122,7 @@ export default function OnboardingChecklistSettings() {
                   <label className="text-sm font-medium">
                     Document Input Type
                   </label>
+
                   <p className="text-xs text-muted-foreground">
                     Select how the employee will provide the document.
                   </p>
@@ -1051,7 +1132,9 @@ export default function OnboardingChecklistSettings() {
                   value={form.documentInputType}
                   onValueChange={(value) => {
                     if (
-                      DOCUMENT_TYPES.some((option) => option.value === value)
+                      DOCUMENT_TYPES.some(
+                        (option) => option.value === value
+                      )
                     ) {
                       updateForm(
                         "documentInputType",
@@ -1060,12 +1143,18 @@ export default function OnboardingChecklistSettings() {
                     }
                   }}
                 >
-                  <SelectTrigger aria-invalid={!!errors.documentInputType}>
+                  <SelectTrigger
+                    aria-invalid={!!errors.documentInputType}
+                  >
                     <SelectValue placeholder="Select document type" />
                   </SelectTrigger>
+
                   <SelectContent>
                     {DOCUMENT_TYPES.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
+                      <SelectItem
+                        key={option.value}
+                        value={option.value}
+                      >
                         {option.label}
                       </SelectItem>
                     ))}
@@ -1082,6 +1171,7 @@ export default function OnboardingChecklistSettings() {
                   {form.documentInputType === "FILE_UPLOAD" ? (
                     <div className="flex items-start gap-2">
                       <Upload className="mt-0.5 h-4 w-4 shrink-0" />
+
                       <p className="text-xs text-muted-foreground">
                         Employee will upload a document file.
                       </p>
@@ -1089,6 +1179,7 @@ export default function OnboardingChecklistSettings() {
                   ) : form.documentInputType === "DOCUMENT_NUMBER" ? (
                     <div className="flex items-start gap-2">
                       <Hash className="mt-0.5 h-4 w-4 shrink-0" />
+
                       <p className="text-xs text-muted-foreground">
                         Employee will enter the document number.
                       </p>
@@ -1096,8 +1187,10 @@ export default function OnboardingChecklistSettings() {
                   ) : (
                     <div className="flex items-start gap-2">
                       <FileText className="mt-0.5 h-4 w-4 shrink-0" />
+
                       <p className="text-xs text-muted-foreground">
-                        Employee can upload a file or enter a document number.
+                        Employee can upload a file or enter a document
+                        number.
                       </p>
                     </div>
                   )}
@@ -1126,6 +1219,7 @@ export default function OnboardingChecklistSettings() {
                 {saving && (
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                 )}
+
                 {saving
                   ? "Saving..."
                   : editingItem

@@ -21,6 +21,7 @@ const isAdminUser = (req: Request): boolean =>
 const getRequestedCompanyId = (req: Request): string | undefined => {
     const bodyCompanyId: unknown = req.body?.companyId;
     const queryCompanyId: unknown = req.query.companyId;
+    const headerCompanyId = req.headers["x-company-id"];
 
     if (typeof bodyCompanyId === "string" && bodyCompanyId.trim()) {
         return bodyCompanyId.trim();
@@ -28,6 +29,9 @@ const getRequestedCompanyId = (req: Request): string | undefined => {
 
     if (typeof queryCompanyId === "string" && queryCompanyId.trim()) {
         return queryCompanyId.trim();
+    }
+    if (typeof headerCompanyId === "string" && headerCompanyId.trim()) {
+        return headerCompanyId.trim();
     }
 
     return undefined;
@@ -211,78 +215,78 @@ export const createTemplateItem = async (
 // PATCH /api/onboarding-template/:id
 // PATCH /api/onboarding-template/:id
 export const updateTemplateItem = async (
-  req: Request,
-  res: Response,
+    req: Request,
+    res: Response,
 ) => {
-  try {
-    if (!isAdminUser(req)) {
-      return res.status(403).json({
-        success: false,
-        message: "Not authorized",
-      });
+    try {
+        if (!isAdminUser(req)) {
+            return res.status(403).json({
+                success: false,
+                message: "Not authorized",
+            });
+        }
+
+        const id = req.params.id;
+
+        if (typeof id !== "string" || !id.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid checklist item ID is required",
+            });
+        }
+
+        const parsed = updateTemplateSchema.safeParse(req.body);
+
+        if (!parsed.success) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid checklist data",
+                errors: parsed.error.flatten(),
+            });
+        }
+
+        const companyId = await resolveCompanyId(req);
+
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Company ID is required",
+            });
+        }
+
+        const item = parsed.data;
+
+        const updateData = {
+            ...(item.title !== undefined ? { title: item.title } : {}),
+            ...(item.description !== undefined
+                ? { description: item.description }
+                : {}),
+            ...(item.isRequired !== undefined
+                ? { isRequired: item.isRequired }
+                : {}),
+            ...(item.requiresDocument !== undefined
+                ? { requiresDocument: item.requiresDocument }
+                : {}),
+            ...(item.documentInputType !== undefined
+                ? { documentInputType: item.documentInputType }
+                : {}),
+        };
+
+        const data = await TemplateService.updateTemplateItem(
+            id,
+            companyId,
+            updateData,
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: "Checklist item updated successfully",
+            data,
+        });
+    } catch (error: unknown) {
+        console.error("Update onboarding template error:", error);
+        return sendError(res, error);
     }
-
-    const id = req.params.id;
-
-    if (typeof id !== "string" || !id.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: "Valid checklist item ID is required",
-      });
-    }
-
-    const parsed = updateTemplateSchema.safeParse(req.body);
-
-    if (!parsed.success) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid checklist data",
-        errors: parsed.error.flatten(),
-      });
-    }
-
-    const companyId = await resolveCompanyId(req);
-
-    if (!companyId) {
-      return res.status(400).json({
-        success: false,
-        message: "Company ID is required",
-      });
-    }
-
-    const item = parsed.data;
-
-    const updateData = {
-      ...(item.title !== undefined ? { title: item.title } : {}),
-      ...(item.description !== undefined
-        ? { description: item.description }
-        : {}),
-      ...(item.isRequired !== undefined
-        ? { isRequired: item.isRequired }
-        : {}),
-      ...(item.requiresDocument !== undefined
-        ? { requiresDocument: item.requiresDocument }
-        : {}),
-      ...(item.documentInputType !== undefined
-        ? { documentInputType: item.documentInputType }
-        : {}),
-    };
-
-    const data = await TemplateService.updateTemplateItem(
-      id,
-      companyId,
-      updateData,
-    );
-
-    return res.status(200).json({
-      success: true,
-      message: "Checklist item updated successfully",
-      data,
-    });
-  } catch (error: unknown) {
-    console.error("Update onboarding template error:", error);
-    return sendError(res, error);
-  }
 };
 
 // DELETE /api/onboarding-template/:id

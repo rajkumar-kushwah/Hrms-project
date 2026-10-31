@@ -377,7 +377,6 @@ export const deleteTemplateItem = async (
         where: {
             id,
             companyId,
-            isActive: true,
         },
     });
 
@@ -385,14 +384,14 @@ export const deleteTemplateItem = async (
         throw new Error("Checklist item not found");
     }
 
-    await prisma.onboardingChecklistTemplate.update({
-        where: { id: existing.id },
-        data: { isActive: false },
+    await prisma.onboardingChecklistTemplate.delete({
+        where: {
+            id: existing.id,
+        },
     });
 
-    return { message: "Checklist item removed" };
+    return { message: "Checklist item deleted successfully" };
 };
-
 export const reorderTemplateItems = async (
     companyId: string,
     stage: OnboardingStage,

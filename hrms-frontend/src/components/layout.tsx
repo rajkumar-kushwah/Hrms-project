@@ -21,6 +21,7 @@ import {
 } from "react-router-dom";
 
 import { useAuthStore } from "@/store/auth.store";
+import { ProfileDropdown } from "./ProfileDropdown";
 
 export default function Layout() {
     const location = useLocation();
@@ -172,94 +173,80 @@ export default function Layout() {
                 <AppSidebar />
 
                 {/* Main Content */}
-                <main className="min-w-0 flex-1 overflow-x-hidden p-3 px-4 space-y-4">
+                <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden px-4 py-3 space-y-4">
 
                     {/* Sidebar Trigger + Breadcrumb */}
-                    <div className="flex items-center gap-2">
 
-                        <SidebarTrigger className="-ml-1 cursor-pointer" />
+                    <div className="flex min-h-10 w-full items-center justify-between gap-3">
+                        {/* Left: Sidebar Trigger + Breadcrumb */}
+                        <div className="flex min-w-0 items-center gap-2">
+                            <SidebarTrigger className="-ml-1 shrink-0 cursor-pointer" />
 
-                        <Breadcrumb>
-                            <BreadcrumbList>
-
-                                <BreadcrumbItem>
-                                    <BreadcrumbLink asChild>
-                                        <Link to="/dashboard">
-                                            {getRoleName()}
-                                        </Link>
-                                    </BreadcrumbLink>
-                                </BreadcrumbItem>
-
-                                <BreadcrumbSeparator />
-
-                                {isEmployeeAttendance ? (
-                                    <>
-                                        <BreadcrumbItem>
-                                            <BreadcrumbLink asChild>
-                                                <Link to="/attendance/list">
-                                                    Attendance List
-                                                </Link>
-                                            </BreadcrumbLink>
-                                        </BreadcrumbItem>
-
-                                        <BreadcrumbSeparator />
-
-                                        <BreadcrumbItem>
-                                            <BreadcrumbPage>
-                                                Employee Attendance
-                                            </BreadcrumbPage>
-                                        </BreadcrumbItem>
-                                    </>
-                                ) : isOnboardingDetail ? (
-                                    <>
-                                        <BreadcrumbItem>
-                                            <BreadcrumbLink asChild>
-                                                <Link to="/onboarding">
-                                                    Onboarding
-                                                </Link>
-                                            </BreadcrumbLink>
-                                        </BreadcrumbItem>
-
-                                        <BreadcrumbSeparator />
-
-                                        <BreadcrumbItem>
-                                            <BreadcrumbPage>
-                                                Onboarding Detail
-                                            </BreadcrumbPage>
-                                        </BreadcrumbItem>
-                                    </>
-                                ) : isEmployeeDetail ? (
-                                    <>
-                                        <BreadcrumbItem>
-                                            <BreadcrumbLink asChild>
-                                                <Link to="/employee">
-                                                    Employee List
-                                                </Link>
-                                            </BreadcrumbLink>
-                                        </BreadcrumbItem>
-
-                                        <BreadcrumbSeparator />
-
-                                        <BreadcrumbItem>
-                                            <BreadcrumbPage>
-                                                Employee Detail
-                                            </BreadcrumbPage>
-                                        </BreadcrumbItem>
-                                    </>
-                                ) : (
+                            <Breadcrumb>
+                                <BreadcrumbList>
                                     <BreadcrumbItem>
-                                        <BreadcrumbPage>
-                                            {pageTitle}
-                                        </BreadcrumbPage>
+                                        <BreadcrumbLink asChild>
+                                            <Link to="/dashboard">{getRoleName()}</Link>
+                                        </BreadcrumbLink>
                                     </BreadcrumbItem>
-                                )}
 
-                            </BreadcrumbList>
-                        </Breadcrumb>
+                                    <BreadcrumbSeparator />
 
+                                    {isEmployeeAttendance ? (
+                                        <>
+                                            <BreadcrumbItem>
+                                                <BreadcrumbLink asChild>
+                                                    <Link to="/attendance/list">
+                                                        Attendance List
+                                                    </Link>
+                                                </BreadcrumbLink>
+                                            </BreadcrumbItem>
+                                            <BreadcrumbSeparator />
+                                            <BreadcrumbItem>
+                                                <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                                            </BreadcrumbItem>
+                                        </>
+                                    ) : isOnboardingDetail ? (
+                                        <>
+                                            <BreadcrumbItem>
+                                                <BreadcrumbLink asChild>
+                                                    <Link to="/onboarding">Onboarding</Link>
+                                                </BreadcrumbLink>
+                                            </BreadcrumbItem>
+                                            <BreadcrumbSeparator />
+                                            <BreadcrumbItem>
+                                                <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                                            </BreadcrumbItem>
+                                        </>
+                                    ) : isEmployeeDetail ? (
+                                        <>
+                                            <BreadcrumbItem>
+                                                <BreadcrumbLink asChild>
+                                                    <Link to="/employee">Employee List</Link>
+                                                </BreadcrumbLink>
+                                            </BreadcrumbItem>
+                                            <BreadcrumbSeparator />
+                                            <BreadcrumbItem>
+                                                <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                                            </BreadcrumbItem>
+                                        </>
+                                    ) : (
+                                        <BreadcrumbItem>
+                                            <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                                        </BreadcrumbItem>
+                                    )}
+                                </BreadcrumbList>
+                            </Breadcrumb>
+                        </div>
+
+                        {/* Right: Profile Dropdown */}
+                        <div className="shrink-0">
+                            <ProfileDropdown />
+                        </div>
                     </div>
 
-                    <div className="w-full min-w-0 max-w-full space-y-5">
+
+                    <div className="w-full min-w-0 space-y-5 pt-4">
 
                         <h1 className="text-2xl font-medium">
                             {pageTitle}
