@@ -394,7 +394,7 @@ const OnboardingList = () => {
                                                         navigate(detailUrl);
                                                     }}
                                                 >
-                                                    View Details
+                                                    Continue Onboarding
                                                 </DropdownMenuItem>
 
                                                 {item.status !== "COMPLETED" && (

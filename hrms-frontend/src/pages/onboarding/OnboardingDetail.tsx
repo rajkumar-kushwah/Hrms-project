@@ -438,7 +438,7 @@ export default function OnboardingDetail() {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-20">
         <p className="text-muted-foreground">Onboarding details not found.</p>
-        <Button variant="outline" onClick={() => navigate("/onboarding")}>
+        <Button variant="add" onClick={() => navigate("/onboarding")}>
           Back to Onboarding
         </Button>
       </div>
@@ -452,11 +452,11 @@ export default function OnboardingDetail() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button
-          variant="outline"
+        <Button 
+          variant="add"
           size="sm"
           onClick={() => navigate("/onboarding")}
-          className="gap-2"
+          className="gap-2 cursor-pointer"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to List
@@ -465,7 +465,7 @@ export default function OnboardingDetail() {
         <div className="flex items-center gap-2">
           {data.status === "IN_PROGRESS" && (
             <Button
-              variant="outline"
+              variant="add"
               size="sm"
               disabled={statusUpdating}
               onClick={() => void handleStatusChange("ON_HOLD")}
@@ -694,7 +694,7 @@ export default function OnboardingDetail() {
 
                               <div className="mt-2 flex flex-wrap items-center gap-2">
                                 {item.isRequired && (
-                                  <Badge variant="outline" className="text-xs">
+                                  <Badge variant="add" className="text-xs">
                                     Required
                                   </Badge>
                                 )}
@@ -710,7 +710,7 @@ export default function OnboardingDetail() {
                                 )}
 
                                 {item.requiresDocument && (
-                                  <Badge variant="outline" className="text-xs">
+                                  <Badge variant="add" className="text-xs">
                                     {inputType === "FILE_UPLOAD"
                                       ? "File upload"
                                       : inputType === "DOCUMENT_NUMBER"
@@ -802,7 +802,7 @@ export default function OnboardingDetail() {
 
                                       <Button
                                         type="button"
-                                        variant="outline"
+                                        variant="add"
                                         className="gap-2"
                                         disabled={!canEdit || isBusy}
                                         onClick={() =>
@@ -902,7 +902,7 @@ export default function OnboardingDetail() {
                                         <DialogFooter>
                                           <Button
                                             type="button"
-                                            variant="outline"
+                                            variant="add"
                                             onClick={() =>
                                               setUploadDialogItemId(null)
                                             }
