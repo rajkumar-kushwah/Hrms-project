@@ -120,19 +120,19 @@ const DOCUMENT_TYPES: {
   value: DocumentInputType;
   label: string;
 }[] = [
-  {
-    value: "FILE_UPLOAD",
-    label: "File Upload",
-  },
-  {
-    value: "DOCUMENT_NUMBER",
-    label: "Document Number",
-  },
-  {
-    value: "EITHER",
-    label: "File or Number",
-  },
-];
+    {
+      value: "FILE_UPLOAD",
+      label: "File Upload",
+    },
+    {
+      value: "DOCUMENT_NUMBER",
+      label: "Document Number",
+    },
+    {
+      value: "EITHER",
+      label: "File or Number",
+    },
+  ];
 
 const createEmptyGrouped = (): GroupedTemplates => ({
   OFFER: [],
@@ -620,7 +620,7 @@ export default function OnboardingChecklistSettings() {
     try {
       await reorderChecklistItems(
         stageAtSubmit,
-        items.map((item) => item.id),
+        items.map((item: ChecklistItem) => item.id),
         companyIdAtSubmit
       );
 
@@ -681,9 +681,8 @@ export default function OnboardingChecklistSettings() {
             disabled={!companyId || loading || refreshing}
           >
             <RefreshCw
-              className={`mr-2 h-4 w-4 ${
-                loading || refreshing ? "animate-spin" : ""
-              }`}
+              className={`mr-2 h-4 w-4 ${loading || refreshing ? "animate-spin" : ""
+                }`}
             />
             Refresh
           </Button>
@@ -1066,10 +1065,9 @@ export default function OnboardingChecklistSettings() {
               <DialogDescription>
                 {editingItem
                   ? "Update the checklist requirement and document settings."
-                  : `Create a default checklist item for the ${
-                      STAGES.find((stage) => stage.value === activeStage)
-                        ?.label
-                    } stage.`}
+                  : `Create a default checklist item for the ${STAGES.find((stage) => stage.value === activeStage)
+                    ?.label
+                  } stage.`}
               </DialogDescription>
             </DialogHeader>
 
