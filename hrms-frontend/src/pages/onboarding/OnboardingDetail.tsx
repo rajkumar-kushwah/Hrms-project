@@ -336,7 +336,6 @@ export default function OnboardingDetail() {
       return;
     }
 
-
     const form = documentForms[item.id] ?? {
       file: null,
       documentNumber: "",
@@ -368,19 +367,23 @@ export default function OnboardingDetail() {
       if (form.file) {
         const uploadResponse = await uploadOnboardingDocument(
           form.file,
-          item.id
+          item.id,
+          companyId
         );
+
         documentUrl = uploadResponse.data.url;
       }
 
-      await submitChecklistDocument(item.id, {
-        ...(documentUrl ? { documentUrl } : {}),
-        ...(documentNumber ? { documentNumber } : {}),
-      });
-      console.log("Document submitted for item:", item.id);
+      await submitChecklistDocument(
+        item.id,
+        {
+          ...(documentUrl ? { documentUrl } : {}),
+          ...(documentNumber ? { documentNumber } : {}),
+        },
+        companyId
+      );
 
       await loadDetail(false);
-      console.log("Onboarding detail refreshed");
 
       setDocumentForms((previous) => ({
         ...previous,
@@ -404,7 +407,7 @@ export default function OnboardingDetail() {
     setStatusUpdating(true);
 
     try {
-      await setOnboardingStatus(userId, status);
+      await setOnboardingStatus(userId, status,companyId);
       await loadDetail(false);
 
       toast.success(
