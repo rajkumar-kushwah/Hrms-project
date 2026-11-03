@@ -28,7 +28,7 @@ import { isDatabaseUnavailable } from "./utilis/dbErrors.js";
 import type { Request, Response, NextFunction } from "express";
 import attendanceReportRoutes from "./routes/Attendancereport.route.js";
 import leaveReportRoutes from "./routes/leaveReport.routes.js";
-
+import overtimeRoutes from "./routes/overtimeReport.routes.js";
 
 // dotenv.config();
 const app = express();
@@ -85,6 +85,7 @@ app.use("/api/onboarding", onboardingRouter);
 app.get("/api/health", healthCheck)
 app.use("/api/attendance-report", attendanceReportRoutes);
 app.use("/api/leave-report", leaveReportRoutes);
+app.use("/api/overtime", overtimeRoutes);
 
 app.use('/checkin', checkInRouter)
 app.use('/monthly-attendance', monthlyRouter)

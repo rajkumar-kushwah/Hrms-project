@@ -11,7 +11,7 @@ export const monthlyPayrollReport = async (req: Request, res: Response) => {
         const userId = req.user?.id;
         const role = normalizeRoleName(req.user?.role?.name);
 
-        const isAdmin =
+        const isAdminRole =
             role === "company_admin" ||
             role === "super_admin";
 
@@ -49,7 +49,7 @@ export const monthlyPayrollReport = async (req: Request, res: Response) => {
             companyId,
             month,
             year,
-            isAdmin ? undefined : userId
+            isAdminRole ? undefined : userId
         );
 
         return res.status(200).json({

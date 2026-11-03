@@ -31,6 +31,7 @@ import OnboardingList from "@/pages/onboarding/OnboardingList";
 import EmployeeView from "@/pages/EmployeeView";
 import AttendanceReport from "@/pages/reports/AttendanceReport";
 import LeaveReport from "@/pages/reports/LeaveReport";
+import OvertimeReport from "@/pages/reports/OvertimeReport";
 
 
 const AppRoutes = () => {
@@ -72,6 +73,7 @@ const AppRoutes = () => {
                         <Route path="/onboarding/:userId" element={<OnboardingDetail />} />
                         <Route path="/reports/attendance" element={<AttendanceReport />} />
                         <Route path="/reports/leave" element={<LeaveReport />} />
+                        <Route path="/reports/overtime" element={<OvertimeReport />} />
 
                     </Route>
                 </Route>
