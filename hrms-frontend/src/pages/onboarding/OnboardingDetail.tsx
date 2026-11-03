@@ -300,7 +300,7 @@ export default function OnboardingDetail() {
     });
 
     try {
-      await toggleChecklistItem(item.id);
+      await toggleChecklistItem(item.id, companyId);
       await loadDetail(false);
       toast.success("Checklist updated successfully.");
     } catch (error: unknown) {
