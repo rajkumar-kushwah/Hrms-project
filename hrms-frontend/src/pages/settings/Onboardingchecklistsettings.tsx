@@ -95,7 +95,10 @@ interface ChecklistItem {
   documentInputType?: DocumentInputType | null;
   order: number;
 }
-
+interface CompanyOption {
+  id: string;
+  name: string;
+}
 type GroupedTemplates = Record<Stage, ChecklistItem[]>;
 type ItemForm = OnboardingChecklistFormValues;
 type FormErrors = Partial<Record<keyof ItemForm, string>>;
@@ -338,7 +341,7 @@ export default function OnboardingChecklistSettings() {
 
           if (requestId !== requestIdRef.current) return;
 
-          const companies = Array.isArray(response.data?.data)
+          const companies: CompanyOption[] = Array.isArray(response.data?.data)
             ? response.data.data
             : [];
 
