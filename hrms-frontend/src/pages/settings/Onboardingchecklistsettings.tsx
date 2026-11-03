@@ -62,6 +62,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { CompanySelector } from "@/pages/common/CompanySelector";
+import { useAuthStore } from "@/store/auth.store";
+import { getMyCompany, getCompanies } from "@/services/company.service";
 
 import {
   getChecklistTemplates,
@@ -228,7 +230,19 @@ function normalizeGroupedTemplates(data: unknown): GroupedTemplates {
 }
 
 export default function OnboardingChecklistSettings() {
+  const { user } = useAuthStore();
+
+  const roleName = user?.role?.name
+    ?.trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+
+  const isSuperAdmin = roleName === "super_admin";
+  const isCompanyAdmin = roleName === "company_admin";
+
+  // Only Super Admin selects a company. Company Admin uses getMyCompany().
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
+  const [companyId, setCompanyId] = useState("");
 
   const [activeStage, setActiveStage] = useState<Stage>("OFFER");
 
@@ -256,8 +270,7 @@ export default function OnboardingChecklistSettings() {
 
   const requestIdRef = useRef(0);
   const selectedCompanyIdRef = useRef(selectedCompanyId);
-
-  // Keep the latest selected company available to async handlers.
+  // Keep the latest company selection available to async handlers.
   selectedCompanyIdRef.current = selectedCompanyId;
 
   const resetForm = useCallback(() => {
@@ -266,9 +279,11 @@ export default function OnboardingChecklistSettings() {
     setHasValidated(false);
   }, []);
 
-  const handleCompanyChange = (companyId: string) => {
-    selectedCompanyIdRef.current = companyId;
-    setSelectedCompanyId(companyId);
+  const handleCompanyChange = (nextCompanyId: string) => {
+    if (!isSuperAdmin) return;
+
+    selectedCompanyIdRef.current = nextCompanyId;
+    setSelectedCompanyId(nextCompanyId);
   };
 
   const closeDialog = useCallback(() => {
@@ -279,12 +294,30 @@ export default function OnboardingChecklistSettings() {
     resetForm();
   }, [saving, resetForm]);
 
-  // Load checklist templates.
+  // Resolve the company using the same pattern as GeneralSettings:
+  // Super Admin selects from all companies; Company Admin loads their own company.
   const loadTemplates = useCallback(
     async (showRefresh = false) => {
       const requestId = ++requestIdRef.current;
 
-      if (!selectedCompanyId) {
+      if (!user) {
+        setCompanyId("");
+        setGrouped(createEmptyGrouped());
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      if (isSuperAdmin && !selectedCompanyId) {
+        setCompanyId("");
+        setGrouped(createEmptyGrouped());
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      if (!isSuperAdmin && !isCompanyAdmin) {
+        setCompanyId("");
         setGrouped(createEmptyGrouped());
         setLoading(false);
         setRefreshing(false);
@@ -298,13 +331,50 @@ export default function OnboardingChecklistSettings() {
       }
 
       try {
-        const response = await getChecklistTemplates(selectedCompanyId);
+        let targetCompanyId = "";
+
+        if (isSuperAdmin) {
+          const response = await getCompanies();
+
+          if (requestId !== requestIdRef.current) return;
+
+          const companies = Array.isArray(response.data?.data)
+            ? response.data.data
+            : [];
+
+          const selectedCompany = companies.find(
+            (item) => item.id === selectedCompanyId
+          );
+
+          targetCompanyId = selectedCompany?.id ?? "";
+
+          if (!targetCompanyId) {
+            throw new Error("Selected company details not found.");
+          }
+        } else {
+          const response = await getMyCompany();
+
+          if (requestId !== requestIdRef.current) return;
+
+          targetCompanyId = response.data?.data?.id ?? "";
+
+          if (!targetCompanyId) {
+            throw new Error("Company details not found.");
+          }
+        }
+
+        if (requestId !== requestIdRef.current) return;
+
+        setCompanyId(targetCompanyId);
+        const response = await getChecklistTemplates(targetCompanyId);
 
         if (requestId !== requestIdRef.current) return;
 
         setGrouped(normalizeGroupedTemplates(response.data.data));
       } catch (error: unknown) {
         if (requestId === requestIdRef.current) {
+          setCompanyId("");
+          setGrouped(createEmptyGrouped());
           toast.error(getErrorMessage(error));
         }
       } finally {
@@ -314,30 +384,24 @@ export default function OnboardingChecklistSettings() {
         }
       }
     },
-    [selectedCompanyId]
+    [user, isSuperAdmin, isCompanyAdmin, selectedCompanyId]
   );
 
-  // Reload when company changes.
+  // Reload when the user or selected company changes.
   useEffect(() => {
+    setCompanyId("");
     setGrouped(createEmptyGrouped());
     setDeleteItem(null);
     setDialogOpen(false);
     setEditingItem(null);
     resetForm();
 
-    if (!selectedCompanyId) {
-      requestIdRef.current += 1;
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
-
     void loadTemplates();
 
     return () => {
       requestIdRef.current += 1;
     };
-  }, [selectedCompanyId, loadTemplates, resetForm]);
+  }, [user, selectedCompanyId, loadTemplates, resetForm]);
 
   const allItems = useMemo(
     () => STAGES.flatMap((stage) => grouped[stage.value]),
@@ -403,8 +467,12 @@ export default function OnboardingChecklistSettings() {
 
     if (saving) return;
 
-    if (!selectedCompanyId) {
-      toast.error("Please select a company");
+    if (!companyId) {
+      toast.error(
+        isSuperAdmin
+          ? "Please select a company"
+          : "Company details not found."
+      );
       return;
     }
 
@@ -418,7 +486,8 @@ export default function OnboardingChecklistSettings() {
       return;
     }
 
-    const companyIdAtSubmit = selectedCompanyId;
+    const companyIdAtSubmit = companyId;
+    const selectedCompanyAtSubmit = selectedCompanyId;
     const stageAtSubmit = activeStage;
     const itemBeingEdited = editingItem;
     const data = result.data;
@@ -458,7 +527,10 @@ export default function OnboardingChecklistSettings() {
       );
 
       // Reload only if the same company is still selected.
-      if (selectedCompanyIdRef.current === companyIdAtSubmit) {
+      if (
+        !isSuperAdmin ||
+        selectedCompanyIdRef.current === selectedCompanyAtSubmit
+      ) {
         await loadTemplates(true);
       }
     } catch (error: unknown) {
@@ -470,10 +542,11 @@ export default function OnboardingChecklistSettings() {
 
   // Permanently delete checklist item.
   const handleDelete = async () => {
-    if (!deleteItem || deleting || !selectedCompanyId) return;
+    if (!deleteItem || deleting || !companyId) return;
 
     const item = deleteItem;
-    const companyIdAtSubmit = selectedCompanyId;
+    const companyIdAtSubmit = companyId;
+    const selectedCompanyAtSubmit = selectedCompanyId;
 
     setDeleting(true);
 
@@ -481,7 +554,10 @@ export default function OnboardingChecklistSettings() {
       await deleteChecklistItem(item.id, companyIdAtSubmit);
 
       // Remove item immediately from the UI.
-      if (selectedCompanyIdRef.current === companyIdAtSubmit) {
+      if (
+        !isSuperAdmin ||
+        selectedCompanyIdRef.current === selectedCompanyAtSubmit
+      ) {
         setGrouped((previous) => ({
           ...previous,
           [item.stage]: previous[item.stage].filter(
@@ -496,7 +572,10 @@ export default function OnboardingChecklistSettings() {
       toast.success("Checklist item deleted successfully");
 
       // Sync latest data from backend.
-      if (selectedCompanyIdRef.current === companyIdAtSubmit) {
+      if (
+        !isSuperAdmin ||
+        selectedCompanyIdRef.current === selectedCompanyAtSubmit
+      ) {
         await loadTemplates(true);
       }
     } catch (error: unknown) {
@@ -511,7 +590,7 @@ export default function OnboardingChecklistSettings() {
     index: number,
     direction: "up" | "down"
   ) => {
-    if (!selectedCompanyId || movingId || saving || deleting) return;
+    if (!companyId || movingId || saving || deleting) return;
 
     const items = [...currentItems];
 
@@ -521,7 +600,8 @@ export default function OnboardingChecklistSettings() {
     if (targetIndex < 0 || targetIndex >= items.length) return;
 
     const originalItems = [...items];
-    const companyIdAtSubmit = selectedCompanyId;
+    const companyIdAtSubmit = companyId;
+    const selectedCompanyAtSubmit = selectedCompanyId;
     const stageAtSubmit = activeStage;
     const itemId = items[index].id;
 
@@ -544,11 +624,17 @@ export default function OnboardingChecklistSettings() {
         companyIdAtSubmit
       );
 
-      if (selectedCompanyIdRef.current === companyIdAtSubmit) {
+      if (
+        !isSuperAdmin ||
+        selectedCompanyIdRef.current === selectedCompanyAtSubmit
+      ) {
         toast.success("Checklist order updated");
       }
     } catch (error: unknown) {
-      if (selectedCompanyIdRef.current === companyIdAtSubmit) {
+      if (
+        !isSuperAdmin ||
+        selectedCompanyIdRef.current === selectedCompanyAtSubmit
+      ) {
         setGrouped((previous) => ({
           ...previous,
           [stageAtSubmit]: originalItems,
@@ -592,7 +678,7 @@ export default function OnboardingChecklistSettings() {
             variant="add"
             className="cursor-pointer"
             onClick={() => void loadTemplates(true)}
-            disabled={!selectedCompanyId || loading || refreshing}
+            disabled={!companyId || loading || refreshing}
           >
             <RefreshCw
               className={`mr-2 h-4 w-4 ${
@@ -607,7 +693,7 @@ export default function OnboardingChecklistSettings() {
             variant="add"
             className="cursor-pointer"
             onClick={openAddDialog}
-            disabled={!selectedCompanyId || loading || saving}
+            disabled={!companyId || loading || saving}
           >
             <Plus className="mr-2 h-4 w-4" />
             Add Item
@@ -615,11 +701,13 @@ export default function OnboardingChecklistSettings() {
         </div>
       </div>
 
-      {/* Company selector */}
-      <CompanySelector
-        selectedCompanyId={selectedCompanyId}
-        onCompanyChange={handleCompanyChange}
-      />
+      {/* Only Super Admin can select a company. */}
+      {isSuperAdmin && (
+        <CompanySelector
+          selectedCompanyId={selectedCompanyId}
+          onCompanyChange={handleCompanyChange}
+        />
+      )}
 
       {/* Summary */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -675,9 +763,11 @@ export default function OnboardingChecklistSettings() {
           <RefreshCw className="h-4 w-4 animate-spin" />
           Loading checklist templates...
         </div>
-      ) : !selectedCompanyId ? (
+      ) : !companyId ? (
         <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground">
-          Select a company to view its checklist.
+          {isSuperAdmin
+            ? "Select a company to view its checklist."
+            : "Company details not found."}
         </div>
       ) : (
         <Tabs
@@ -1214,7 +1304,7 @@ export default function OnboardingChecklistSettings() {
                 type="submit"
                 variant="add"
                 className="cursor-pointer"
-                disabled={saving || !selectedCompanyId}
+                disabled={saving || !companyId}
               >
                 {saving && (
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />

@@ -389,8 +389,8 @@ const LeaveReport = () => {
                     </Button>
 
                     <Button
-                        variant="outline"
-                        size="icon"
+                        variant="add"
+                        size="sm"
                         onClick={() => void fetchReport(true)}
                         disabled={
                             loading ||
@@ -399,10 +399,11 @@ const LeaveReport = () => {
                         }
                     >
                         <RefreshCw
-                            className={`h-4 w-4 ${
+                            className={` ${
                                 refreshing ? "animate-spin" : ""
                             }`}
                         />
+                        <span>Refresh</span>
                     </Button>
                 </div>
             </div>
