@@ -418,7 +418,8 @@ const BranchList = () => {
             const res =
                 await updateBranch(
                     selectedBranch.id,
-                    payload
+                    payload,
+                    selectedCompanyId
                 );
 
             setBranches((prev) =>
