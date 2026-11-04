@@ -13,6 +13,7 @@ import {
     getCompanyId,
 } from "../utilis/roleUtils.js";
 import { prisma } from "../config/db.js";
+import { getIO } from "../config/socket.js";
 
 export const punchIn = async (req: Request, res: Response) => {
     try {
@@ -31,6 +32,19 @@ export const punchIn = async (req: Request, res: Response) => {
             companyId,
             req.body
         );
+
+        // Emit only after successful database operation
+        const io = getIO()
+
+        io?.to(`user:${userId}`)
+            .to(`company:${companyId}:attendance`)
+            .emit("attendance:updated", {
+                action: "PUNCH_IN",
+                userId,
+                companyId,
+                attendance: result.attendance,
+                timestamp: new Date().toISOString(),
+            });
 
         return res.status(200).json({
             success: true,
@@ -66,6 +80,20 @@ export const punchOut = async (req: Request, res: Response) => {
             companyId,
             req.body
         );
+
+        // Real-time Punch Out event
+        const io = getIO();
+
+        io?.to(`user:${userId}`)
+            .to(`company:${companyId}:attendance`)
+            .emit("attendance:updated", {
+                action: "PUNCH_OUT",
+                userId,
+                companyId,
+                attendance: result.attendance,
+                timestamp: new Date().toISOString(),
+            });
+
 
         return res.status(200).json({
             success: true,

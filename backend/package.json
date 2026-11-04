@@ -46,6 +46,8 @@
     "multer": "^2.5.0",
     "prisma": "^7.4.1",
     "puppeteer": "^25.11.0",
+    "socket.io": "^4.8.4",
+    "socket.io-client": "^4.8.4",
     "zod": "^4.5.4"
   },
   "prisma": {

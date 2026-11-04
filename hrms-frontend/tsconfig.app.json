@@ -11,13 +11,11 @@
       "vite/client"
     ],
     "skipLibCheck": true,
-    
     /* Alias */
     "paths": {
       "@/*": [
         "./src/*"
       ],
-      
     },
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -33,6 +31,7 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": [
-    "src"
+    "src",
+    "src/pages/test-biometric.ts"
   ]
 }

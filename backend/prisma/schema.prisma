@@ -52,7 +52,7 @@ model User {
   branchId              String?
   categoryId            String?
   designation           String?
-  employeeCode          String?          @unique
+  employeeCode          String?         
   joiningDate           DateTime?
   phone                 String?
   aadharNumber          String?
@@ -89,6 +89,7 @@ model User {
   reportingManager      User?            @relation("ReportingManager", fields: [reportingManagerId], references: [id])
   teamMembers           User[]           @relation("ReportingManager")
   role                  Role?            @relation(fields: [roleId], references: [id])
+  @@unique([companyId, employeeCode])
 }
 
 model Role {

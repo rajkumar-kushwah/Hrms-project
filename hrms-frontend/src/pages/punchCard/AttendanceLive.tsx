@@ -30,6 +30,7 @@ import {
 import { useAuthStore } from "@/store/auth.store";
 import { isSuperAdminRole } from "@/utilis/roleUtils";
 import { CompanySelector } from "@/pages/common/CompanySelector";
+import { socket } from "@/lib/socket";
 
 const AttendanceLive = () => {
     const { user } = useAuthStore();
@@ -87,6 +88,66 @@ const AttendanceLive = () => {
 
         return () => window.clearInterval(interval);
     }, [loadLiveAttendance, isSuperAdmin, selectedCompanyId]);
+    // Real-time attendance updates
+    React.useEffect(() => {
+        if (isSuperAdmin && !selectedCompanyId) return;
+
+        const subscribeToAttendance = () => {
+            if (isSuperAdmin && selectedCompanyId) {
+                socket.emit(
+                    "attendance:subscribe",
+                    selectedCompanyId
+                );
+            }
+        };
+
+        const handleAttendanceUpdated = (payload: {
+            action: "PUNCH_IN" | "PUNCH_OUT";
+            companyId: string;
+            userId: string;
+        }) => {
+            // Super Admin: only selected company's updates
+            if (
+                isSuperAdmin &&
+                payload.companyId !== selectedCompanyId
+            ) {
+                return;
+            }
+
+            console.log(
+                "Real-time attendance update:",
+                payload.action,
+                payload.userId
+            );
+
+            void loadLiveAttendance();
+        };
+
+        socket.on("connect", subscribeToAttendance);
+
+        socket.on(
+            "attendance:updated",
+            handleAttendanceUpdated
+        );
+
+        // Socket already connected ho to immediately subscribe karo.
+        if (socket.connected) {
+            subscribeToAttendance();
+        }
+
+        return () => {
+            socket.off("connect", subscribeToAttendance);
+
+            socket.off(
+                "attendance:updated",
+                handleAttendanceUpdated
+            );
+        };
+    }, [
+        isSuperAdmin,
+        selectedCompanyId,
+        loadLiveAttendance,
+    ]);
 
     const formatTime = (dateString?: string) => {
         if (!dateString) return "—";

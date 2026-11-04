@@ -12,6 +12,7 @@ function Dashboard() {
       {/* sirf Employee ko punch-in punch-out show krega */}
       {isEmployee && <PunchCard />}
       <DashboardStats />
+     
     </div>
   )
 }
