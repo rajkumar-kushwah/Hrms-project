@@ -180,14 +180,39 @@ export const getMyAttendance = async (req: Request, res: Response) => {
 
 export const getAllAttendance = async (req: Request, res: Response) => {
     try {
-        const companyId = isSuperAdminRole(req.user?.role?.name)
-            ? null
+        const roleName = req.user?.role?.name;
+
+        if (!isAdminRole(roleName)) {
+            return res.status(403).json({
+                success: false,
+                message: "Not authorized",
+            });
+        }
+
+        const superAdmin = isSuperAdminRole(roleName);
+
+        const companyId = superAdmin
+            ? typeof req.query.companyId === "string"
+                ? req.query.companyId.trim()
+                : null
             : getCompanyId(req);
 
-        if (!isSuperAdminRole(req.user?.role?.name) && !companyId) {
+        if (!companyId) {
             return res.status(400).json({
                 success: false,
-                message: "Company information is missing",
+                message: "Please select a company",
+            });
+        }
+
+        const company = await prisma.company.findUnique({
+            where: { id: companyId },
+            select: { id: true },
+        });
+
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: "Selected company not found",
             });
         }
 
@@ -196,7 +221,7 @@ export const getAllAttendance = async (req: Request, res: Response) => {
             : undefined;
 
         const attendance = await AttendanceService.getAllAttendance(
-            companyId,
+            company.id,
             date
         );
 
@@ -211,7 +236,9 @@ export const getAllAttendance = async (req: Request, res: Response) => {
 
         return res.status(500).json({
             success: false,
-            message: error instanceof Error ? error.message : "Failed to fetch attendance",
+            message: error instanceof Error
+                ? error.message
+                : "Failed to fetch attendance",
         });
     }
 };
@@ -219,17 +246,44 @@ export const getAllAttendance = async (req: Request, res: Response) => {
 // Get live attendance
 export const getLiveAttendance = async (req: Request, res: Response) => {
     try {
-        const superAdmin = isSuperAdminRole(req.user?.role?.name);
-        const companyId = superAdmin ? null : getCompanyId(req);
+        const roleName = req.user?.role?.name;
 
-        if (!superAdmin && !companyId) {
-            return res.status(400).json({
+        if (!isAdminRole(roleName)) {
+            return res.status(403).json({
                 success: false,
-                message: "Company information is missing",
+                message: "Not authorized",
             });
         }
 
-        const attendance = await AttendanceService.getLiveAttendance(companyId);
+        const superAdmin = isSuperAdminRole(roleName);
+
+        const companyId = superAdmin
+            ? typeof req.query.companyId === "string"
+                ? req.query.companyId.trim()
+                : null
+            : getCompanyId(req);
+
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Please select a company",
+            });
+        }
+
+        const company = await prisma.company.findUnique({
+            where: { id: companyId },
+            select: { id: true },
+        });
+
+        if (!company) {
+            return res.status(404).json({
+                success: false,
+                message: "Selected company not found",
+            });
+        }
+
+        const attendance =
+            await AttendanceService.getLiveAttendance(company.id);
 
         return res.status(200).json({
             success: true,
@@ -242,7 +296,9 @@ export const getLiveAttendance = async (req: Request, res: Response) => {
 
         return res.status(500).json({
             success: false,
-            message: error instanceof Error ? error.message : "Failed to fetch live attendance",
+            message: error instanceof Error
+                ? error.message
+                : "Failed to fetch live attendance",
         });
     }
 };
