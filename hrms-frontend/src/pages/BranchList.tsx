@@ -458,7 +458,8 @@ const BranchList = () => {
                     {
                         isActive:
                             !selectedBranch.isActive,
-                    }
+                    },
+                    selectedCompanyId
                 );
 
             toast.success(
