@@ -214,7 +214,7 @@ export default function PayrollTable({
       "revert",
       async (companyIdAtSubmit) => {
         await Promise.all(
-          selectedDraftEmployees.map((employee) =>
+          selectedConfirmedEmployees.map((employee) =>
             revertPayrollToDraft(
               employee.userId,
               month,
@@ -224,7 +224,7 @@ export default function PayrollTable({
           )
         );
       },
-      "Payroll reverted successfully."
+      "Payroll reverted to draft successfully."
     );
 
   return (
@@ -327,7 +327,7 @@ export default function PayrollTable({
           onClick={handleRevert}
           disabled={
             loadingAction !== null ||
-            selectedDraftEmployees.length === 0 ||
+            selectedConfirmedEmployees.length === 0 ||
             companyRequired
           }
         >
