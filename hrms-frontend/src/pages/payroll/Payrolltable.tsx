@@ -69,7 +69,7 @@ export default function PayrollTable({
   onMonthChange,
   onYearChange,
   isSuperAdmin,
-  selectedDraftEmployees,
+  // selectedDraftEmployees,
   selectedConfirmedEmployees,
   selectedDraftIds,
   selectedConfirmedIds,
