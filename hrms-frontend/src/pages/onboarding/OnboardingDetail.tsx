@@ -407,7 +407,7 @@ export default function OnboardingDetail() {
     setStatusUpdating(true);
 
     try {
-      await setOnboardingStatus(userId, status,companyId);
+      await setOnboardingStatus(userId, status, companyId);
       await loadDetail(false);
 
       toast.success(
@@ -452,7 +452,7 @@ export default function OnboardingDetail() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button 
+        <Button
           variant="add"
           size="sm"
           onClick={() => navigate("/onboarding")}
@@ -678,10 +678,7 @@ export default function OnboardingDetail() {
                             <div className="min-w-0 flex-1">
                               <label
                                 htmlFor={item.id}
-                                className={`break-words text-sm font-medium ${item.isCompleted
-                                  ? "text-muted-foreground line-through"
-                                  : ""
-                                  }`}
+                                className="break-words text-sm font-medium"
                               >
                                 {item.title}
                               </label>

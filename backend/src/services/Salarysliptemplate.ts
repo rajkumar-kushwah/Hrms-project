@@ -33,8 +33,7 @@ interface SalarySlipData {
     unpaidLeaveDays: number;
     absentDays: number;
     holidayDays: number;
-    paidWeekOffDays?: number;
-    unpaidWeekOffDays?: number;
+    weekOffDays: number;
 
     totalUnpaidDays: number;
     deductionAmount: number;
@@ -195,6 +194,10 @@ export const generateSalarySlipHTML = (
         <div class="summary-card">
             <div class="value">${data.presentDays}</div>
             <div class="label">Present</div>
+        </div>
+        <div class="summary-card">
+    <div class="value">${data.weekOffDays}</div>
+    <div class="label">Week Off</div>
         </div>
         <div class="summary-card">
             <div class="value">${data.paidLeaveDays}</div>

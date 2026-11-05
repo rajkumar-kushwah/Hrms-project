@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import { prisma } from "../config/db.js";
+import { ROLES, isAdminRole, isSuperAdminRole } from "../utilis/roleUtils.js";
 
 // ─────────────────────────────────────────────
 // Normalize Role / Module Name
@@ -19,28 +20,23 @@ const normalizeName = (value?: string | null) => {
 // ─────────────────────────────────────────────
 
 const generateCompanyCode = async (): Promise<string> => {
-    const lastCompany = await prisma.company.findFirst({
-        orderBy: {
-            createdAt: "desc",
-        },
+    const companies = await prisma.company.findMany({
         select: {
             code: true,
         },
     });
 
-    let number = 1;
+    const maxNumber = companies.reduce((max, company) => {
+        const match = company.code.match(/^COMP_(\d+)$/);
 
-    if (lastCompany?.code) {
-        const match = lastCompany.code.match(/^COMP_(\d+)$/);
+        if (!match) return max;
 
-        if (match) {
-            number = Number(match[1]) + 1;
-        }
-    }
+        return Math.max(max, Number(match[1]));
+    }, 0);
 
-    const newNumber = String(number).padStart(3, "0");
+    const nextNumber = maxNumber + 1;
 
-    return `COMP_${newNumber}`;
+    return `COMP_${String(nextNumber).padStart(3, "0")}`;
 };
 
 
@@ -98,10 +94,7 @@ export const getAllCompanies = async (
     companyId?: string | null,
     requestingUserRole?: string | null
 ) => {
-    const normalizedRole = normalizeName(requestingUserRole);
-
-    const isSuperAdmin =
-        normalizedRole === "super_admin";
+    const isSuperAdmin = isSuperAdminRole(requestingUserRole);
 
     const companies = await prisma.company.findMany({
         where: isSuperAdmin
@@ -109,15 +102,13 @@ export const getAllCompanies = async (
             : {
                 id: companyId ?? "",
             },
-
         orderBy: {
-            createdAt: "desc",
+            code: "asc",
         },
     });
 
     return companies;
 };
-
 // ─────────────────────────────────────────────
 // Get Company By ID
 // ─────────────────────────────────────────────
@@ -342,10 +333,8 @@ export const assignCompanyAdmin = async (
     });
 
     let companyAdminRole = companyRoles.find(
-        (role) =>
-            normalizeName(role.name) === "company_admin"
+        (role) => isAdminRole(role.name)
     );
-
 
     // ─────────────────────────────────────────
     // Create Company Admin Role If Not Exists
@@ -354,7 +343,7 @@ export const assignCompanyAdmin = async (
     if (!companyAdminRole) {
         companyAdminRole = await prisma.role.create({
             data: {
-                name: "Company_Admin",
+                name: ROLES.COMPANY_ADMIN,
                 description: "Company level admin",
                 isActive: true,
                 isSystemRole: true,

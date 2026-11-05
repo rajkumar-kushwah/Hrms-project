@@ -890,7 +890,6 @@ export type DayStatus =
     | "Half-day"
     | "Absent"
     | "Week Off"
-    | "Unpaid Week Off"
     | "Holiday"
     | "Paid Leave"
     | "Unpaid Leave"
@@ -975,13 +974,9 @@ export const resolveMonthDays = (
             continue;
         }
 
-        // 3. Week Off
+        // 3. Weekly Off - always normal paid Week Off
         if (weekOffDays.includes(date.getDay())) {
-            days.push(
-                hasAttendanceInWeek(date)
-                    ? "Week Off"
-                    : "Unpaid Week Off"
-            );
+            days.push("Week Off");
             continue;
         }
 

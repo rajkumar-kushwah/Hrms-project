@@ -57,7 +57,6 @@ export const getAttendanceReport = async (
         const paidLeave = count("Paid Leave");
         const unpaidLeave = count("Unpaid Leave");
         const weekOff = count("Week Off");
-        const unpaidWeekOff = count("Unpaid Week Off");
         const holiday = count("Holiday");
 
         const workingDays =
@@ -78,7 +77,6 @@ export const getAttendanceReport = async (
             paidLeave,
             unpaidLeave,
             weekOff,
-            unpaidWeekOff,
             holiday,
             workingDays,
             attendancePercent:
@@ -86,7 +84,7 @@ export const getAttendanceReport = async (
                     ? Math.round((attended / workingDays) * 100)
                     : 0,
             unpaidDays:
-                absent + unpaidLeave + unpaidWeekOff + halfDay * 0.5,
+                absent + unpaidLeave + halfDay * 0.5,
             totalHours: round1(hours?.total ?? 0),
             avgHours:
                 hours && hours.days > 0

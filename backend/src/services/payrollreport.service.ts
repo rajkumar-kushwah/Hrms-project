@@ -158,6 +158,7 @@ export const getMonthlyPayrollReport = async (
             userId: p.userId,
             name: p.user.name,
             employeeCode: p.user.employeeCode,
+            perDaySalary: round2(p.perDaySalary ?? 0),
             branchId: u?.branchId ?? null,
             branchName: u?.branch?.name ?? "Unassigned",
             categoryId: u?.categoryId ?? null,

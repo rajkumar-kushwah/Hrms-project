@@ -34,7 +34,6 @@ type DayStatus =
     | "Half-day"
     | "Absent"
     | "Week Off"
-    | "Unpaid Week Off"
     | "Holiday"
     | "Paid Leave"
     | "Unpaid Leave"
@@ -101,10 +100,6 @@ const CELL: Record<DayStatus, { code: string; cls: string }> = {
         code: "W",
         cls: "bg-gray-100 text-gray-600",
     },
-    "Unpaid Week Off": {
-        code: "WU",
-        cls: "bg-red-50 text-red-600 border border-red-300",
-    },
     Holiday: {
         code: "H",
         cls: "bg-purple-100 text-purple-700",
@@ -168,19 +163,18 @@ const summarize = (days: DayStatus[]) => {
     const halfDay = count("Half-day");
     const absent = count("Absent");
     const unpaidLeave = count("Unpaid Leave");
-    const unpaidWeekOff = count("Unpaid Week Off");
+
 
     return {
         present: count("Present") + count("Late"),
         halfDay,
         absent,
+        weekOff: count("Week Off"),
         paidLeave: count("Paid Leave"),
         unpaidLeave,
-        unpaidWeekOff,
         unpaidDays:
             absent +
             unpaidLeave +
-            unpaidWeekOff +
             halfDay * 0.5,
     };
 };
@@ -401,7 +395,6 @@ const MonthlySheet = () => {
                 "Half-day": "Half-day",
                 Absent: "Absent",
                 "Week Off": "Week Off",
-                "Unpaid Week Off": "Unpaid Week Off",
                 Holiday: "Holiday",
                 "Paid Leave": "Paid Leave",
                 "Unpaid Leave": "Unpaid Leave",
@@ -657,13 +650,13 @@ const MonthlySheet = () => {
                                 </th>
                                 <th
                                     className="px-2 text-center text-xs font-medium text-muted-foreground"
-                                    title="Unpaid week off"
+                                    title="Weekly Off"
                                 >
-                                    WU
+                                    WO
                                 </th>
                                 <th
                                     className="px-2 text-center text-xs font-medium text-muted-foreground"
-                                    title="Absent + unpaid leave + unpaid week off + half-day x 0.5"
+                                    title="Absent + unpaid leave + week off + half-day x 0.5"
                                 >
                                     Unpaid
                                 </th>
@@ -739,7 +732,7 @@ const MonthlySheet = () => {
                                             {totals.unpaidLeave}
                                         </td>
                                         <td className="px-2 text-center">
-                                            {totals.unpaidWeekOff}
+                                            {totals.weekOff}
                                         </td>
                                         <td className="px-2 text-center font-semibold text-red-600">
                                             {totals.unpaidDays}

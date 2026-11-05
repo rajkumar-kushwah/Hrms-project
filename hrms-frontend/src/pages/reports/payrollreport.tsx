@@ -43,6 +43,7 @@ interface GroupTotals {
     totalGross: number;
     totalEarned: number;
     totalDeduction: number;
+    totalperDaySalary: number;
     totalNet: number;
 }
 
@@ -55,6 +56,7 @@ interface EmployeeRow {
     gross: number;
     earned: number;
     deduction: number;
+    perDaySalary: number;
     net: number;
     status: PayrollStatus;
 }
@@ -67,6 +69,7 @@ interface Report {
         totalGross: number;
         totalEarned: number;
         totalDeduction: number;
+        totalperDaySalary: number;
         totalNet: number;
         draftCount: number;
         confirmedCount: number;
@@ -211,7 +214,12 @@ const PayrollReport = () => {
             return;
         }
 
-        setLoading(true);
+        // Sirf first load par loading screen dikhao.
+        // Existing report hone par use visible rakho.
+        if (!report) {
+            setLoading(true);
+        }
+
 
         try {
             const response = await getMonthlyPayrollReport(
@@ -227,7 +235,7 @@ const PayrollReport = () => {
         } finally {
             setLoading(false);
         }
-    }, [month, year, isSuperAdmin, selectedCompanyId]);
+    }, [month, year, isSuperAdmin, selectedCompanyId, report]);
 
     React.useEffect(() => {
         void loadReport();
@@ -265,6 +273,7 @@ const PayrollReport = () => {
                 Gross: r.totalGross,
                 Earned: r.totalEarned,
                 Deduction: r.totalDeduction,
+                perDaySalary: r.totalperDaySalary,
                 "Net Payable": r.totalNet,
             })),
             {
@@ -273,6 +282,7 @@ const PayrollReport = () => {
                 Gross: sum(rows, (r) => r.totalGross),
                 Earned: sum(rows, (r) => r.totalEarned),
                 Deduction: sum(rows, (r) => r.totalDeduction),
+                perDaySalary: sum(rows, (r) => r.totalperDaySalary),
                 "Net Payable": sum(rows, (r) => r.totalNet),
             },
         ];
@@ -293,6 +303,7 @@ const PayrollReport = () => {
                 Gross: e.gross,
                 Earned: e.earned,
                 Deduction: e.deduction,
+                perDaySalary: e.perDaySalary,
                 "Net Payable": e.net,
                 Status: e.status,
             })),
@@ -304,33 +315,34 @@ const PayrollReport = () => {
                 Gross: sum(sortedEmployees, (e) => e.gross),
                 Earned: sum(sortedEmployees, (e) => e.earned),
                 Deduction: sum(sortedEmployees, (e) => e.deduction),
+                perDaySalary: sum(sortedEmployees, (e) => e.perDaySalary),
                 "Net Payable": sum(sortedEmployees, (e) => e.net),
                 Status: "",
             },
         ];
 
         // Branch-wise Detail sheet: employees grouped under their branch
-        const detailHeader = ["Branch / Employee", "Code", "Category", "Gross", "Earned", "Deduction", "Net Payable"];
+        const detailHeader = ["Branch / Employee", "Code", "Category", "Gross", "Earned", "Deduction", "PerDaySalary", "Net Payable"];
         const detailRows: (string | number)[][] = [detailHeader];
         const branchNames = Array.from(new Set(sortedEmployees.map((e) => e.branchName)));
 
         for (const branchName of branchNames) {
             const members = sortedEmployees.filter((e) => e.branchName === branchName);
-            detailRows.push([branchName.toUpperCase(), "", "", "", "", "", ""]);
+            detailRows.push([branchName.toUpperCase(), "", "", "", "", "", "", ""]);
             for (const e of members) {
-                detailRows.push([`   ${e.name}`, e.employeeCode ?? "", e.categoryName, e.gross, e.earned, e.deduction, e.net]);
+                detailRows.push([`   ${e.name}`, e.employeeCode ?? "", e.categoryName, e.gross, e.earned, e.deduction, e.perDaySalary, e.net]);
             }
             detailRows.push([
                 `Branch Total (${members.length} employees)`, "", "",
                 sum(members, (e) => e.gross), sum(members, (e) => e.earned),
-                sum(members, (e) => e.deduction), sum(members, (e) => e.net),
+                sum(members, (e) => e.deduction), sum(members, (e) => e.perDaySalary), sum(members, (e) => e.net),
             ]);
-            detailRows.push(["", "", "", "", "", "", ""]);
+            detailRows.push(["", "", "", "", "", "", "", ""]);
         }
         detailRows.push([
             `GRAND TOTAL (${sortedEmployees.length} employees)`, "", "",
             sum(sortedEmployees, (e) => e.gross), sum(sortedEmployees, (e) => e.earned),
-            sum(sortedEmployees, (e) => e.deduction), sum(sortedEmployees, (e) => e.net),
+            sum(sortedEmployees, (e) => e.deduction), sum(sortedEmployees, (e) => e.perDaySalary), sum(sortedEmployees, (e) => e.net),
         ]);
 
         const detailSheet = XLSX.utils.aoa_to_sheet(detailRows);
@@ -444,7 +456,7 @@ const PayrollReport = () => {
                 <div className="flex min-h-[300px] items-center justify-center rounded-lg border bg-card text-sm text-muted-foreground">
                     Please select a company to view the payroll report.
                 </div>
-            ) : loading ? (
+            ) : !report && loading ? (
                 <div className="flex min-h-[300px] items-center justify-center rounded-lg border bg-card">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <RefreshCw className="h-4 w-4 animate-spin" />
@@ -566,6 +578,7 @@ const PayrollReport = () => {
                                             <TableHead className="text-right font-semibold">
                                                 Deduction
                                             </TableHead>
+
                                             <TableHead className="text-right font-semibold">
                                                 Net Payable
                                             </TableHead>
@@ -740,6 +753,9 @@ const PayrollReport = () => {
                                                 Earned
                                             </TableHead>
                                             <TableHead className="text-right font-semibold">
+                                                perDaySalary
+                                            </TableHead>
+                                            <TableHead className="text-right font-semibold">
                                                 Deduction
                                             </TableHead>
                                             <TableHead className="text-right font-semibold">
@@ -789,6 +805,9 @@ const PayrollReport = () => {
 
                                                     <TableCell className="text-right whitespace-nowrap">
                                                         {inr(e.earned)}
+                                                    </TableCell>
+                                                    <TableCell className="text-right whitespace-nowrap text-green-600">
+                                                        {inr(e.perDaySalary)}
                                                     </TableCell>
 
                                                     <TableCell className="text-right whitespace-nowrap text-red-600">

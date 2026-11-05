@@ -63,7 +63,6 @@ interface EmployeeRow {
   paidLeave: number;
   unpaidLeave: number;
   weekOff: number;
-  unpaidWeekOff: number;
   holiday: number;
   attendancePercent: number;
   unpaidDays: number;
@@ -101,7 +100,7 @@ const EMPLOYEE_COLUMNS: {
     { label: "Half-day", get: (row) => row.halfDay },
     { label: "Absent", get: (row) => row.absent },
     { label: "Leave", get: (row) => row.paidLeave + row.unpaidLeave },
-    { label: "Week off", get: (row) => row.weekOff + row.unpaidWeekOff },
+    { label: "Week off", get: (row) => row.weekOff },
     { label: "Hours", get: (row) => row.totalHours },
     { label: "Avg hrs/day", get: (row) => row.avgHours },
     { label: "Unpaid days", get: (row) => row.unpaidDays },

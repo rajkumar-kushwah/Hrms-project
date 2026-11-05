@@ -110,6 +110,13 @@ export const isAdminRole = (
     );
 };
 
+// Check Employee
+export const isEmployeeRole = (
+    roleName?: string | null
+): boolean => {
+    return normalizeRoleName(roleName) === ROLES.EMPLOYEE;
+};
+
 // Get company ID according to logged-in user's role
 export const getCompanyId = (
     req: Request
