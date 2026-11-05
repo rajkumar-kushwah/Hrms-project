@@ -4,7 +4,7 @@ import { prisma } from "../config/db.js";
 import { getEmployeePayrollDetail } from "../services/payroll.service.js";
 import { generateSalarySlipHTML } from "../services/Salarysliptemplate.js";
 import { generatePdfFromHtml } from "../services/Pdfservice.js";
-
+import { getCompanyId } from "../utilis/roleUtils.js";
 // ─────────────────────────────────────────────────────────────
 // POST /api/payroll/salary-slips/bulk
 // Body: { userIds: string[], month: number, year: number }
@@ -27,7 +27,7 @@ export const downloadBulkSalarySlips = async (
             year: number;
         };
 
-        const companyId = req.user?.companyId; // adjust to your auth context
+        const companyId = getCompanyId(req); // adjust to your auth context
 
         if (!companyId) {
             return res.status(400).json({

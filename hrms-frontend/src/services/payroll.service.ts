@@ -58,9 +58,13 @@ export const downloadBulkSalarySlips = (
             userIds,
             month,
             year,
-            ...(companyId ? { companyId } : {}),
         },
-        { responseType: "blob" }
+        {
+            headers: companyId
+                ? { "x-company-id": companyId }
+                : {},
+            responseType: "blob",
+        }
     );
 
 export const confirmPayroll = (
