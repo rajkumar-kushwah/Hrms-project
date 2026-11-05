@@ -235,7 +235,7 @@ const PayrollReport = () => {
         } finally {
             setLoading(false);
         }
-    }, [month, year, isSuperAdmin, selectedCompanyId, report]);
+    }, [month, year, isSuperAdmin, selectedCompanyId]);
 
     React.useEffect(() => {
         void loadReport();
