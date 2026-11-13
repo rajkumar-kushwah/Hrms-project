@@ -3,7 +3,7 @@
 
 import { prisma } from "../config/db.js";
 import { getLockedPayrollIfExists } from "./Payrollstatus.service.js";
-import { isEmployeeRole } from "../utilis/roleUtils.js";
+import { getUserDisplayName, isEmployeeRole } from "../utilis/roleUtils.js";
 
 // ─────────────────────────────────────────────────────────────
 // Helper: Date Key
@@ -87,7 +87,7 @@ const calculateEmployeePayroll = async (
     }
 
     // Only Employee role can have payroll
-    if (!isEmployeeRole(user.role?.name)) {
+    if (!isEmployeeRole(user.role)) {
         throw new Error("Payroll is only available for employees");
     }
 
@@ -202,7 +202,7 @@ const calculateEmployeePayroll = async (
             userId,
             user: {
                 id: userId,
-                name: user.name,
+                name: getUserDisplayName(user),
                 employeeCode: user.employeeCode,
                 designation: user.designation,
             },
@@ -227,11 +227,11 @@ const calculateEmployeePayroll = async (
             totalUnpaidDays:
                 locked.perDaySalary > 0
                     ? Number(
-                          (
-                              locked.unpaidDeduction /
-                              locked.perDaySalary
-                          ).toFixed(2)
-                      )
+                        (
+                            locked.unpaidDeduction /
+                            locked.perDaySalary
+                        ).toFixed(2)
+                    )
                     : 0,
             deductionAmount: locked.unpaidDeduction,
             netSalary: locked.netSalary,
@@ -464,9 +464,9 @@ const calculateEmployeePayroll = async (
 
     const remainingDays = Math.max(
         totalWorkingDays -
-            presentDays -
-            halfDays -
-            paidLeaveDays,
+        presentDays -
+        halfDays -
+        paidLeaveDays,
         0
     );
 
@@ -600,7 +600,7 @@ const calculateEmployeePayroll = async (
         userId,
         user: {
             id: userId,
-            name: user.name,
+            name:getUserDisplayName(user),
             employeeCode: user.employeeCode,
             designation: user.designation,
         },
@@ -681,7 +681,7 @@ export const getPayrollSummary = async (
     });
 
     const employeeRoleIds = employeeRoles
-        .filter((role) => isEmployeeRole(role.name))
+        .filter((role) => isEmployeeRole(role))
         .map((role) => role.id);
 
     if (employeeRoleIds.length === 0) {
@@ -773,7 +773,7 @@ export const updateEmployeeSalary = async (
         },
     });
 
-    if (!user || !isEmployeeRole(user.role?.name)) {
+    if (!user || !isEmployeeRole(user.role)) {
         throw new Error("Employee not found in this company");
     }
 

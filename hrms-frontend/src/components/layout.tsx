@@ -22,40 +22,13 @@ import {
 
 import { useAuthStore } from "@/store/auth.store";
 import { ProfileDropdown } from "./ProfileDropdown";
+import { formatRole } from "@/utilis/roleUtils";
 
 export default function Layout() {
     const location = useLocation();
     const { user } = useAuthStore();
 
-    const getRoleName = () => {
-        const role = user?.role?.name;
-
-        if (!role) {
-            return "User";
-        }
-
-        switch (role.toLowerCase()) {
-            case "superadmin":
-            case "super admin":
-                return "Super Admin";
-
-            case "admin":
-            case "companyadmin":
-            case "company admin":
-                return "Admin";
-
-            case "employee":
-                return "Employee";
-
-            default:
-                return role;
-        }
-    };
-
-    // ─────────────────────────────────────────
-    // Page Title
-    // ─────────────────────────────────────────
-
+   
     const getPageTitle = () => {
         switch (location.pathname) {
             case "/dashboard":
@@ -186,7 +159,7 @@ export default function Layout() {
                                 <BreadcrumbList>
                                     <BreadcrumbItem>
                                         <BreadcrumbLink asChild>
-                                            <Link to="/dashboard">{getRoleName()}</Link>
+                                            <Link to="/dashboard">{formatRole(user, "User")}</Link>
                                         </BreadcrumbLink>
                                     </BreadcrumbItem>
 

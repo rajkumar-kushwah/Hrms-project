@@ -11,7 +11,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { isSuperAdminRole } from "@/utilis/roleUtils";
+import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
 
 interface Company {
     id: string;
@@ -39,7 +39,8 @@ export function CompanySelector({
 
     const [companies, setCompanies] = useState<Company[]>([]);
     const [loading, setLoading] = useState(false);
-    const isSuperAdmin = isSuperAdminRole(user?.role?.name)
+    const userRole = getUserRole(user);
+    const isSuperAdmin = isSuperAdminRole(userRole);
 
     useEffect(() => {
         if (!user || !isSuperAdmin) {
@@ -113,10 +114,10 @@ export function CompanySelector({
     }
 
     return (
-        <div className="w-full max-w-sm space-y-1.5">
-            <label className="text-sm font-medium">
+        <div className="w-auto max-w-full space-y-1.5">
+            {/* <label className="text-sm font-medium">
                 Select Company
-            </label>
+            </label> */}
 
             <Select
                 value={selectedCompanyId || ""}

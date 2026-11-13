@@ -21,7 +21,7 @@ import { toast } from 'sonner';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useAuthStore } from '@/store/auth.store';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { isCompanyAdminRole, isSuperAdminRole } from '@/utilis/roleUtils';
+import { getUserRole, isCompanyAdminRole, isSuperAdminRole } from '@/utilis/roleUtils';
 import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { companySchema, assignAdminSchema } from "@/validation/company.validation";
@@ -49,8 +49,9 @@ type CompanyErrors = {
 
 function CompanyList() {
   const { user } = useAuthStore();
-  const isSuperAdmin = isSuperAdminRole(user?.role?.name);
-  const isCompanyAdmin = isCompanyAdminRole(user?.role?.name);
+  const userRole = getUserRole(user);
+  const isSuperAdmin = isSuperAdminRole(userRole);
+  const isCompanyAdmin = isCompanyAdminRole(userRole);
 
   const [searchQuery, setSearchQuery] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("all");
@@ -561,7 +562,7 @@ function CompanyList() {
           </DialogHeader>
           <div>
             <Label>Name</Label>
-            <Input type="text"  placeholder="Enter admin name" name="name" id="adminName" autoComplete="new-password" value={adminForm.name} onChange={handleAdminChange} />
+            <Input type="text" placeholder="Enter admin name" name="name" id="adminName" autoComplete="new-password" value={adminForm.name} onChange={handleAdminChange} />
             {adminErrors.name && (
               <p className="mt-1 text-sm text-red-500">{adminErrors.name}</p>
             )}

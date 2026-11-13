@@ -9,7 +9,6 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Search, RefreshCw, Check } from "lucide-react";
@@ -21,6 +20,11 @@ import { useAuthStore } from "@/store/auth.store";
 import { useCompanyStore } from "@/store/company.store";
 
 import PayrollTable from "./Payrolltable";
+import {
+    getUserName,
+    getUserRole,
+    isSuperAdminRole,
+} from "@/utilis/roleUtils";
 
 const formatCurrency = (amount: number) =>
     `₹${Math.round(amount).toLocaleString("en-IN")}`;
@@ -48,12 +52,8 @@ const Payroll = () => {
         (state) => state.selectedCompanyId
     );
 
-    const roleName = user?.role?.name
-        ?.trim()
-        .toLowerCase()
-        .replace(/\s+/g, "_");
-
-    const isSuperAdmin = roleName === "super_admin";
+    const userRole = getUserRole(user);
+    const isSuperAdmin = isSuperAdminRole(userRole);
 
     const currentDate = new Date();
 
@@ -157,6 +157,7 @@ const Payroll = () => {
         reloadKey,
     ]);
 
+    // Search employees.
     const filteredEmployees = useMemo(() => {
         const searchValue = search.toLowerCase().trim();
 
@@ -164,7 +165,9 @@ const Payroll = () => {
 
         return payrollData.filter(
             (employee) =>
-                employee.user.name.toLowerCase().includes(searchValue) ||
+                getUserName(employee.user)
+                    .toLowerCase()
+                    .includes(searchValue) ||
                 (employee.user.employeeCode ?? "")
                     .toLowerCase()
                     .includes(searchValue) ||
@@ -183,6 +186,7 @@ const Payroll = () => {
         filteredEmployeeIds.length > 0 &&
         filteredEmployeeIds.every((id) => selectedIds.has(id));
 
+    // Select or deselect all filtered employees.
     const toggleSelectAll = () => {
         setSelectedIds((previous) => {
             const next = new Set(previous);
@@ -197,6 +201,7 @@ const Payroll = () => {
         });
     };
 
+    // Select or deselect individual employee.
     const toggleEmployee = (userId: string) => {
         setSelectedIds((previous) => {
             const next = new Set(previous);
@@ -211,6 +216,7 @@ const Payroll = () => {
         });
     };
 
+    // Selected draft employees.
     const selectedDraftEmployees = useMemo(
         () =>
             payrollData.filter(
@@ -221,6 +227,7 @@ const Payroll = () => {
         [payrollData, selectedIds]
     );
 
+    // Selected confirmed employees.
     const selectedConfirmedEmployees = useMemo(
         () =>
             payrollData.filter(
@@ -242,110 +249,23 @@ const Payroll = () => {
         [selectedConfirmedEmployees]
     );
 
-    const payrollSummary = useMemo(
-        () =>
-            payrollData.reduce(
-                (acc, employee) => {
-                    acc.totalEmployees += 1;
-                    acc.totalGrossSalary += employee.grossSalary;
-                    acc.totalHolidayDays += employee.holidayDays;
-                    acc.totalUnpaidLeaveDays += employee.unpaidLeaveDays;
-                    acc.totalDeduction += employee.deductionAmount;
-                    acc.totalNetSalary += employee.netSalary;
-                    acc.absentDays += employee.absentDays;
-
-                    return acc;
-                },
-                {
-                    totalEmployees: 0,
-                    totalGrossSalary: 0,
-                    totalHolidayDays: 0,
-                    totalUnpaidLeaveDays: 0,
-                    totalDeduction: 0,
-                    totalNetSalary: 0,
-                    absentDays: 0,
-                }
-            ),
-        [payrollData]
-    );
-
     return (
-        <div className="space-y-6 p-1">
+        <div className="space-y-4 p-1">
+            {/* Page Description */}
             <div>
                 <p className="text-sm text-muted-foreground">
                     Manage employee salary and payroll
                 </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-7">
-                <Card className="p-3">
-                    <p className="text-xs text-muted-foreground">
-                        Total Employees
-                    </p>
-                    <p className="text-2xl font-bold">
-                        {payrollSummary.totalEmployees}
-                    </p>
-                </Card>
-
-                <Card className="p-3">
-                    <p className="text-xs text-muted-foreground">
-                        Gross Salary
-                    </p>
-                    <p className="text-2xl font-bold">
-                        {formatCurrency(payrollSummary.totalGrossSalary)}
-                    </p>
-                </Card>
-
-                <Card className="p-3">
-                    <p className="text-xs text-muted-foreground">Holiday</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                        {payrollSummary.totalHolidayDays}
-                    </p>
-                </Card>
-
-                <Card className="p-3">
-                    <p className="text-xs text-muted-foreground">
-                        Unpaid Leave
-                    </p>
-                    <p className="text-2xl font-bold text-red-600">
-                        {payrollSummary.totalUnpaidLeaveDays}
-                    </p>
-                </Card>
-
-                <Card className="p-3">
-                    <p className="text-xs text-muted-foreground">
-                        Absent Days
-                    </p>
-                    <p className="text-2xl font-bold text-red-600">
-                        {payrollSummary.absentDays}
-                    </p>
-                </Card>
-
-                <Card className="p-3">
-                    <p className="text-xs text-muted-foreground">
-                        Total Deduction
-                    </p>
-                    <p className="text-2xl font-bold text-red-600">
-                        {formatCurrency(payrollSummary.totalDeduction)}
-                    </p>
-                </Card>
-
-                <Card className="p-3">
-                    <p className="text-xs text-muted-foreground">
-                        Net Payable
-                    </p>
-                    <p className="text-2xl font-bold text-green-600">
-                        {formatCurrency(payrollSummary.totalNetSalary)}
-                    </p>
-                </Card>
-            </div>
-
+            {/* Search */}
             <div className="flex items-center justify-between gap-3">
                 <div className="relative w-full max-w-sm">
                     <Search
                         size={18}
                         className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                     />
+
                     <Input
                         type="search"
                         name="payroll-search"
@@ -358,6 +278,7 @@ const Payroll = () => {
                 </div>
             </div>
 
+            {/* Payroll Filters and Actions */}
             <PayrollTable
                 selectedIds={selectedIds}
                 month={month}
@@ -374,12 +295,14 @@ const Payroll = () => {
                 }
             />
 
+            {/* Company Selection Message */}
             {isSuperAdmin && !selectedCompanyId && (
                 <p className="text-sm text-muted-foreground">
                     Please select a company to view payroll.
                 </p>
             )}
 
+            {/* Employee Payroll Table */}
             <div className="grid w-full grid-cols-1 overflow-x-auto rounded border bg-card">
                 <Table className="table-auto">
                     <TableHeader className="bg-muted">
@@ -404,6 +327,7 @@ const Payroll = () => {
                                     )}
                                 </button>
                             </TableHead>
+
                             <TableHead>Employee</TableHead>
                             <TableHead>Designation</TableHead>
                             <TableHead>Gross Salary</TableHead>
@@ -460,16 +384,14 @@ const Payroll = () => {
                                             <button
                                                 type="button"
                                                 onClick={() =>
-                                                    toggleEmployee(
-                                                        employee.userId
-                                                    )
+                                                    toggleEmployee(employee.userId)
                                                 }
                                                 className={`flex h-4 w-4 items-center justify-center rounded-sm border transition-colors ${
                                                     isSelected
                                                         ? "border-[var(--themePrimary)] bg-[var(--themePrimary)] text-white"
                                                         : "border-input bg-background"
                                                 }`}
-                                                aria-label={`Select ${employee.user.name}`}
+                                                aria-label={`Select ${getUserName(employee.user)}`}
                                             >
                                                 {isSelected && (
                                                     <Check className="h-3 w-3" />
@@ -479,7 +401,7 @@ const Payroll = () => {
 
                                         <TableCell>
                                             <p className="font-medium">
-                                                {employee.user.name}
+                                                {getUserName(employee.user)}
                                             </p>
                                             <p className="text-xs text-muted-foreground">
                                                 {employee.user.employeeCode}
@@ -489,24 +411,30 @@ const Payroll = () => {
                                         <TableCell>
                                             {employee.user.designation ?? "—"}
                                         </TableCell>
+
                                         <TableCell>
                                             {formatCurrency(employee.grossSalary)}
                                         </TableCell>
+
                                         <TableCell>
                                             {employee.totalWorkingDays}
                                         </TableCell>
+
                                         <TableCell>
                                             <Badge variant="secondary">
                                                 {employee.holidayDays || 0}
                                             </Badge>
                                         </TableCell>
+
                                         <TableCell>
                                             {employee.presentDays} /{" "}
                                             {employee.totalWorkingDays}
                                         </TableCell>
+
                                         <TableCell>
                                             {employee.paidLeaveDays}
                                         </TableCell>
+
                                         <TableCell>
                                             <Badge
                                                 variant={
@@ -518,21 +446,27 @@ const Payroll = () => {
                                                 {employee.unpaidLeaveDays} days
                                             </Badge>
                                         </TableCell>
+
                                         <TableCell>
                                             {employee.absentDays}
                                         </TableCell>
+
                                         <TableCell>
                                             {formatCurrency(
                                                 employee.deductionAmount
                                             )}
                                         </TableCell>
+
                                         <TableCell>
                                             <span className="font-semibold">
                                                 {formatCurrency(employee.netSalary)}
                                             </span>
                                         </TableCell>
+
                                         <TableCell>
-                                            <StatusBadge status={employee.status} />
+                                            <StatusBadge
+                                                status={employee.status}
+                                            />
                                         </TableCell>
                                     </TableRow>
                                 );

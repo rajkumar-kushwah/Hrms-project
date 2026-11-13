@@ -5,12 +5,37 @@ import { protect } from "../middleware/auth.middleware.js";
 import { authorize } from "../middleware/role.middleware.js";
 import { validate } from "../middleware/validation.middleware.js";
 import { createLeaveTypeSchema, updateLeaveTypeSchema } from "../validations/leavetype.validation.js";
-
+import { MODULES } from "../utilis/moduleUtils.js";
 const router = Router();
-router.get("/", protect, authorize("leave_policy", "canView"), getLeaveTypes);
-router.post("/", protect, authorize("leave_policy", "canCreate"), validate(createLeaveTypeSchema), createLeaveType);
-router.put("/:id", protect, authorize("leave_policy", "canEdit"), validate(updateLeaveTypeSchema), updateLeaveType);
-router.delete("/:id", protect, authorize("leave_policy", "canDelete"), deleteLeaveType);
 
+router.get(
+    "/",
+    protect,
+    authorize(MODULES.LEAVE_POLICY, "canView"),
+    getLeaveTypes
+);
+
+router.post(
+    "/",
+    protect,
+    authorize(MODULES.LEAVE_POLICY, "canCreate"),
+    validate(createLeaveTypeSchema),
+    createLeaveType
+);
+
+router.put(
+    "/:id",
+    protect,
+    authorize(MODULES.LEAVE_POLICY, "canEdit"),
+    validate(updateLeaveTypeSchema),
+    updateLeaveType
+);
+
+router.delete(
+    "/:id",
+    protect,
+    authorize(MODULES.LEAVE_POLICY, "canDelete"),
+    deleteLeaveType
+);
 
 export default router;

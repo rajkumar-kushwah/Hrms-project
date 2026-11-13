@@ -1,10 +1,11 @@
 
 import { prisma } from "../config/db.js";
 import { isWithinGeoFence } from "../utilis/geoFencing.js";
+
 import {
-    normalizeRoleName,
-    isAdminRole,
+    isEmployeeRole,
 } from "../utilis/roleUtils.js";
+
 
 // ─── Shared helpers ──────────────────────────────────────────
 
@@ -33,9 +34,6 @@ const getDateKey = (date: Date) =>
 
 const isValidDate = (date: Date) =>
     !Number.isNaN(date.getTime());
-
-const isEmployeeRole = (roleName?: string | null) =>
-    !isAdminRole(normalizeRoleName(roleName));
 
 const getMonthRange = (month: number, year: number) => {
     if (!Number.isInteger(month) || month < 1 || month > 12) {
@@ -136,7 +134,7 @@ export const punchIn = async (
 
     if (!user) throw new Error("Employee not found");
 
-    if (!isEmployeeRole(user.role?.name)) {
+    if (!isEmployeeRole(user)) {
         throw new Error("Admin users cannot punch attendance here");
     }
 
@@ -684,7 +682,7 @@ export const getAllAttendance = async (
     ]);
 
     const employees = users.filter((user) =>
-        isEmployeeRole(user.role?.name)
+        isEmployeeRole(user)
     );
 
     const employeeIds = new Set(
@@ -818,7 +816,7 @@ export const getLiveAttendance = async (
     });
 
     return records.filter((record) =>
-        isEmployeeRole(record.user.role?.name)
+        isEmployeeRole(record.user)
     );
 };
 
@@ -1057,7 +1055,7 @@ export const getMonthlySheet = async (
     ]);
 
     const employees = users.filter((user) =>
-        isEmployeeRole(user.role?.name)
+        isEmployeeRole(user)
     );
 
     if (employees.length === 0) {

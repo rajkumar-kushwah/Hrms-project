@@ -23,6 +23,7 @@ import { useAuthStore } from "@/store/auth.store"
 import { LogoutUser } from "@/services/auth.service"
 import { useNavigate } from "react-router-dom"
 import { useTheme } from "@/providers/ThemeContext"
+import { getUserName } from "@/utilis/roleUtils"
 
 
 export function NavUser() {
@@ -38,7 +39,7 @@ export function NavUser() {
   const navigate = useNavigate();
   const logout = useAuthStore((state) => state.logout);
 
-  
+
   const handleLogout = async () => {
     try {
       await LogoutUser()
@@ -123,11 +124,11 @@ export function NavUser() {
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground border border-transparent hover:border-[var(--logo-green)]"
             >
               <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarImage src={user?.avatar || ""} alt={user?.name || "User"} />
-                <AvatarFallback className="rounded-lg">{getInitials(user?.name || "CN")}</AvatarFallback>
+                <AvatarImage src={user.avatar || ""} alt={getUserName(user)} />
+                <AvatarFallback className="rounded-lg"> {getInitials(getUserName(user))}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user.name}</span>
+                <span className="truncate font-medium"> {getUserName(user)}</span>
                 <span className="truncate text-xs">{user.email}</span>
               </div>
               <ChevronsUpDownIcon className="ml-auto size-4" />
@@ -144,11 +145,13 @@ export function NavUser() {
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">{getInitials(user.name)}</AvatarFallback>
+                  <AvatarImage src={user.avatar} alt={getUserName(user)} />
+                  <AvatarFallback className="rounded-lg">
+                    {getInitials(getUserName(user))}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.name}  </span>
+                  <span className="truncate font-medium">{getUserName(user)}  </span>
                   {/* {user?.company?.name ?? ""} */}
                   <span className="truncate text-xs text-muted-foreground">
 

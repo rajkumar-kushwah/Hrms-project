@@ -1,5 +1,6 @@
 import { prisma } from "../config/db.js";
 import { getPayrollSummary } from "../services/payroll.service.js"; // adjust path
+import { getUserDisplayName } from "../utilis/roleUtils.js";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -156,7 +157,7 @@ export const getMonthlyPayrollReport = async (
 
         return {
             userId: p.userId,
-            name: p.user.name,
+            name:getUserDisplayName(p.user),
             employeeCode: p.user.employeeCode,
             perDaySalary: round2(p.perDaySalary ?? 0),
             branchId: u?.branchId ?? null,

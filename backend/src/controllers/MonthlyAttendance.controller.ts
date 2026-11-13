@@ -1,6 +1,9 @@
 import { prisma } from "../config/db.js";
 import { type Request, type Response } from "express";
-
+import {
+    isSuperAdminRole,
+    isHRRole,
+} from "../utilis/roleUtils.js";
 
 // monthly attendance controller
 
@@ -51,14 +54,14 @@ export const getMonthlyAttendance = async (req: Request, res: Response) => {
             });
         }
 
-        const roles = user.role ? [user.role.name] : [];
+
 
         let attendance;
 
         // SUPER_ADMIN / HR → all employees full attendance
         if (
-            roles.includes("SUPER_ADMIN") ||
-            roles.includes("HR")
+            isSuperAdminRole(user.role) ||
+            isHRRole(user.role)
         ) {
             attendance = await prisma.attendance.findMany({
                 where: {
@@ -181,7 +184,7 @@ export const FilteredMonthlyAttendance = async (
             });
         }
 
-        const roles = user.role ? [user.role.name] : [];
+
 
         // dynamic where
         const where: any = {
@@ -221,8 +224,8 @@ export const FilteredMonthlyAttendance = async (
 
         // normal employee → only own data
         if (
-            !roles.includes("SUPER_ADMIN") &&
-            !roles.includes("HR")
+            !isSuperAdminRole(user.role) &&
+            !isHRRole(user.role)
         ) {
             where.userId = userId;
         }

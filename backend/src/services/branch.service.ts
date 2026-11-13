@@ -1,5 +1,6 @@
 
 import { prisma } from "../config/db.js";
+import { getUserDisplayName } from "../utilis/roleUtils.js";
 
 // Create branch
 export const createBranch = async (
@@ -213,8 +214,7 @@ export const permanentDeleteBranch = async (
 
     if (employeeCount > 0) {
         throw new Error(
-            `Cannot delete branch: ${employeeCount} ${
-                employeeCount === 1 ? "employee is" : "employees are"
+            `Cannot delete branch: ${employeeCount} ${employeeCount === 1 ? "employee is" : "employees are"
             } assigned to this branch.`
         );
     }
@@ -225,8 +225,7 @@ export const permanentDeleteBranch = async (
 
     if (categoryCount > 0) {
         throw new Error(
-            `Cannot delete branch: ${categoryCount} ${
-                categoryCount === 1 ? "category exists" : "categories exist"
+            `Cannot delete branch: ${categoryCount} ${categoryCount === 1 ? "category exists" : "categories exist"
             } under this branch.`
         );
     }
@@ -323,7 +322,7 @@ export const getGeoFencingOverview = async (
             totalPunchedInToday: branchAttendance.length,
             employees: branchAttendance.map((attendance) => ({
                 id: attendance.user.id,
-                name: attendance.user.name,
+                name: getUserDisplayName(attendance.user),
                 employeeCode: attendance.user.employeeCode,
                 isWithinGeoFence: attendance.isWithinGeoFence,
                 punchInTime: attendance.punchInTime,

@@ -1,89 +1,131 @@
+import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Signin from "@/pages/Auth/Signin";
-import Dashboard from "@/pages/dashboard/Dashboard";
+import { Toaster } from "sonner";
+
 import Layout from "@/components/layout";
 import { ProtectedRoute } from "../providers/ProtectedRoute";
-import Profile from "@/pages/Profile";
-import { Toaster } from "sonner";
 import Unauthorized from "@/Unauthorized/Unauthorized";
 import ErrorPage from "@/ErrorHandling/ErrorPage";
-import CompanyList from "@/pages/CompanyList";
-import Users from "../pages/CompanyUsers";
-import Roles from "@/pages/Roles";
-import BranchList from "@/pages/BranchList";
-import CategoryList from "@/pages/CategoryList";
-import EmployeeList from "@/pages/EmployeeList";
-import AttendanceList from "@/pages/punchCard/AttendanceList";
-import AttendanceLive from "@/pages/punchCard/AttendanceLive";
-import EmployeeAttendanceDetail from "@/pages/punchCard/EmployeeAttendanceDetail";
-import Settings from "@/pages/Settings";
-import GeoFencing from "@/pages/punchCard/GeoFencing";
-import LeavePolicy from "@/pages/LeavePolicy";
-import LeaveRequestPage from "@/pages/LeaveRequestPage";
-import LeaveApproval from "@/pages/LeaveApproval";
-import PayrollPage from "@/pages/payroll/Payroll";
-import HolidayPage from "@/pages/Holiday";
-import LandingPage from "@/pages/LandingPage";
-import PayrollReportPage from "@/pages/reports/PayrollReportPage";
-import OnboardingChecklistSettings from "@/pages/settings/Onboardingchecklistsettings";
-import OnboardingDetail from "@/pages/onboarding/OnboardingDetail";
-import OnboardingList from "@/pages/onboarding/OnboardingList";
-import EmployeeView from "@/pages/EmployeeView";
-import AttendanceReport from "@/pages/reports/AttendanceReport";
-import LeaveReport from "@/pages/reports/LeaveReport";
-import OvertimeReport from "@/pages/reports/OvertimeReport";
 
+// Lazy-loaded pages
+const LandingPage = lazy(() => import("@/pages/LandingPage"));
+const Signin = lazy(() => import("@/pages/Auth/Signin"));
+
+const Dashboard = lazy(() => import("@/pages/dashboard/Dashboard"));
+const Profile = lazy(() => import("@/pages/Profile"));
+
+const CompanyList = lazy(() => import("@/pages/CompanyList"));
+const Users = lazy(() => import("../pages/CompanyUsers"));
+const Roles = lazy(() => import("@/pages/Roles"));
+const BranchList = lazy(() => import("@/pages/BranchList"));
+const CategoryList = lazy(() => import("@/pages/CategoryList"));
+
+const EmployeeList = lazy(() => import("@/pages/EmployeeList"));
+const EmployeeView = lazy(() => import("@/pages/EmployeeView"));
+
+const AttendanceList = lazy(() => import("@/pages/punchCard/AttendanceList"));
+const AttendanceLive = lazy(() => import("@/pages/punchCard/AttendanceLive"));
+const EmployeeAttendanceDetail = lazy(  () => import("@/pages/punchCard/EmployeeAttendanceDetail"));
+const GeoFencing = lazy(() => import("@/pages/punchCard/GeoFencing"));
+
+const Settings = lazy(() => import("@/pages/Settings"));
+
+const LeavePolicy = lazy(() => import("@/pages/LeavePolicy"));
+const LeaveRequestPage = lazy(() => import("@/pages/LeaveRequestPage"));
+const LeaveApproval = lazy(() => import("@/pages/LeaveApproval"));
+
+const PayrollPage = lazy(() => import("@/pages/payroll/Payroll"));
+const HolidayPage = lazy(() => import("@/pages/Holiday"));
+
+const PayrollReportPage = lazy(() => import("@/pages/reports/PayrollReportPage"));
+const AttendanceReport = lazy(() => import("@/pages/reports/AttendanceReport"));
+const LeaveReport = lazy(() => import("@/pages/reports/LeaveReport"));
+const OvertimeReport = lazy(() => import("@/pages/reports/OvertimeReport"));
+
+const OnboardingChecklistSettings = lazy( () => import("@/pages/settings/Onboardingchecklistsettings"));
+const OnboardingDetail = lazy(() => import("@/pages/onboarding/OnboardingDetail"));
+const OnboardingList = lazy(() => import("@/pages/onboarding/OnboardingList"));
+
+// Reusable lazy page fallback
+const PageLoader = ({ children }: { children: React.ReactNode }) => (
+    <Suspense
+        fallback={
+            <div className="py-6 text-center text-sm text-muted-foreground">
+                Loading...
+            </div>
+        }
+    >
+        {children}
+    </Suspense>
+);
 
 const AppRoutes = () => {
     return (
         <BrowserRouter>
-
             <Toaster position="top-right" />
-            <Routes>
 
-                {/* <Route path="/" element={<Navigate to="/signin" />} />
-                <Route path="/signin" element={<Signin />} /> */}
-                <Route path="/" element={<LandingPage />} />
-                <Route path="/signin" element={<Signin />} />
+            <Routes>
+                <Route path="/" element={<PageLoader>  <LandingPage /> </PageLoader>} />
+
+                <Route path="/signin" element={<PageLoader> <Signin /> </PageLoader>} />
 
                 <Route element={<ProtectedRoute />}>
                     <Route element={<Layout />}>
-                        <Route path="/dashboard" element={<Dashboard />} />
-                        <Route path="/profile" element={<Profile />} />
-                        <Route path="/company" element={<CompanyList />} />
-                        <Route path="/companyusers" element={<Users />} />
-                        <Route path="/roles" element={<Roles />} />
-                        <Route path="/branch" element={<BranchList />} />
-                        <Route path="/category" element={<CategoryList />} />
-                        <Route path="/employee" element={<EmployeeList />} />
-                        <Route path="/employee/:id" element={<EmployeeView />} />
-                        <Route path="/attendance/list" element={<AttendanceList />} />
-                        <Route path="/attendance/live" element={<AttendanceLive />} />
-                        <Route path="/attendance/employee/:userId" element={<EmployeeAttendanceDetail />} />
-                        <Route path="/settings/*" element={<Settings />} />
-                        <Route path="/attendance/geo-fencing" element={<GeoFencing />} />
-                        <Route path="/leave/request" element={<LeaveRequestPage />} />
-                        <Route path="/leave/approval" element={<LeaveApproval />} />
-                        <Route path="/leave/policy" element={<LeavePolicy />} />
-                        <Route path="/payroll" element={<PayrollPage />} />
-                        <Route path="/holiday" element={<HolidayPage />} />
-                        <Route path="/reports/payroll" element={<PayrollReportPage />} />
-                        <Route path="/onboardingchecklist" element={<OnboardingChecklistSettings />} />
-                        <Route path="/onboarding" element={<OnboardingList />} />
-                        <Route path="/onboarding/:userId" element={<OnboardingDetail />} />
-                        <Route path="/reports/attendance" element={<AttendanceReport />} />
-                        <Route path="/reports/leave" element={<LeaveReport />} />
-                        <Route path="/reports/overtime" element={<OvertimeReport />} />
-
+                        <Route path="/dashboard" element={<PageLoader><Dashboard /></PageLoader>} />
+                        <Route path="/profile" element={<PageLoader><Profile /></PageLoader>} />
+                        <Route path="/company" element={<PageLoader><CompanyList /></PageLoader>} />
+                        <Route path="/companyusers" element={<PageLoader><Users /></PageLoader>} />
+                        <Route path="/roles" element={<PageLoader><Roles /></PageLoader>}/>
+                        <Route path="/branch" element={<PageLoader><BranchList /></PageLoader>} />
+                        <Route path="/category" element={<PageLoader><CategoryList /></PageLoader>}
+                        />
+                        <Route path="/employee" element={<PageLoader><EmployeeList /></PageLoader>}
+                        />
+                        <Route path="/employee/:id" element={<PageLoader><EmployeeView /></PageLoader>}
+                        />
+                        <Route path="/attendance/list" element={<PageLoader><AttendanceList /></PageLoader>}
+                        />
+                        <Route path="/attendance/live" element={<PageLoader><AttendanceLive /></PageLoader>}
+                        />
+                        <Route path="/attendance/employee/:userId" element={<PageLoader><EmployeeAttendanceDetail /></PageLoader>}
+                        />
+                        <Route path="/settings/*" element={<PageLoader><Settings /></PageLoader>}
+                        />
+                        <Route path="/attendance/geo-fencing" element={<PageLoader><GeoFencing /></PageLoader>}
+                        />
+                        <Route path="/leave/request" element={<PageLoader><LeaveRequestPage /></PageLoader>}
+                        />
+                        <Route path="/leave/approval" element={<PageLoader><LeaveApproval /></PageLoader>}
+                        />
+                        <Route path="/leave/policy" element={<PageLoader><LeavePolicy /></PageLoader>}
+                        />
+                        <Route path="/payroll" element={<PageLoader><PayrollPage /></PageLoader>}
+                        />
+                        <Route path="/holiday" element={<PageLoader><HolidayPage /></PageLoader>}
+                        />
+                        <Route path="/reports/payroll" element={<PageLoader><PayrollReportPage /></PageLoader>}
+                        />
+                        <Route path="/onboardingchecklist" element={<PageLoader>         <OnboardingChecklistSettings />     </PageLoader>}
+                        />
+                        <Route path="/onboarding" element={<PageLoader><OnboardingList /></PageLoader>}
+                        />
+                        <Route path="/onboarding/:userId" element={<PageLoader><OnboardingDetail /></PageLoader>}
+                        />
+                        <Route path="/reports/attendance" element={<PageLoader><AttendanceReport /></PageLoader>}
+                        />
+                        <Route path="/reports/leave" element={<PageLoader><LeaveReport /></PageLoader>}
+                        />
+                        <Route path="/reports/overtime" element={<PageLoader><OvertimeReport /></PageLoader>}
+                        />
                     </Route>
                 </Route>
-                {/* Error hanlding */}
+
+                {/* Error handling */}
                 <Route path="/unauthorized" element={<Unauthorized />} />
                 <Route path="*" element={<ErrorPage status={404} />} />
                 <Route path="/403" element={<ErrorPage status={403} />} />
                 <Route path="/404" element={<ErrorPage status={404} />} />
                 <Route path="/500" element={<ErrorPage status={500} />} />
-
             </Routes>
         </BrowserRouter>
     );

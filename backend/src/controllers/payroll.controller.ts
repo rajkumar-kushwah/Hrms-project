@@ -2,8 +2,8 @@
 import type { Request, Response } from "express";
 import * as PayrollService from "../services/payroll.service.js";
 import {
-    normalizeRoleName,
     isAdminRole,
+    isSuperAdminRole,
     getCompanyId,
 } from "../utilis/roleUtils.js";
 import { prisma } from "../config/db.js";
@@ -19,10 +19,10 @@ const getErrorMessage = (error: unknown): string => {
 };
 
 const getPayrollAccess = (req: Request) => {
-    const roleName = normalizeRoleName(req.user?.role?.name);
+
 
     return {
-        isAdmin: isAdminRole(roleName),
+        isAdmin: isAdminRole(req.user),
         companyId: getCompanyId(req),
         userId: req.user?.id ?? null,
     };
@@ -76,8 +76,7 @@ export const getPayrollSummary = async (
             });
         }
 
-        const roleName = normalizeRoleName(req.user?.role?.name);
-        const isSuperAdmin = roleName === "super_admin";
+        const isSuperAdmin = isSuperAdminRole(req.user);
 
         // Super Admin can select a company; other roles cannot override it.
         const requestedCompanyId = req.query.companyId;

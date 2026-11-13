@@ -1,7 +1,7 @@
 // payrollReportController.ts
 import type { Request, Response } from "express";
 import { getMonthlyPayrollReport } from "../services/payrollreport.service.js";
-import { getCompanyId, normalizeRoleName } from "../utilis/roleUtils.js";
+import { getCompanyId, isAdminRole } from "../utilis/roleUtils.js";
 
 // GET /api/payroll/report?month=9&year=2026
 // Super Admin: /api/payroll/report?month=9&year=2026&companyId=COMPANY_ID
@@ -9,11 +9,7 @@ export const monthlyPayrollReport = async (req: Request, res: Response) => {
     try {
         const companyId = getCompanyId(req);
         const userId = req.user?.id;
-        const role = normalizeRoleName(req.user?.role?.name);
-
-        const isAdminRole =
-            role === "company_admin" ||
-            role === "super_admin";
+        const isAdmin = isAdminRole(req.user);
 
         if (!companyId) {
             return res.status(400).json({
@@ -49,7 +45,7 @@ export const monthlyPayrollReport = async (req: Request, res: Response) => {
             companyId,
             month,
             year,
-            isAdminRole ? undefined : userId
+            isAdmin ? undefined : userId
         );
 
         return res.status(200).json({

@@ -1,29 +1,15 @@
 import type { Request, Response } from "express";
-import * as PayrollStatusService from "../services/Payrollstatus.service.js"; // adjust path to match your project
-
-// ─────────────────────────────────────────────────────────────
-// Helper: same pattern as your existing payroll.controller.ts
-// ─────────────────────────────────────────────────────────────
-
-const isAdminUser = (req: Request) => {
-    const roleName = req.user?.role?.name
-        ?.trim()
-        .toLowerCase()
-        .replace(/\s+/g, "_");
-
-    return roleName === "super_admin" || roleName === "company_admin";
-};
+import * as PayrollStatusService from "../services/Payrollstatus.service.js";
+import { isAdminRole } from "../utilis/roleUtils.js";
 
 // ─────────────────────────────────────────────────────────────
 // POST /api/payroll/confirm
-// Body: { userIds: string[], month: number, year: number }
-// Admin/Company Admin only — an employee should never confirm
-// their own payroll.
+// Admin / Company Admin only
 // ─────────────────────────────────────────────────────────────
 
 export const confirmPayrollHandler = async (req: Request, res: Response) => {
     try {
-        if (!isAdminUser(req)) {
+        if (!isAdminRole(req.user)) {
             return res.status(403).json({
                 success: false,
                 message: "Not authorized to confirm payroll",
@@ -55,13 +41,12 @@ export const confirmPayrollHandler = async (req: Request, res: Response) => {
 
 // ─────────────────────────────────────────────────────────────
 // POST /api/payroll/mark-paid
-// Body: { userIds: string[], month: number, year: number, paymentRef?: string }
-// Admin/Company Admin only.
+// Admin / Company Admin only
 // ─────────────────────────────────────────────────────────────
 
 export const markPaidHandler = async (req: Request, res: Response) => {
     try {
-        if (!isAdminUser(req)) {
+        if (!isAdminRole(req.user)) {
             return res.status(403).json({
                 success: false,
                 message: "Not authorized to mark payroll as paid",
@@ -95,13 +80,12 @@ export const markPaidHandler = async (req: Request, res: Response) => {
 
 // ─────────────────────────────────────────────────────────────
 // POST /api/payroll/employee/:userId/revert-to-draft
-// Body: { month: number, year: number }
-// Admin/Company Admin only.
+// Admin / Company Admin only
 // ─────────────────────────────────────────────────────────────
 
 export const revertToDraftHandler = async (req: Request, res: Response) => {
     try {
-        if (!isAdminUser(req)) {
+        if (!isAdminRole(req.user)) {
             return res.status(403).json({
                 success: false,
                 message: "Not authorized to revert payroll",

@@ -18,7 +18,7 @@ import type { CompanySettings } from "@/types/settings.types";
 import { useAuthStore } from "@/store/auth.store";
 import { useCompanyStore } from "@/store/company.store";
 import { CompanySelector } from "@/pages/common/CompanySelector";
-import { isSuperAdminRole } from "@/utilis/roleUtils";
+import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
 
 const weekDays = [
     { value: 0, label: "Sunday" },
@@ -33,10 +33,11 @@ const weekDays = [
 const AttendanceSettings = () => {
     const { user } = useAuthStore();
 
-
+    const userRole = getUserRole(user);
+    const isSuperAdmin = isSuperAdminRole(userRole);
+    
     const [selectedCompanyId, setSelectedCompanyId] = React.useState("");
 
-    const isSuperAdmin = isSuperAdminRole(user?.role?.name);
 
     const [settings, setSettings] =
         React.useState<CompanySettings | null>(null);

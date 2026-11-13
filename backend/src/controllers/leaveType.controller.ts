@@ -44,7 +44,7 @@ export const getLeaveTypes = async (req: Request, res: Response) => {
         if (!companyId) {
             return res.status(400).json({
                 success: false,
-                message: isSuperAdminRole(req.user?.role?.name)
+                message: isSuperAdminRole(req.user)
                     ? "Please select a company first."
                     : "Company information is missing.",
             });

@@ -52,7 +52,7 @@ model User {
   branchId              String?
   categoryId            String?
   designation           String?
-  employeeCode          String?         
+  employeeCode          String?
   joiningDate           DateTime?
   phone                 String?
   aadharNumber          String?
@@ -89,6 +89,7 @@ model User {
   reportingManager      User?            @relation("ReportingManager", fields: [reportingManagerId], references: [id])
   teamMembers           User[]           @relation("ReportingManager")
   role                  Role?            @relation(fields: [roleId], references: [id])
+
   @@unique([companyId, employeeCode])
 }
 
@@ -96,6 +97,7 @@ model Role {
   id                 Int          @id @default(autoincrement())
   name               String
   code               String?
+  systemKey          String?
   description        String?
   isActive           Boolean      @default(true)
   companyId          String?
@@ -125,20 +127,29 @@ model Module {
   permission  Permission[]
 }
 
+enum DataScope {
+  OWN
+  COMPANY
+  ALL
+}
+
+
 model Permission {
-  id        Int      @id @default(autoincrement())
-  roleId    Int
-  moduleId  Int
-  companyId String?
-  canView   Boolean  @default(false)
-  canCreate Boolean  @default(false)
-  canEdit   Boolean  @default(false)
-  canDelete Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  company   Company? @relation(fields: [companyId], references: [id])
-  module    Module   @relation(fields: [moduleId], references: [id])
-  role      Role     @relation(fields: [roleId], references: [id])
+  id                 Int       @id @default(autoincrement())
+  roleId             Int
+  moduleId           Int
+  companyId          String?
+  canView            Boolean   @default(false)
+  canCreate          Boolean   @default(false)
+  canEdit            Boolean   @default(false)
+  canDelete          Boolean   @default(false)
+  canPermanentDelete Boolean   @default(false)
+  dataScope          DataScope @default(OWN)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  company            Company?  @relation(fields: [companyId], references: [id])
+  module             Module    @relation(fields: [moduleId], references: [id])
+  role               Role      @relation(fields: [roleId], references: [id])
 
   @@unique([roleId, moduleId, companyId])
 }

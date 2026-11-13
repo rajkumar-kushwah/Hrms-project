@@ -3,8 +3,9 @@ import type { Request, Response } from "express";
 import * as EmployeeService from "../services/employee.service.js";
 import {
     getCompanyId,
+    getRoleName,
     isAdminRole,
-    normalizeRoleName,
+    isSuperAdminRole,
 } from "../utilis/roleUtils.js";
 
 // Create employee
@@ -12,7 +13,7 @@ export const createEmployee = async (req: Request, res: Response) => {
     try {
         const companyId = getCompanyId(req);
         const createdBy = req.user?.id;
-        const roleName = normalizeRoleName(req.user?.role?.name);
+        const roleName = getRoleName(req.user);
 
         if (!companyId) {
             return res.status(400).json({
@@ -58,7 +59,7 @@ export const getEmployees = async (req: Request, res: Response) => {
     try {
         const companyId = getCompanyId(req);
         const requestingUserId = req.user?.id;
-        const requestingUserRole = normalizeRoleName(req.user?.role?.name);
+        const requestingUserRole = getRoleName(req.user);
 
         if (!requestingUserId || !requestingUserRole) {
             return res.status(401).json({
@@ -67,7 +68,7 @@ export const getEmployees = async (req: Request, res: Response) => {
             });
         }
         if (!companyId) {
-            if (normalizeRoleName(requestingUserRole) === "super_admin") {
+            if (isSuperAdminRole(req.user)) {
                 return res.status(200).json({
                     success: true,
                     data: [],
@@ -108,7 +109,7 @@ export const getEmployeeById = async (req: Request, res: Response) => {
     try {
         const id = req.params.id;
         const requestingUserId = req.user?.id;
-        const requestingUserRole = normalizeRoleName(req.user?.role?.name);
+        const requestingUserRole = getRoleName(req.user);
         const requestingCompanyId = getCompanyId(req);
 
         if (typeof id !== "string" || !id) {
@@ -177,7 +178,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
     try {
         const id = req.params.id;
         const requestingUserId = req.user?.id;
-        const requestingUserRole = normalizeRoleName(req.user?.role?.name);
+        const requestingUserRole = getRoleName(req.user);
         const requestingCompanyId = getCompanyId(req);
 
         if (typeof id !== "string" || !id) {
@@ -313,9 +314,8 @@ export const resetEmployeePassword = async (
 ) => {
     try {
         // Admin authorization check
-        const roleName = req.user?.role?.name;
-
-        if (!isAdminRole(roleName)) {
+        
+        if (!isAdminRole(req.user)) {
             return res.status(403).json({
                 success: false,
                 message: "Access denied. Only administrators can reset employee passwords.",

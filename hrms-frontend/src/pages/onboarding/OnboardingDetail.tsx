@@ -41,6 +41,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { getUserName } from "@/utilis/roleUtils";
 
 type Stage = "OFFER" | "JOINING" | "DOCUMENTS" | "TRAINING" | "ACTIVE";
 type DocumentInputType = "FILE_UPLOAD" | "DOCUMENT_NUMBER" | "EITHER";
@@ -495,7 +496,7 @@ export default function OnboardingDetail() {
       </div>
 
       <div className="border-b pb-5">
-        <h1 className="text-2xl font-bold tracking-tight">{data.user.name}</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{getUserName(data.user)}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {data.user.designation || "Employee"}
           {" · "}

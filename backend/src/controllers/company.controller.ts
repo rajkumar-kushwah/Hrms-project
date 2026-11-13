@@ -1,5 +1,10 @@
 import { type Request, type Response } from "express";
 import * as CompanyService from "../services/company.service.js";
+import {
+    getCompanyId,
+    getRoleName,
+    isSuperAdminRole,
+} from "../utilis/roleUtils.js";
 
 // create company controller
 export const createCompany = async (req: Request, res: Response) => {
@@ -24,7 +29,7 @@ export const createCompany = async (req: Request, res: Response) => {
 export const getAllCompanies = async (req: Request, res: Response) => {
     try {
         const companyId = req.user?.companyId;
-        const roleName = req.user?.role?.name;
+        const roleName = getRoleName(req.user);
 
         const companies = await CompanyService.getAllCompanies(
             companyId,
@@ -88,7 +93,7 @@ export const getCompanyById = async (req: Request, res: Response) => {
 export const updateCompany = async (req: Request, res: Response) => {
     try {
         const id = req.params.id as string;
-        const isSuperAdmin = req.user?.role?.name?.toLowerCase().replace(/\s+/g, "_") === "super_admin";
+        const isSuperAdmin = isSuperAdminRole(req.user);
 
         if (!isSuperAdmin && req.user?.companyId !== id) {
             return res.status(403).json({ success: false, message: "Forbidden" });

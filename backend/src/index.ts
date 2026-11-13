@@ -32,7 +32,9 @@ import attendanceReportRoutes from "./routes/Attendancereport.route.js";
 import leaveReportRoutes from "./routes/leaveReport.routes.js";
 import overtimeRoutes from "./routes/overtimeReport.routes.js";
 import { setIO } from "./config/socket.js";
-import { isAdminRole, isSuperAdminRole } from "./utilis/roleUtils.js";
+// import { getRoleName, isAdminRole, isSuperAdminRole } from "./utilis/roleUtils.js";
+import { MODULES } from "./utilis/moduleUtils.js";
+import { isTrustedPlatformAdmin } from "./utilis/platformAdminUtils.js";
 
 // dotenv.config();
 const app = express();
@@ -102,7 +104,19 @@ io.use(async (socket, next) => {
                 companyId: true,
                 role: {
                     select: {
-                        name: true,
+                        isActive: true,
+                        permissions: {
+                            where: {
+                                module: {
+                                    name: MODULES.ATTENDANCE_LIVE,
+                                    isActive: true,
+                                },
+                            },
+                            select: {
+                                canView: true,
+                                dataScope: true,
+                            },
+                        },
                     },
                 },
             },
@@ -112,9 +126,20 @@ io.use(async (socket, next) => {
             return next(new Error("User not found."));
         }
 
+        const attendancePermission = user.role?.permissions[0];
+
         socket.data.userId = user.id;
         socket.data.companyId = user.companyId;
-        socket.data.role = user.role?.name;
+
+        socket.data.attendancePermission = {
+            canView:
+                user.role?.isActive === true &&
+                attendancePermission?.canView === true,
+            dataScope: attendancePermission?.dataScope ?? null,
+        };
+
+        socket.data.isTrustedPlatformAdmin =
+            isTrustedPlatformAdmin(user);
 
         next();
     } catch (error) {
@@ -124,20 +149,30 @@ io.use(async (socket, next) => {
 });
 
 io.on("connection", (socket) => {
-    const { userId, companyId, role } = socket.data;
+    const {
+        userId,
+        companyId,
+        attendancePermission,
+        isTrustedPlatformAdmin: trustedAdmin,
+    } = socket.data;
 
     console.log("Authenticated Socket Connected:", {
         socketId: socket.id,
         userId,
         companyId,
-        role,
     });
 
+    // Private user room
     socket.join(`user:${userId}`);
 
-    // Company Admin automatically joins their company room
-    if (companyId && isAdminRole(role)) {
+    // COMPANY scope: only own company
+    if (
+        attendancePermission?.canView &&
+        attendancePermission.dataScope === "COMPANY" &&
+        companyId
+    ) {
         socket.join(`company:${companyId}:attendance`);
+        socket.data.attendanceCompanyId = companyId;
     }
 
     // Attendance subscription
@@ -146,25 +181,44 @@ io.on("connection", (socket) => {
         async (requestedCompanyId: string) => {
             try {
                 if (
+                    !attendancePermission?.canView ||
                     typeof requestedCompanyId !== "string" ||
                     !requestedCompanyId.trim()
                 ) {
                     return;
                 }
 
-                const previousCompanyId = socket.data
-                    .attendanceCompanyId as string | undefined;
+                const selectedCompanyId = requestedCompanyId.trim();
+
+                const previousCompanyId =
+                    socket.data.attendanceCompanyId as string | undefined;
 
                 if (previousCompanyId) {
                     await socket.leave(
                         `company:${previousCompanyId}:attendance`
                     );
+
                     delete socket.data.attendanceCompanyId;
                 }
 
-                const selectedCompanyId = requestedCompanyId.trim();
+                // COMPANY scope: own company only
+                if (
+                    attendancePermission.dataScope === "COMPANY" &&
+                    companyId === selectedCompanyId
+                ) {
+                    await socket.join(
+                        `company:${selectedCompanyId}:attendance`
+                    );
 
-                if (isSuperAdminRole(role)) {
+                    socket.data.attendanceCompanyId = selectedCompanyId;
+                    return;
+                }
+
+                // ALL scope: trusted platform admin only
+                if (
+                    attendancePermission.dataScope === "ALL" &&
+                    trustedAdmin
+                ) {
                     const company = await prisma.company.findUnique({
                         where: { id: selectedCompanyId },
                         select: { id: true },
@@ -177,17 +231,9 @@ io.on("connection", (socket) => {
                     );
 
                     socket.data.attendanceCompanyId = company.id;
-                    return;
                 }
 
-                if (
-                    isAdminRole(role) &&
-                    companyId === selectedCompanyId
-                ) {
-                    await socket.join(
-                        `company:${companyId}:attendance`
-                    );
-                }
+                // OWN scope: user room only, no company room
             } catch (error) {
                 console.error("Attendance subscription failed:", error);
             }
@@ -196,13 +242,14 @@ io.on("connection", (socket) => {
 
     // Unsubscribe
     socket.on("attendance:unsubscribe", async () => {
-        const previousCompanyId = socket.data
-            .attendanceCompanyId as string | undefined;
+        const previousCompanyId =
+            socket.data.attendanceCompanyId as string | undefined;
 
         if (previousCompanyId) {
             await socket.leave(
                 `company:${previousCompanyId}:attendance`
             );
+
             delete socket.data.attendanceCompanyId;
         }
     });
@@ -260,31 +307,31 @@ app.use('/monthly-attendance', monthlyRouter)
 
 
 // Socket.io Connection Logic (Biometric live event handler)
-io.on("connection", (socket) => {
-    const { userId, companyId, role } = socket.data;
+// io.on("connection", (socket) => {
+//     const { userId, companyId, role } = socket.data;
 
-    console.log("Authenticated Socket Connected:", {
-        socketId: socket.id,
-        userId,
-        companyId,
-        role,
-    });
+//     console.log("Authenticated Socket Connected:", {
+//         socketId: socket.id,
+//         userId,
+//         companyId,
+//         role,
+//     });
 
-    // Private user room
-    socket.join(`user:${userId}`);
+//     // Private user room
+//     socket.join(`user:${userId}`);
 
-    // Company-wise private room
-    if (companyId && isAdminRole(role)) {
-        socket.join(`company:${companyId}:attendance`);
-    }
+//     // Company-wise private room
+//     if (companyId && isAdminRole(role)) {
+//         socket.join(`company:${companyId}:attendance`);
+//     }
 
-    socket.on("disconnect", (reason) => {
-        console.log("Socket disconnected:", {
-            userId,
-            reason,
-        });
-    });
-});
+//     socket.on("disconnect", (reason) => {
+//         console.log("Socket disconnected:", {
+//             userId,
+//             reason,
+//         });
+//     });
+// });
 
 
 

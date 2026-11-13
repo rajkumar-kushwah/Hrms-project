@@ -1,4 +1,3 @@
-
 import type { Request, Response } from "express";
 import * as ReportService from "../services/Attendancereport.service.js";
 import {
@@ -8,7 +7,7 @@ import {
 import {
     getCompanyId,
     isSuperAdminRole,
-    normalizeRoleName,
+    isCompanyAdminRole,
 } from "../utilis/roleUtils.js";
 
 export const getAttendanceReport = async (
@@ -16,9 +15,8 @@ export const getAttendanceReport = async (
     res: Response
 ) => {
     try {
-        const roleName = normalizeRoleName(req.user?.role?.name);
-        const superAdmin = isSuperAdminRole(roleName);
-        const companyAdmin = roleName === "company_admin";
+        const superAdmin = isSuperAdminRole(req.user);
+        const companyAdmin = isCompanyAdminRole(req.user);
 
         if (!superAdmin && !companyAdmin) {
             return res.status(403).json({
@@ -44,13 +42,13 @@ export const getAttendanceReport = async (
 
         const month =
             typeof req.query.month === "string" &&
-            req.query.month.trim() !== ""
+                req.query.month.trim() !== ""
                 ? Number(req.query.month)
                 : currentDate.getMonth() + 1;
 
         const year =
             typeof req.query.year === "string" &&
-            req.query.year.trim() !== ""
+                req.query.year.trim() !== ""
                 ? Number(req.query.year)
                 : currentDate.getFullYear();
 

@@ -14,7 +14,7 @@ import {
 import { useAuthStore } from "@/store/auth.store";
 import { getCompanies } from "@/services/company.service";
 import { getLeaveReport } from "@/services/leaveReport.service";
-import { isSuperAdminRole } from "@/utilis/roleUtils";
+import { getUserName, getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
 
 import type {
     LeaveReportItem,
@@ -105,7 +105,7 @@ const downloadCSV = (items: LeaveReportItem[]) => {
     ];
 
     const rows = items.map((item) => [
-        item.user.name ?? "",
+        getUserName(item.user) ?? "",
         item.user.employeeCode ?? "",
         item.user.email,
         item.user.branch?.name ?? "",
@@ -144,7 +144,8 @@ const downloadCSV = (items: LeaveReportItem[]) => {
 
 const LeaveReport = () => {
     const user = useAuthStore((state) => state.user);
-    const isSuperAdmin = isSuperAdminRole(user?.role?.name);
+    const userRole = getUserRole(user);
+    const isSuperAdmin = isSuperAdminRole(userRole);
 
     // Company
     const [companies, setCompanies] = useState<Company[]>([]);
@@ -399,9 +400,8 @@ const LeaveReport = () => {
                         }
                     >
                         <RefreshCw
-                            className={` ${
-                                refreshing ? "animate-spin" : ""
-                            }`}
+                            className={` ${refreshing ? "animate-spin" : ""
+                                }`}
                         />
                         <span>Refresh</span>
                     </Button>
@@ -566,7 +566,7 @@ const LeaveReport = () => {
                                             {/* Employee */}
                                             <TableCell>
                                                 <div className="font-medium">
-                                                    {item.user.name ?? "N/A"}
+                                                    {getUserName(item.user, "N/A")}
                                                 </div>
                                                 <div className="text-xs text-muted-foreground">
                                                     {item.user.email}
@@ -671,7 +671,7 @@ const LeaveReport = () => {
                                                 }
                                                 className={
                                                     page >=
-                                                    report.pagination.totalPages
+                                                        report.pagination.totalPages
                                                         ? "pointer-events-none opacity-50"
                                                         : "cursor-pointer"
                                                 }

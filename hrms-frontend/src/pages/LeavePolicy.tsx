@@ -35,6 +35,7 @@ import {
 } from "@/services/leaveType.service";
 import { useAuthStore } from "@/store/auth.store";
 import {
+    getUserRole,
     isEmployeeRole,
     isSuperAdminRole,
 } from "@/utilis/roleUtils";
@@ -64,8 +65,10 @@ const initialForm = {
 const LeavePolicy = () => {
     const { user } = useAuthStore();
 
-    const isSuperAdmin = isSuperAdminRole(user?.role?.name);
-    const canChangeStatus = !isEmployeeRole(user?.role?.name);
+    const userRole = getUserRole(user);
+
+    const isSuperAdmin = isSuperAdminRole(userRole);
+    const canChangeStatus = !isEmployeeRole(userRole);
 
     const [leaveTypes, setLeaveTypes] = React.useState<LeaveType[]>([]);
     const [selectedCompanyId, setSelectedCompanyId] =

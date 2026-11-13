@@ -10,8 +10,7 @@ import {
     sendDatabaseUnavailable,
 } from "../utilis/dbErrors.js";
 
-// const resolveCompanyId = (req: Request): string | null =>
-//     isSuperAdminRole(req.user?.role?.name) ? null : getCompanyId(req);
+
 
 const handleCategoryError = (
     res: Response,

@@ -44,16 +44,15 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuthStore } from "@/store/auth.store";
-import { isSuperAdminRole } from "@/utilis/roleUtils";
+import { getUserName, getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
 import { CompanySelector } from "../common/CompanySelector";
 
 const OnboardingList = () => {
     const navigate = useNavigate();
     const { user } = useAuthStore();
 
-    const isSuperAdmin = isSuperAdminRole(
-        user?.role?.name
-    );
+    const userRole = getUserRole(user);
+    const isSuperAdmin = isSuperAdminRole(userRole);
 
     const [selectedCompanyId, setSelectedCompanyId] =
         React.useState("");
@@ -142,7 +141,7 @@ const OnboardingList = () => {
         const search = searchQuery.toLowerCase();
 
         return (
-            item.user.name.toLowerCase().includes(search) ||
+            getUserName(item.user).toLowerCase().includes(search) ||
             (item.user.employeeCode ?? "").toLowerCase().includes(search) ||
             (item.user.designation ?? "").toLowerCase().includes(search)
         );
@@ -243,11 +242,11 @@ const OnboardingList = () => {
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>
-                            Reset Onboarding? {selectedOnboarding?.user.name}
+                            Reset Onboarding? {getUserName(selectedOnboarding?.user)}
                         </AlertDialogTitle>
 
                         <AlertDialogDescription>
-                            This will delete <span className="font-bold">{selectedOnboarding?.user.name}</span>'s current onboarding
+                            This will delete <span className="font-bold">{getUserName(selectedOnboarding?.user)}</span>'s current onboarding
                             checklist and reset the onboarding process. The employee
                             can then be started again using the latest configured
                             checklist templates.
@@ -337,7 +336,7 @@ const OnboardingList = () => {
                                     </TableCell>
 
                                     <TableCell>
-                                        {item.user.name}
+                                        {getUserName(item.user)}
                                     </TableCell>
 
                                     <TableCell>

@@ -1,0 +1,18 @@
+export const MODULES = {
+    EMPLOYEE: "employee",
+    COMPANY_USERS: "company-users",
+    ATTENDANCE: "attendance",
+    ATTENDANCE_LIVE: "attendance_live",
+    ATTENDANCE_LIST: "attendance_list",
+    LEAVE: "leave",
+    PAYROLL: "payroll",
+    COMPANY: "company",
+    CATEGORY: "category",
+    BRANCH: "branch",
+    GEO_FENCING: "geo_fencing",
+    HOLIDAY: "holiday",
+    LEAVE_APPROVAL: "leave_approval",
+    LEAVE_POLICY: "leave_policy",
+    ROLES: "roles",
+    SETTINGS: "settings",
+} as const;

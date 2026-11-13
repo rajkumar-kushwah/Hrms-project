@@ -1,6 +1,6 @@
 
 import React from "react";
-import * as XLSX from "xlsx";
+// import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import {
     FileSpreadsheet,
@@ -29,7 +29,7 @@ import {
 import { getOvertimeReport } from "@/services/overtimeReport.service";
 import { getCompanies } from "@/services/company.service";
 import { useAuthStore } from "@/store/auth.store";
-import { isSuperAdminRole } from "@/utilis/roleUtils";
+import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
 
 // Types
 
@@ -164,7 +164,8 @@ const getErrorMessage = (error: unknown): string => {
 
 const OvertimeReport = () => {
     const user = useAuthStore((state) => state.user);
-    const isSuperAdmin = isSuperAdminRole(user?.role?.name);
+    const userRole = getUserRole(user);
+    const isSuperAdmin = isSuperAdminRole(userRole);
 
     // Report states
 
@@ -350,56 +351,58 @@ const OvertimeReport = () => {
     };
 
     // Excel export
-
-    const handleExport = () => {
+    const handleExport = async () => {
         if (!records.length) {
-            toast.error(
-                "No overtime records available to export."
-            );
+            toast.error("No overtime records available to export.");
             return;
         }
 
-        const rows = records.map((record) => ({
-            Date: formatDate(record.date),
-            "Employee Code": record.employeeCode ?? "",
-            "Employee Name": record.employeeName,
-            Email: record.email,
-            Branch: record.branch,
-            Category: record.category,
-            "Working Hours": record.workingHours,
-            "Overtime Hours": record.overtimeHours,
-        }));
+        try {
+            const XLSX = await import("xlsx");
 
-        const worksheet = XLSX.utils.json_to_sheet(rows);
+            const rows = records.map((record) => ({
+                Date: formatDate(record.date),
+                "Employee Code": record.employeeCode ?? "",
+                "Employee Name": record.employeeName,
+                Email: record.email,
+                Branch: record.branch,
+                Category: record.category,
+                "Working Hours": record.workingHours,
+                "Overtime Hours": record.overtimeHours,
+            }));
 
-        worksheet["!cols"] = Object.keys(rows[0]).map((key) => ({
-            wch:
-                Math.max(
-                    key.length,
-                    ...rows.map((row) =>
-                        String(
-                            row[key as keyof typeof row] ?? ""
-                        ).length
-                    )
-                ) + 2,
-        }));
+            const worksheet = XLSX.utils.json_to_sheet(rows);
 
-        const workbook = XLSX.utils.book_new();
+            worksheet["!cols"] = Object.keys(rows[0]).map((key) => ({
+                wch:
+                    Math.max(
+                        key.length,
+                        ...rows.map((row) =>
+                            String(
+                                row[key as keyof typeof row] ?? ""
+                            ).length
+                        )
+                    ) + 2,
+            }));
 
-        XLSX.utils.book_append_sheet(
-            workbook,
-            worksheet,
-            "Overtime Report"
-        );
+            const workbook = XLSX.utils.book_new();
 
-        XLSX.writeFile(
-            workbook,
-            `overtime-report-${selectedMonth}.xlsx`
-        );
+            XLSX.utils.book_append_sheet(
+                workbook,
+                worksheet,
+                "Overtime Report"
+            );
 
-        toast.success("Overtime report exported successfully.");
+            XLSX.writeFile(
+                workbook,
+                `overtime-report-${selectedMonth}.xlsx`
+            );
+
+            toast.success("Overtime report exported successfully.");
+        } catch {
+            toast.error("Failed to export overtime report.");
+        }
     };
-
     // Summary cards
 
     const cards = [

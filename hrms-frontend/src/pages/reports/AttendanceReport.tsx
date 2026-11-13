@@ -1,6 +1,6 @@
 
 import React from "react";
-import * as XLSX from "xlsx";
+// import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { FileSpreadsheet, RefreshCw } from "lucide-react";
 
@@ -25,10 +25,11 @@ import {
 import { getAttendanceReport } from "@/services/attendanceReport.service";
 import { getCompanies } from "@/services/company.service";
 import { useAuthStore } from "@/store/auth.store";
-import { isSuperAdminRole } from "@/utilis/roleUtils";
+import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
 
-
+// ─────────────────────────────────────────────
 // Types
+// ─────────────────────────────────────────────
 
 interface Company {
   id: string;
@@ -78,6 +79,10 @@ interface Report {
   employees: EmployeeRow[];
 }
 
+// ─────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────
+
 const BRANCH_COLUMNS: {
   label: string;
   get: (row: BranchRow) => number;
@@ -88,7 +93,10 @@ const BRANCH_COLUMNS: {
     { label: "Half-day", get: (row) => row.halfDay },
     { label: "Absent", get: (row) => row.absent },
     { label: "Leave", get: (row) => row.leave },
-    { label: "Avg attendance %", get: (row) => row.avgAttendancePercent },
+    {
+      label: "Avg attendance %",
+      get: (row) => row.avgAttendancePercent,
+    },
   ];
 
 const EMPLOYEE_COLUMNS: {
@@ -99,7 +107,10 @@ const EMPLOYEE_COLUMNS: {
     { label: "Late", get: (row) => row.late },
     { label: "Half-day", get: (row) => row.halfDay },
     { label: "Absent", get: (row) => row.absent },
-    { label: "Leave", get: (row) => row.paidLeave + row.unpaidLeave },
+    {
+      label: "Leave",
+      get: (row) => row.paidLeave + row.unpaidLeave,
+    },
     { label: "Week off", get: (row) => row.weekOff },
     { label: "Hours", get: (row) => row.totalHours },
     { label: "Avg hrs/day", get: (row) => row.avgHours },
@@ -107,13 +118,27 @@ const EMPLOYEE_COLUMNS: {
   ];
 
 const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 const getYearOptions = () => {
   const currentYear = new Date().getFullYear();
-  return Array.from({ length: 5 }, (_, index) => currentYear - index);
+
+  return Array.from(
+    { length: 5 },
+    (_, index) => currentYear - index
+  );
 };
 
 const percentClass = (percent: number) =>
@@ -123,25 +148,50 @@ const percentClass = (percent: number) =>
       ? "bg-yellow-100 text-yellow-700"
       : "bg-red-100 text-red-700";
 
+// ─────────────────────────────────────────────
+// Component
+// ─────────────────────────────────────────────
+
 const AttendanceReport = () => {
   const today = new Date();
 
-  const [month, setMonth] = React.useState(today.getMonth() + 1);
-  const [year, setYear] = React.useState(today.getFullYear());
+  const user = useAuthStore((state) => state.user);
+  const userRole = getUserRole(user);
+  const isSuperAdmin = isSuperAdminRole(userRole);
+
+  const [month, setMonth] = React.useState(
+    today.getMonth() + 1
+  );
+
+  const [year, setYear] = React.useState(
+    today.getFullYear()
+  );
+
   const [report, setReport] = React.useState<Report | null>(null);
+
   const [companies, setCompanies] = React.useState<Company[]>([]);
-  const [selectedCompanyId, setSelectedCompanyId] = React.useState("");
-  const [companiesLoading, setCompaniesLoading] = React.useState(false);
+  const [selectedCompanyId, setSelectedCompanyId] =
+    React.useState("");
+
+  const [companiesLoading, setCompaniesLoading] =
+    React.useState(false);
+
   const [loading, setLoading] = React.useState(false);
   const [isSpinning, setIsSpinning] = React.useState(false);
 
-  // Adjust these selectors to match your existing auth store.
-  const user = useAuthStore((state) => state.user);
-  const isSuperAdmin = isSuperAdminRole(user?.role?.name);
+  // Prevent older API responses from replacing newer reports.
+  const requestIdRef = React.useRef(0);
 
-  // Load company list only for Super Admin.
+  // ─────────────────────────────────────────
+  // Load Companies
+  // ─────────────────────────────────────────
+
   React.useEffect(() => {
-    if (!isSuperAdmin) return;
+    if (!isSuperAdmin) {
+      setCompanies([]);
+      setSelectedCompanyId("");
+      return;
+    }
 
     let cancelled = false;
 
@@ -150,7 +200,7 @@ const AttendanceReport = () => {
 
       try {
         const response = await getCompanies();
-        const payload = response.data.data;
+        const payload = response.data?.data;
 
         const list: Company[] = Array.isArray(payload)
           ? payload
@@ -162,15 +212,27 @@ const AttendanceReport = () => {
 
         setCompanies(list);
 
-        if (list.length === 1) {
-          setSelectedCompanyId(list[0].id);
-        }
+        setSelectedCompanyId((current) => {
+          const currentExists = list.some(
+            (company) => company.id === current
+          );
+
+          if (current && currentExists) {
+            return current;
+          }
+
+          return list.length === 1 ? list[0].id : "";
+        });
       } catch {
         if (!cancelled) {
           toast.error("Failed to load companies.");
+          setCompanies([]);
+          setSelectedCompanyId("");
         }
       } finally {
-        if (!cancelled) setCompaniesLoading(false);
+        if (!cancelled) {
+          setCompaniesLoading(false);
+        }
       }
     };
 
@@ -181,9 +243,16 @@ const AttendanceReport = () => {
     };
   }, [isSuperAdmin]);
 
+  // ─────────────────────────────────────────
+  // Load Attendance Report
+  // ─────────────────────────────────────────
+
   const loadReport = React.useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+
     if (isSuperAdmin && !selectedCompanyId) {
       setReport(null);
+      setLoading(false);
       return;
     }
 
@@ -193,11 +262,24 @@ const AttendanceReport = () => {
       const response = await getAttendanceReport({
         month,
         year,
-        ...(isSuperAdmin ? { companyId: selectedCompanyId } : {}),
+        ...(isSuperAdmin
+          ? { companyId: selectedCompanyId }
+          : {}),
       });
 
-      setReport(response.data.data ?? null);
+      // Ignore stale responses.
+      if (requestId !== requestIdRef.current) {
+        return;
+      }
+
+      const reportData = response.data?.data ?? null;
+
+      setReport(reportData);
     } catch (error: unknown) {
+      if (requestId !== requestIdRef.current) {
+        return;
+      }
+
       setReport(null);
 
       const message =
@@ -216,29 +298,97 @@ const AttendanceReport = () => {
 
       toast.error(message);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [month, year, isSuperAdmin, selectedCompanyId]);
 
+  // ─────────────────────────────────────────
+  // Report Effect
+  // ─────────────────────────────────────────
+
   React.useEffect(() => {
     void loadReport();
+
+    return () => {
+      // Invalidate the previous request on dependency change/unmount.
+      requestIdRef.current += 1;
+    };
   }, [loadReport]);
 
-  const handleExport = () => {
-    if (!report) return;
+  // ─────────────────────────────────────────
+  // Filter Handlers
+  // ─────────────────────────────────────────
 
-    const toSheet = (rows: Record<string, string | number>[]) => {
-      const sheet = XLSX.utils.json_to_sheet(rows);
-      sheet["!cols"] = Object.keys(rows[0] ?? {}).map((key) => ({
+  const handleCompanyChange = (value: string) => {
+    // Immediately invalidate previous company request.
+    requestIdRef.current += 1;
+
+    setReport(null);
+    setLoading(true);
+    setSelectedCompanyId(value);
+  };
+
+  const handleMonthChange = (value: string) => {
+    requestIdRef.current += 1;
+
+    setReport(null);
+    setLoading(true);
+    setMonth(Number(value));
+  };
+
+  const handleYearChange = (value: string) => {
+    requestIdRef.current += 1;
+
+    setReport(null);
+    setLoading(true);
+    setYear(Number(value));
+  };
+
+  // ─────────────────────────────────────────
+  // Excel Export
+  // ─────────────────────────────────────────
+
+  const handleExport = async () => {
+    if (
+      !report ||
+      loading ||
+      (isSuperAdmin && !selectedCompanyId)
+    ) {
+      return;
+    }
+
+    if (report.month !== month || report.year !== year) {
+      toast.error("Please wait for the latest report to load.");
+      return;
+    }
+
+    // XLSX only loads when export is clicked
+    const XLSX = await import("xlsx");
+
+    const toSheet = (
+      rows: Record<string, string | number>[],
+      headers: string[]
+    ) => {
+      const sheet = XLSX.utils.json_to_sheet(rows, {
+        header: headers,
+      });
+
+      sheet["!cols"] = headers.map((key) => ({
         wch:
           Math.max(
             key.length,
-            ...rows.map((row) => String(row[key] ?? "").length)
+            ...rows.map((row) =>
+              String(row[key] ?? "").length
+            )
           ) + 2,
       }));
+
       return sheet;
     };
 
+    // Export the exact employee data currently displayed.
     const employeeRows = report.employees.map((employee) => ({
       Code: employee.employeeCode ?? "",
       Name: employee.name,
@@ -250,8 +400,10 @@ const AttendanceReport = () => {
         ])
       ),
       "Attendance %": employee.attendancePercent,
+      Holiday: employee.holiday,
     }));
 
+    // Export the exact branch summary currently displayed.
     const branchRows = report.byBranch.map((branch) => ({
       Branch: branch.name,
       ...Object.fromEntries(
@@ -260,93 +412,164 @@ const AttendanceReport = () => {
           column.get(branch),
         ])
       ),
+      "Total Hours": branch.totalHours,
+      "Unpaid Days": branch.unpaidDays,
     }));
 
     const workbook = XLSX.utils.book_new();
 
+    const employeeHeaders = [
+      "Code",
+      "Name",
+      "Branch",
+      ...EMPLOYEE_COLUMNS.map((column) => column.label),
+      "Attendance %",
+      "Holiday",
+    ];
+
+    const branchHeaders = [
+      "Branch",
+      ...BRANCH_COLUMNS.map((column) => column.label),
+      "Total Hours",
+      "Unpaid Days",
+    ];
+
     XLSX.utils.book_append_sheet(
       workbook,
-      toSheet(employeeRows),
+      toSheet(employeeRows, employeeHeaders),
       "Employees"
     );
 
     XLSX.utils.book_append_sheet(
       workbook,
-      toSheet(branchRows),
+      toSheet(branchRows, branchHeaders),
       "By Branch"
     );
 
-    XLSX.writeFile(
-      workbook,
-      `attendance-report-${month}-${year}.xlsx`
-    );
+    const fileName = `attendance-report-${month}-${year}.xlsx`;
+
+    XLSX.writeFile(workbook, fileName);
+
+    toast.success("Attendance report exported successfully.");
   };
 
+  // ─────────────────────────────────────────
+  // Refresh
+  // ─────────────────────────────────────────
+
   const handleRefresh = async () => {
+    if (
+      loading ||
+      isSpinning ||
+      (isSuperAdmin && !selectedCompanyId)
+    ) {
+      return;
+    }
+
     setIsSpinning(true);
 
     try {
-      await Promise.all([
-        loadReport(),
-        new Promise((resolve) => setTimeout(resolve, 700)),
-      ]);
+      await loadReport();
     } finally {
       setIsSpinning(false);
     }
   };
 
+  // ─────────────────────────────────────────
+  // Summary Cards
+  // ─────────────────────────────────────────
+
   const cards = report
     ? [
-      { label: "Employees", value: report.totals.employeeCount },
+      {
+        label: "Employees",
+        value: report.totals.employeeCount,
+      },
       {
         label: "Avg attendance",
         value: `${report.totals.avgAttendancePercent}%`,
       },
-      { label: "Present days", value: report.totals.present },
-      { label: "Late marks", value: report.totals.late },
-      { label: "Absent days", value: report.totals.absent },
-      { label: "Total hours", value: `${report.totals.totalHours}h` },
+      {
+        label: "Present days",
+        value: report.totals.present,
+      },
+      {
+        label: "Late marks",
+        value: report.totals.late,
+      },
+      {
+        label: "Absent days",
+        value: report.totals.absent,
+      },
+      {
+        label: "Total hours",
+        value: `${report.totals.totalHours}h`,
+      },
     ]
     : [];
 
+  // ─────────────────────────────────────────
+  // UI
+  // ─────────────────────────────────────────
+
   return (
     <div className="space-y-4 p-1">
+
+      {/* HEADER */}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           Monthly attendance summary, same rules as payroll
         </p>
 
-        <Button className="cursor-pointer"
+        <Button
+          className="cursor-pointer"
           variant="add"
           size="sm"
           onClick={handleRefresh}
-          disabled={isSpinning || loading || (isSuperAdmin && !selectedCompanyId)}
+          disabled={
+            isSpinning ||
+            loading ||
+            (isSuperAdmin && !selectedCompanyId)
+          }
         >
           <RefreshCw
-            className={`mr-2 h-4 w-4 ${isSpinning ? "animate-spin" : ""}`}
+            className={`mr-2 h-4 w-4 ${isSpinning ? "animate-spin" : ""
+              }`}
           />
           Refresh
         </Button>
       </div>
 
+      {/* FILTERS */}
+
       <div className="flex flex-wrap items-center justify-end gap-2">
+
         {isSuperAdmin && (
           <Select
             value={selectedCompanyId}
-            onValueChange={setSelectedCompanyId}
+            onValueChange={handleCompanyChange}
             disabled={companiesLoading}
           >
             <SelectTrigger className="w-full sm:w-[220px]">
               <SelectValue
                 placeholder={
-                  companiesLoading ? "Loading companies..." : "Select company"
+                  companiesLoading
+                    ? "Loading companies..."
+                    : companies.length === 0
+                      ? "No companies available"
+                      : "Select company"
                 }
               />
             </SelectTrigger>
 
             <SelectContent position="popper">
               {companies.map((company) => (
-                <SelectItem className="cursor-pointer" key={company.id} value={company.id}>
+                <SelectItem
+                  className="cursor-pointer"
+                  key={company.id}
+                  value={company.id}
+                >
                   {company.name}
                 </SelectItem>
               ))}
@@ -356,14 +579,18 @@ const AttendanceReport = () => {
 
         <Select
           value={String(month)}
-          onValueChange={(value) => setMonth(Number(value))}
+          onValueChange={handleMonthChange}
         >
           <SelectTrigger className="w-[145px]">
             <SelectValue placeholder="Month" />
           </SelectTrigger>
+
           <SelectContent position="popper">
             {MONTHS.map((label, index) => (
-              <SelectItem key={label} value={String(index + 1)}>
+              <SelectItem
+                key={label}
+                value={String(index + 1)}
+              >
                 {label}
               </SelectItem>
             ))}
@@ -372,29 +599,40 @@ const AttendanceReport = () => {
 
         <Select
           value={String(year)}
-          onValueChange={(value) => setYear(Number(value))}
+          onValueChange={handleYearChange}
         >
           <SelectTrigger className="w-[100px]">
             <SelectValue placeholder="Year" />
           </SelectTrigger>
+
           <SelectContent position="popper">
             {getYearOptions().map((value) => (
-              <SelectItem key={value} value={String(value)}>
+              <SelectItem
+                key={value}
+                value={String(value)}
+              >
                 {value}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        <Button className="cursor-pointer"
+        <Button
+          className="cursor-pointer"
           variant="add"
           onClick={handleExport}
-          disabled={!report || loading}
+          disabled={
+            !report ||
+            loading ||
+            (isSuperAdmin && !selectedCompanyId)
+          }
         >
           <FileSpreadsheet className="mr-2 h-4 w-4" />
           Export Excel
         </Button>
       </div>
+
+      {/* REPORT CONTENT */}
 
       {isSuperAdmin && !selectedCompanyId ? (
         <div className="py-12 text-center text-sm text-muted-foreground">
@@ -411,16 +649,29 @@ const AttendanceReport = () => {
         </div>
       ) : (
         <>
+          {/* SUMMARY CARDS */}
+
           <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
             {cards.map((card) => (
-              <Card key={card.label} className="p-3">
-                <p className="text-xs text-muted-foreground">{card.label}</p>
-                <p className="text-2xl font-bold">{card.value}</p>
+              <Card
+                key={card.label}
+                className="p-3"
+              >
+                <p className="text-xs text-muted-foreground">
+                  {card.label}
+                </p>
+
+                <p className="text-2xl font-bold">
+                  {card.value}
+                </p>
               </Card>
             ))}
           </div>
 
           <div className="relative">
+
+            {/* REFRESH OVERLAY */}
+
             {loading && (
               <div className="absolute inset-0 z-10 flex items-start justify-center bg-background/60 pt-16 backdrop-blur-[1px]">
                 <div className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-sm">
@@ -429,6 +680,8 @@ const AttendanceReport = () => {
                 </div>
               </div>
             )}
+
+            {/* BRANCH SUMMARY */}
 
             <div className="mb-6">
               <h3 className="mb-2 text-sm font-medium">
@@ -439,9 +692,15 @@ const AttendanceReport = () => {
                 <Table>
                   <TableHeader className="bg-muted">
                     <TableRow>
-                      <TableHead>Branch</TableHead>
+                      <TableHead>
+                        Branch
+                      </TableHead>
+
                       {BRANCH_COLUMNS.map((column) => (
-                        <TableHead key={column.label} className="text-right">
+                        <TableHead
+                          key={column.label}
+                          className="text-right"
+                        >
                           {column.label}
                         </TableHead>
                       ))}
@@ -464,6 +723,7 @@ const AttendanceReport = () => {
                           <TableCell className="font-medium">
                             {branch.name}
                           </TableCell>
+
                           {BRANCH_COLUMNS.map((column) => (
                             <TableCell
                               key={column.label}
@@ -480,6 +740,8 @@ const AttendanceReport = () => {
               </div>
             </div>
 
+            {/* EMPLOYEE DETAILS */}
+
             <div>
               <h3 className="mb-2 text-sm font-medium">
                 Employee-wise Detail
@@ -489,14 +751,26 @@ const AttendanceReport = () => {
                 <Table>
                   <TableHeader className="bg-muted">
                     <TableRow>
-                      <TableHead>Employee</TableHead>
-                      <TableHead>Branch</TableHead>
+                      <TableHead>
+                        Employee
+                      </TableHead>
+
+                      <TableHead>
+                        Branch
+                      </TableHead>
+
                       {EMPLOYEE_COLUMNS.map((column) => (
-                        <TableHead key={column.label} className="text-right">
+                        <TableHead
+                          key={column.label}
+                          className="text-right"
+                        >
                           {column.label}
                         </TableHead>
                       ))}
-                      <TableHead className="text-right">Attendance</TableHead>
+
+                      <TableHead className="text-right">
+                        Attendance
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
 
@@ -514,7 +788,10 @@ const AttendanceReport = () => {
                       report.employees.map((employee) => (
                         <TableRow key={employee.userId}>
                           <TableCell>
-                            <p className="font-medium">{employee.name}</p>
+                            <p className="font-medium">
+                              {employee.name}
+                            </p>
+
                             <p className="text-xs text-muted-foreground">
                               {employee.employeeCode ?? "—"}
                             </p>

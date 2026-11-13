@@ -7,7 +7,7 @@ import {
 import { prisma } from "../config/db.js";
 
 const resolveCompanyId = (req: Request): string | null => {
-    const superAdmin = isSuperAdminRole(req.user?.role?.name);
+    const superAdmin = isSuperAdminRole(req.user);
 
     if (superAdmin) {
         return typeof req.query.companyId === "string"
@@ -20,7 +20,7 @@ const resolveCompanyId = (req: Request): string | null => {
 
 export const getSettings = async (req: Request, res: Response) => {
     try {
-        const superAdmin = isSuperAdminRole(req.user?.role?.name);
+        const superAdmin = isSuperAdminRole(req.user);
         const companyId = resolveCompanyId(req);
 
         if (!companyId) {
@@ -62,7 +62,7 @@ export const getSettings = async (req: Request, res: Response) => {
 
 export const updateSettings = async (req: Request, res: Response) => {
     try {
-        const superAdmin = isSuperAdminRole(req.user?.role?.name);
+        const superAdmin = isSuperAdminRole(req.user);
         const companyId = resolveCompanyId(req);
 
         if (!companyId) {

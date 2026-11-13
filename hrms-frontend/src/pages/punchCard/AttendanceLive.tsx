@@ -28,14 +28,15 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { useAuthStore } from "@/store/auth.store";
-import { isSuperAdminRole } from "@/utilis/roleUtils";
+import { getUserName, getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
 import { CompanySelector } from "@/pages/common/CompanySelector";
 import { socket } from "@/lib/socket";
 
 const AttendanceLive = () => {
     const { user } = useAuthStore();
 
-    const isSuperAdmin = isSuperAdminRole(user?.role?.name);
+    const userRole = getUserRole(user);
+    const isSuperAdmin = isSuperAdminRole(userRole);
 
     const [attendances, setAttendances] = React.useState<Attendance[]>([]);
     const [loading, setLoading] = React.useState(false);
@@ -214,7 +215,7 @@ const AttendanceLive = () => {
         if (!searchValue) return true;
 
         return (
-            att.user?.name?.toLowerCase().includes(searchValue) ||
+            getUserName(att.user, "").toLowerCase().includes(searchValue) ||
             att.user?.employeeCode?.toLowerCase().includes(searchValue) ||
             att.user?.designation?.toLowerCase().includes(searchValue) ||
             att.branch?.name?.toLowerCase().includes(searchValue) ||
@@ -425,7 +426,7 @@ const AttendanceLive = () => {
                                         <TableCell>
                                             <div className="flex flex-col">
                                                 <span className="text-sm font-medium">
-                                                    {att.user?.name ?? "—"}
+                                                    {getUserName(att.user, "—")}
                                                 </span>
                                                 <span className="text-xs text-muted-foreground">
                                                     {att.user?.employeeCode ?? "—"}

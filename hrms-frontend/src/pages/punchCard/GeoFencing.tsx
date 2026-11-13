@@ -25,7 +25,7 @@ import {
 
 import { getGeoFencingOverview } from "@/services/branch.service";
 import { useAuthStore } from "@/store/auth.store";
-import { isSuperAdminRole } from "@/utilis/roleUtils";
+import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
 import { CompanySelector } from "@/pages/common/CompanySelector";
 import { Button } from "@/components/ui/button";
 
@@ -54,7 +54,8 @@ interface GeoFenceBranch {
 
 const GeoFencing = () => {
     const { user } = useAuthStore();
-    const isSuperAdmin = isSuperAdminRole(user?.role?.name);
+    const userRole = getUserRole(user);
+    const isSuperAdmin = isSuperAdminRole(userRole);
 
     const [branches, setBranches] = React.useState<GeoFenceBranch[]>([]);
     const [loading, setLoading] = React.useState(false);

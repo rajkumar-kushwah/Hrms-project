@@ -23,6 +23,7 @@ import {
 import { getMonthlyAttendanceSheet } from "@/services/attendance.service";
 import { getCompanies } from "@/services/company.service";
 import { useAuthStore } from "@/store/auth.store";
+import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
 
 // --------------------------------------------------
 // Types
@@ -189,12 +190,8 @@ const MonthlySheet = () => {
 
     const user = useAuthStore((state) => state.user);
 
-    const roleName = String(user?.role?.name ?? "")
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, "_");
-
-    const isSuperAdmin = roleName === "super_admin";
+    const userRole = getUserRole(user);
+    const isSuperAdmin = isSuperAdminRole(userRole);
 
     const [month, setMonth] = React.useState(
         today.getMonth() + 1

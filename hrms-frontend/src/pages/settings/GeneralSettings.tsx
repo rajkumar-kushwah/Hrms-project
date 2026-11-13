@@ -22,18 +22,16 @@ import { useCompanyStore } from "@/store/company.store";
 import { CompanySelector } from "@/pages/common/CompanySelector";
 
 import type { Company } from "@/types/company.types";
-
+import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
 const GeneralSettings = () => {
     const { user } = useAuthStore();
 
+    const userRole = getUserRole(user);
+    const isSuperAdmin = isSuperAdminRole(userRole);
+
+
     const [selectedCompanyId, setSelectedCompanyId] = React.useState("");
 
-    const roleName = user?.role?.name
-        ?.trim()
-        .toLowerCase()
-        .replace(/\s+/g, "_");
-
-    const isSuperAdmin = roleName === "super_admin";
 
     const [company, setCompany] = React.useState<Company | null>(null);
     const [loading, setLoading] = React.useState(true);

@@ -36,6 +36,7 @@ import {
 import { getLeaveTypes } from "@/services/leaveType.service";
 import { useAuthStore } from "@/store/auth.store";
 import {
+    getUserRole,
     isAdminRole,
     isSuperAdminRole,
 } from "@/utilis/roleUtils";
@@ -45,8 +46,10 @@ import { CompanySelector } from "@/pages/common/CompanySelector.tsx";
 const LeaveRequestPage = () => {
     const { user } = useAuthStore();
 
-    const isSuperAdmin = isSuperAdminRole(user?.role?.name);
-    const canChangeStatus = !isAdminRole(user?.role?.name);
+    const userRole = getUserRole(user);
+
+    const isSuperAdmin = isSuperAdminRole(userRole);
+    const canChangeStatus = !isAdminRole(userRole);
 
     const [selectedCompanyId, setSelectedCompanyId] =
         React.useState("");

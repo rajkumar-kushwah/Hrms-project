@@ -33,11 +33,12 @@ import { getCategories } from "@/services/category.service";
 import { getRoles } from "@/services/role.service";
 import { useAuthStore } from "@/store/auth.store";
 import { employeeSchema, updateEmployeeSchema } from "@/validation/employee.validation";
-import { isAdminRole, isSuperAdminRole } from "@/utilis/roleUtils";
+import { isAdminRole, isSuperAdminRole, getUserRole, formatRole } from "@/utilis/roleUtils";
 import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { startOnboarding } from "@/services/onboarding.service";
+
 
 const fieldTabMap: Record<string, string> = {
     name: "basic",
@@ -117,9 +118,9 @@ const AddEmployeeDialog = ({
     selectedCompanyId,
 }: Props) => {
     const { user } = useAuthStore();
-
-    const isSuperAdmin = isSuperAdminRole(user?.role?.name);
-    const isCompanyAdmin = isAdminRole(user?.role?.name);
+    const userRole = getUserRole(user);
+    const isSuperAdmin = isSuperAdminRole(userRole);
+    const isCompanyAdmin = isAdminRole(userRole);
     const isEditMode = Boolean(editEmployee);
 
     // Edit mode: employee ki apni company ko priority do.
@@ -215,7 +216,7 @@ const AddEmployeeDialog = ({
         setActiveTab("basic");
 
         if (editEmployee) {
-           
+
             setForm({
                 ...initialForm,
                 ...editEmployee,
@@ -561,7 +562,7 @@ const AddEmployeeDialog = ({
                                     <SelectContent position="popper" align="start">
                                         {filteredRoles.map((role) => (
                                             <SelectItem key={role.id} value={String(role.id)}>
-                                                {role.name}
+                                                   {formatRole(role)}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

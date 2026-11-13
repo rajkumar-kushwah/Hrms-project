@@ -4,7 +4,6 @@ import bcrypt from "bcrypt";
 import {
     isAdminRole,
     isCompanyAdminRole,
-    normalizeRoleName,
 } from "../utilis/roleUtils.js";
 
 // ─────────────────────────────────────────────
@@ -87,9 +86,7 @@ export const createEmployee = async (
         throw new Error("Company selection is required");
     }
 
-    const normalizedRole = normalizeRoleName(requestingUserRole);
-
-    const isCompanyAdmin = isCompanyAdminRole(normalizedRole);
+    const isCompanyAdmin = isCompanyAdminRole(requestingUserRole);
 
     // Email duplicate check
     const existingUser = await prisma.user.findUnique({
@@ -400,8 +397,7 @@ export const getEmployees = async (
     requestingUserId: string,
     requestingUserRole: string
 ) => {
-    const normalizedRole = normalizeRoleName(requestingUserRole);
-    const isAdmin = isAdminRole(normalizedRole);
+    const isAdmin = isAdminRole(requestingUserRole);
 
     // Super Admin can see all companies when no company is selected.
     // Company Admin should always receive their own company ID.
@@ -413,7 +409,7 @@ export const getEmployees = async (
     });
 
     const companyAdminRoleIds = roles
-        .filter((role) => isCompanyAdminRole(role.name))
+        .filter((role) => isCompanyAdminRole(role))
         .map((role) => role.id);
 
     const employees = await prisma.user.findMany({
@@ -539,8 +535,7 @@ export const getEmployeeById = async (
     requestingUserRole: string,
     requestingCompanyId: string
 ) => {
-    const normalizedRole = normalizeRoleName(requestingUserRole);
-    const isAdmin = isAdminRole(normalizedRole);
+    const isAdmin = isAdminRole(requestingUserRole);
 
     // Employee can view only own profile.
     if (!isAdmin && requestingUserId !== id) {
@@ -638,9 +633,9 @@ export const updateEmployee = async (
     requestingCompanyId: string,
     data: UpdateEmployeeData
 ) => {
-    const normalizedRole = normalizeRoleName(requestingUserRole);
-    const isAdmin = isAdminRole(normalizedRole);
-    const isCompanyAdmin = isCompanyAdminRole(normalizedRole);
+
+    const isAdmin = isAdminRole(requestingUserRole);
+    const isCompanyAdmin = isCompanyAdminRole(requestingUserRole);
     const isSelf = requestingUserId === id;
 
     const existing = await prisma.user.findUnique({

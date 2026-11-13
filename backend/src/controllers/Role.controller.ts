@@ -13,7 +13,7 @@ import {
 // Sabhi roles
 export const getCompanyRoles = async (req: Request, res: Response) => {
     try {
-        const superAdmin = isSuperAdminRole(req.user?.role?.name);
+        const superAdmin = isSuperAdminRole(req.user);
         const companyId = getCompanyId(req);
 
         const roles = await RoleService.getCompanyRoles(
@@ -44,7 +44,7 @@ export const getCompanyRoles = async (req: Request, res: Response) => {
 export const createRole = async (req: Request, res: Response) => {
     try {
         const companyId = getCompanyId(req);
-        const superAdmin = isSuperAdminRole(req.user?.role?.name);
+        const superAdmin = isSuperAdminRole(req.user);
 
         if (!companyId && !superAdmin) {
             return res.status(400).json({
@@ -103,7 +103,7 @@ export const updateRolePermissions = async (req: Request, res: Response) => {
 
         const { permissions, name, description } = req.body;
 
-        const superAdmin = isSuperAdminRole(req.user?.role?.name);
+        const superAdmin = isSuperAdminRole(req.user);
         const companyId = superAdmin ? null : getCompanyId(req);
 
         if (!superAdmin && !companyId) {

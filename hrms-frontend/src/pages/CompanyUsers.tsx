@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { getCompanyUsers, resetUserPassword, toggleUserStatus } from "@/services/companyUser.service";
 import type { CompanyUser } from "@/types/companyuser.types";
 import { useAuthStore } from "@/store/auth.store";
-
+import { formatRole, getUserName } from "@/utilis/roleUtils";
 
 
 const Users = () => {
@@ -49,7 +49,7 @@ const Users = () => {
     };
     const filteredCompaniesUsers = users.filter((user) => {
         return (
-            user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            getUserName(user).toLowerCase().includes(searchQuery.toLowerCase()) ||
             user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
             user.company?.name.toLowerCase().includes(searchQuery.toLowerCase())
         );
@@ -93,16 +93,7 @@ const Users = () => {
         }
     };
 
-    const formatRole = (role: string) => {
-        if (!role) return "User";
 
-        return role
-            .trim()
-            .toLowerCase()
-            .split("_")
-            .map((r) => r.charAt(0).toUpperCase() + r.slice(1))
-            .join(" ");
-    };
 
     return (
         <div className="flex flex-col gap-4">
@@ -204,12 +195,12 @@ const Users = () => {
                                 {filteredCompaniesUsers.map((user, index) => (
                                     <TableRow key={user.id}>
                                         <TableCell>{index + 1}</TableCell>
-                                        <TableCell>{user.name}</TableCell>
+                                        <TableCell>{getUserName(user)}</TableCell>
                                         <TableCell>{user.email}</TableCell>
                                         <TableCell>{user.company?.name ?? "—"}</TableCell>
                                         <TableCell>
                                             <Badge variant="outline">
-                                                {user.role ? formatRole(user.role.name) : "—"}
+                                                {formatRole(user.role)}
                                             </Badge>
                                         </TableCell>
                                         <TableCell>

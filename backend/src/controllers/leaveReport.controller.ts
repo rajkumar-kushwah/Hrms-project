@@ -14,14 +14,8 @@ import {
     isDatabaseUnavailable,
     sendDatabaseUnavailable,
 } from "../utilis/dbErrors.js";
+import type { AuthenticatedUser } from "../types/user.types.js";
 
-type AuthenticatedUser = {
-    id: string;
-    companyId: string | null;
-    role?: {
-        name: string;
-    } | null;
-};
 
 type AuthenticatedRequest = Request & {
     user?: AuthenticatedUser;
@@ -63,8 +57,8 @@ export const getLeaveReport = async (
 
         const filters = parsed.data;
 
-        const admin = isAdminRole(user.role?.name);
-        const superAdmin = isSuperAdminRole(user.role?.name);
+        const admin = isAdminRole(user);
+        const superAdmin = isSuperAdminRole(user);
 
         if (!admin) {
             return res.status(403).json({

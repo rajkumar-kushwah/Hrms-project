@@ -1,5 +1,9 @@
 import type { Request, Response } from "express";
 import { prisma } from "../config/db.js";
+import {
+    isEmployeeRole,
+    isSuperAdminRole,
+} from "../utilis/roleUtils.js";
 
 // check in controller
 
@@ -23,9 +27,7 @@ export const checkIn = async (req: Request, res: Response) => {
             }
         });
 
-        const roles = user?.role ? [user.role.name] : [];
-
-        if (!roles.includes("EMPLOYEE")) {
+        if (!isEmployeeRole(user?.role)) {
             return res.status(403).json({
                 message: "Only employees can check in"
             });
@@ -142,9 +144,7 @@ export const checkOut = async (req: Request, res: Response) => {
             }
         });
 
-        const roles = user?.role ? [user.role.name] : [];
-
-        if (!roles.includes("EMPLOYEE")) {
+        if (!isEmployeeRole(user?.role)) {
             return res.status(403).json({
                 message: "Only employees can check out"
             })
@@ -247,8 +247,6 @@ export const getAttendance = async (req: Request, res: Response) => {
             }
         });
 
-        // const role = user?.roles?.[0]?.name;
-        const role = user?.role ? [user.role.name] : [];
 
         // checkin / checkout data fetch and condition
         const start = new Date();
@@ -277,7 +275,7 @@ export const getAttendance = async (req: Request, res: Response) => {
 
         const companyId = (req.session as any).companyId;
         //  SUPER ADMIN → ALL DATA
-        if (role.includes("SUPER_ADMIN")) {
+        if (isSuperAdminRole(user?.role)) {
             data = await prisma.attendance.findMany({
                 where: { companyId },
                 include: {
@@ -396,12 +394,12 @@ export const filterAttendance = async (req: Request, res: Response) => {
             include: { role: true },
         });
 
-        const roles = user?.role ? [user.role.name] : [];
+
         // base where
         let where: any = { companyId: (req.session as any).companyId };
 
         //  NORMAL USER restriction
-        if (!roles.includes("SUPER_ADMIN")) {
+        if (isSuperAdminRole(user?.role)) {
             where.userId = userId;
         }
 

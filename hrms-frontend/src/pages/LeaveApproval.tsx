@@ -42,6 +42,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/store/auth.store";
 import {
+    getUserName,
+    getUserRole,
     isEmployeeRole,
     isSuperAdminRole,
 } from "@/utilis/roleUtils";
@@ -50,8 +52,10 @@ import { CompanySelector } from "@/pages/common/CompanySelector";
 const LeaveApproval = () => {
     const { user } = useAuthStore();
 
-    const isEmployee = isEmployeeRole(user?.role?.name);
-    const isSuperAdmin = isSuperAdminRole(user?.role?.name);
+    const userRole = getUserRole(user);
+
+    const isEmployee = isEmployeeRole(userRole);
+    const isSuperAdmin = isSuperAdminRole(userRole);
 
     const [selectedCompanyId, setSelectedCompanyId] = React.useState("");
     const [leaves, setLeaves] = React.useState<LeaveRequest[]>([]);
@@ -229,7 +233,7 @@ const LeaveApproval = () => {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>
-                            Reject Leave — {selectedLeave?.user?.name}
+                            Reject Leave —  {getUserName(selectedLeave?.user)}
                         </DialogTitle>
                     </DialogHeader>
 
@@ -258,7 +262,7 @@ const LeaveApproval = () => {
 
                         <DialogDescription>
                             Are you sure you want to revoke{" "}
-                            <strong>{leaveToRevoke?.user?.name}</strong>'s approved{" "}
+                            <strong>{getUserName(leaveToRevoke?.user)}</strong>'s approved{" "}
                             <strong>{leaveToRevoke?.leaveType?.name}</strong> from{" "}
                             {leaveToRevoke &&
                                 new Date(leaveToRevoke.startDate).toLocaleDateString("en-IN")}{" "}
@@ -331,7 +335,7 @@ const LeaveApproval = () => {
 
                                         <TableCell>
                                             <p className="font-medium">
-                                                {leave.user?.name}
+                                                {getUserName(leave.user)}
                                             </p>
                                             <p className="text-xs text-muted-foreground">
                                                 {leave.user?.employeeCode}

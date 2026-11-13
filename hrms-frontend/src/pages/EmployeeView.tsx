@@ -25,6 +25,7 @@ import {
     TabsList,
     TabsTrigger,
 } from "@/components/ui/tabs";
+import { formatRole, getRoleName } from "@/utilis/roleUtils";
 
 
 const EmployeeView = () => {
@@ -45,7 +46,7 @@ const EmployeeView = () => {
             try {
                 setLoading(true);
 
-                const res = await getEmployeeById(id,companyId);
+                const res = await getEmployeeById(id, companyId);
                 setEmployee(res.data.data);
             } catch (err: any) {
                 const message = err?.message ||
@@ -133,7 +134,7 @@ const EmployeeView = () => {
                             </h2>
 
                             <p className="text-muted-foreground text-sm">
-                                {employee.designation ?? employee.role?.name}{" "}
+                                {employee.designation || formatRole(employee.role)}{" "}
                                 • {employee.employeeCode ?? "—"}
                             </p>
 
@@ -207,7 +208,7 @@ const EmployeeView = () => {
                         <InfoItem
                             icon={<Briefcase className="h-4 w-4" />}
                             label="Role"
-                            value={employee.role?.name}
+                            value={getRoleName(employee.role)}
                         />
 
                         <InfoItem

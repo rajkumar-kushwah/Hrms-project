@@ -49,7 +49,7 @@ export const getOvertimeReport = async (
         }
 
         // 3. Check Super Admin role using role name
-        const isSuperAdmin = isSuperAdminRole(user.role?.name);
+        const isSuperAdmin = isSuperAdminRole(user);
 
         // 4. Resolve company ID according to user role
         let companyId: string;

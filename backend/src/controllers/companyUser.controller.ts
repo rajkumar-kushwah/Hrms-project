@@ -2,17 +2,11 @@ import type { Request, Response } from "express";
 import { prisma } from "../config/db.js";
 import bcrypt from "bcrypt";
 
-// ─────────────────────────────────────────────
-// Normalize Role Name
-// ─────────────────────────────────────────────
-
-const normalizeRoleName = (role?: string | null) => {
-    return role
-        ?.trim()
-        .toLowerCase()
-        .replace(/\s+/g, "_")
-        .replace(/_+/g, "_");
-};
+import {
+    getRoleName,
+    isSuperAdminRole,
+    isCompanyAdminRole,
+} from "../utilis/roleUtils.js";
 
 
 // ─────────────────────────────────────────────
@@ -21,7 +15,7 @@ const normalizeRoleName = (role?: string | null) => {
 
 export const getUsers = async (req: Request, res: Response) => {
     try {
-        const userRoleName = normalizeRoleName(req.user?.role?.name);
+        const userRoleName = getRoleName(req.user);
         const companyId = req.user?.companyId;
 
         if (!userRoleName) {
@@ -48,11 +42,7 @@ export const getUsers = async (req: Request, res: Response) => {
         });
 
         const companyAdminRoleIds = roles
-            .filter((role) => {
-                const normalizedRole = normalizeRoleName(role.name);
-
-                return normalizedRole === "company_admin";
-            })
+            .filter((role) => isCompanyAdminRole(role))
             .map((role) => role.id);
 
         if (companyAdminRoleIds.length === 0) {
@@ -68,7 +58,7 @@ export const getUsers = async (req: Request, res: Response) => {
 
         const whereClause = {
             companyId:
-                userRoleName === "super_admin"
+                isSuperAdminRole(req.user)
                     ? { not: null }
                     : companyId,
 
@@ -149,9 +139,7 @@ export const toggleUserStatus = async (
             });
         }
 
-        const requestingRoleName = normalizeRoleName(
-            requestingUser.role?.name
-        );
+        const requestingRoleName = getRoleName(requestingUser);
 
         if (!requestingRoleName) {
             return res.status(403).json({
@@ -195,7 +183,7 @@ export const toggleUserStatus = async (
         // ─────────────────────────────────────
 
         if (
-            requestingRoleName !== "super_admin" &&
+            !isSuperAdminRole(requestingUser) &&
             user.companyId !== requestingUser.companyId
         ) {
             return res.status(403).json({
@@ -221,11 +209,10 @@ export const toggleUserStatus = async (
         return res.status(200).json({
             success: true,
 
-            message: `User ${
-                updated.isActive
-                    ? "activated"
-                    : "deactivated"
-            } successfully`,
+            message: `User ${updated.isActive
+                ? "activated"
+                : "deactivated"
+                } successfully`,
 
             data: {
                 id: updated.id,

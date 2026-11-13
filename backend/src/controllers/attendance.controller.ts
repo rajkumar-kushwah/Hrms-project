@@ -9,7 +9,7 @@ import {
 import {
     isAdminRole,
     isSuperAdminRole,
-    normalizeRoleName,
+    isEmployeeRole,
     getCompanyId,
 } from "../utilis/roleUtils.js";
 import { prisma } from "../config/db.js";
@@ -180,16 +180,15 @@ export const getMyAttendance = async (req: Request, res: Response) => {
 
 export const getAllAttendance = async (req: Request, res: Response) => {
     try {
-        const roleName = req.user?.role?.name;
 
-        if (!isAdminRole(roleName)) {
+        if (!isAdminRole(req.user)) {
             return res.status(403).json({
                 success: false,
                 message: "Not authorized",
             });
         }
 
-        const superAdmin = isSuperAdminRole(roleName);
+        const superAdmin = isSuperAdminRole(req.user);
 
         const companyId = superAdmin
             ? typeof req.query.companyId === "string"
@@ -246,16 +245,15 @@ export const getAllAttendance = async (req: Request, res: Response) => {
 // Get live attendance
 export const getLiveAttendance = async (req: Request, res: Response) => {
     try {
-        const roleName = req.user?.role?.name;
 
-        if (!isAdminRole(roleName)) {
+        if (!isAdminRole(req.user)) {
             return res.status(403).json({
                 success: false,
                 message: "Not authorized",
             });
         }
 
-        const superAdmin = isSuperAdminRole(roleName);
+        const superAdmin = isSuperAdminRole(req.user);
 
         const companyId = superAdmin
             ? typeof req.query.companyId === "string"
@@ -349,9 +347,13 @@ export const getEmployeeAttendance = async (req: Request, res: Response) => {
 // Super Admin: /api/attendance/monthly-sheet?month=9&year=2026&companyId=COMPANY_ID
 export const getMonthlySheet = async (req: Request, res: Response) => {
     try {
-        const roleName = normalizeRoleName(req.user?.role?.name);
+
         const userId = req.user?.id;
         const companyId = getCompanyId(req);
+
+        const employee = isEmployeeRole(req.user);
+        const admin = isAdminRole(req.user);
+        const superAdmin = isSuperAdminRole(req.user);
 
         const month = Number(req.query.month) || new Date().getMonth() + 1;
         const year = Number(req.query.year) || new Date().getFullYear();
@@ -378,7 +380,7 @@ export const getMonthlySheet = async (req: Request, res: Response) => {
         }
 
         // Employee: sirf apni attendance sheet
-        if (roleName === "employee") {
+        if (employee) {
             if (!companyId) {
                 return res.status(400).json({
                     success: false,
@@ -400,10 +402,7 @@ export const getMonthlySheet = async (req: Request, res: Response) => {
         }
 
         // Sirf Super Admin aur Company Admin ko monthly sheet access hai.
-        if (
-            roleName !== "super_admin" &&
-            roleName !== "company_admin"
-        ) {
+        if (!admin) {
             return res.status(403).json({
                 success: false,
                 message: "Not authorized",

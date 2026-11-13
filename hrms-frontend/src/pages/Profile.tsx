@@ -15,13 +15,14 @@ import {
     changePasswordSchema,
 } from "@/validation/profile.validation";
 import { Eye, EyeOff } from "lucide-react";
+import { formatRole, getUserName } from "@/utilis/roleUtils";
 
 const Profile = () => {
     const { user, setUser } = useAuthStore();
 
     //  Edit Profile Popup
     const [editOpen, setEditOpen] = React.useState(false);
-    const [name, setName] = React.useState(user?.name ?? "");
+    const [name, setName] = React.useState(getUserName(user, ""));
     const [updating, setUpdating] = React.useState(false);
     const [showPassword, setShowPassword] = React.useState(false);
     const [showNewPassword, setShowNewPassword] = React.useState(false);
@@ -46,8 +47,6 @@ const Profile = () => {
     const getInitials = (name: string) =>
         name.split(" ").map((n) => n[0]).join("").toUpperCase();
 
-    const formatRole = (role: string) =>
-        role.split("_").map((r) => r.charAt(0).toUpperCase() + r.slice(1)).join(" ");
 
     //  Update Profile
     const handleUpdateProfile = async () => {
@@ -178,7 +177,7 @@ const Profile = () => {
                         variant="ghost"
                         size="icon"
                         onClick={() => {
-                            setName(user?.name ?? "");
+                            setName(getUserName(user, ""));
                             setEditOpen(true);
                         }}
                     >
@@ -192,15 +191,15 @@ const Profile = () => {
                         <Avatar className='h-20 w-20'>
                             <AvatarImage src={user?.avatar} alt="avatar" />
                             <AvatarFallback className="text-lg">
-                                {getInitials(user?.name || "U")}
+                                {getInitials(getUserName(user))}
                             </AvatarFallback>
                         </Avatar>
-                        <h2 className="text-lg font-semibold">{user?.name}</h2>
+                        <h2 className="text-lg font-semibold">{getUserName(user)}</h2>
 
                         {user?.role && (
                             <Badge variant="secondary" className="flex items-center gap-1">
                                 <ShieldCheck className="h-3 w-3" />
-                                {formatRole(user.role.name)}
+                                {formatRole(user.role)}
                             </Badge>
                         )}
 
@@ -220,7 +219,7 @@ const Profile = () => {
                             </Label>
                             <Input
                                 type="text"
-                                defaultValue={user.createdByUser.name ?? "—"}
+                                defaultValue={getUserName(user.createdByUser, "—")}
                                 readOnly
                                 className="opacity-60 cursor-not-allowed"
                             />
@@ -234,7 +233,7 @@ const Profile = () => {
                             <Label className='text-sm text-muted-foreground flex items-center gap-1'>
                                 <User className="h-3 w-3" /> Name
                             </Label>
-                            <Input type='text' defaultValue={user?.name} readOnly className="opacity-60 cursor-not-allowed" />
+                            <Input type='text' defaultValue={getUserName(user, "")} readOnly className="opacity-60 cursor-not-allowed" />
                         </div>
 
                         <div className="flex flex-col gap-1">

@@ -26,7 +26,9 @@ import {
 } from "@/validation/holiday.validation";
 import { useAuthStore } from "@/store/auth.store";
 import {
+    getUserRole,
     isEmployeeRole,
+    isSuperAdminRole,
 } from "@/utilis/roleUtils";
 
 import { Button } from "@/components/ui/button";
@@ -164,13 +166,10 @@ const validateField = (
 
 export default function HolidayPage() {
     const user = useAuthStore((state) => state.user);
-    const roleName = user?.role?.name
-        ?.trim()
-        .toLowerCase()
-        .replace(/\s+/g, "_");
+    const userRole = getUserRole(user);
 
-    const isSuperAdmin = roleName === "super_admin";
-    const employeeView = isEmployeeRole(user?.role?.name ?? "");
+    const isSuperAdmin = isSuperAdminRole(userRole);
+    const employeeView = isEmployeeRole(userRole);
 
     const [companies, setCompanies] = useState<CompanyOption[]>([]);
     const [selectedCompanyId, setSelectedCompanyId] = useState("");

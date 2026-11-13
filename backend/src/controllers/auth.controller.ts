@@ -5,7 +5,7 @@ import bcrypt from "bcrypt";
 import {
     isAdminRole,
     isSuperAdminRole,
-    normalizeRoleName,
+    normalizeValue,
 } from "../utilis/roleUtils.js";
 import {
     isDatabaseUnavailable,
@@ -54,9 +54,8 @@ export const signin = async (req: Request, res: Response) => {
             });
         }
 
-        const roleName = normalizeRoleName(user.role?.name);
-        const isAdmin = isAdminRole(roleName);
-        const superAdmin = isSuperAdminRole(roleName);
+        const isAdmin = isAdminRole(user);
+        const superAdmin = isSuperAdminRole(user);
 
         if (!user.isActive) {
             return res.status(403).json({
@@ -74,7 +73,7 @@ export const signin = async (req: Request, res: Response) => {
 
         if (
             !isAdmin &&
-            normalizeRoleName(user.employmentStatus) !== "active"
+            normalizeValue(user.employmentStatus) !== "active"
         ) {
             return res.status(403).json({
                 success: false,

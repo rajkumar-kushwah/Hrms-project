@@ -4,7 +4,7 @@ import { prisma } from "../config/db.js";
 import { getEmployeePayrollDetail } from "../services/payroll.service.js";
 import { generateSalarySlipHTML } from "../services/Salarysliptemplate.js";
 import { generatePdfFromHtml } from "../services/Pdfservice.js";
-import { getCompanyId } from "../utilis/roleUtils.js";
+import { getCompanyId, getUserDisplayName } from "../utilis/roleUtils.js";
 // ─────────────────────────────────────────────────────────────
 // POST /api/payroll/salary-slips/bulk
 // Body: { userIds: string[], month: number, year: number }
@@ -101,7 +101,7 @@ export const downloadBulkSalarySlips = async (
 
                 const pdfBuffer = await generatePdfFromHtml(html);
 
-                const entryName = `${payrollDetail.user.employeeCode ?? userId}-${payrollDetail.user.name}.pdf`;
+                const entryName = `${payrollDetail.user.employeeCode ?? userId}-${getUserDisplayName(payrollDetail.user)}.pdf`;
 
                 archive.append(pdfBuffer, { name: entryName });
             } catch (err: any) {

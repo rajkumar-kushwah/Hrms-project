@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/db.js";
+import { getUserDisplayName } from "../utilis/roleUtils.js";
 
 const STANDARD_WORKING_HOURS = 8;
 
@@ -109,7 +110,7 @@ export const getOvertimeReportService = async (
                 date: record.date,
                 userId: record.user.id,
                 employeeCode: record.user.employeeCode,
-                employeeName: record.user.name,
+                employeeName: getUserDisplayName(record.user),
                 email: record.user.email,
                 branch: record.user.branch?.name ?? "-",
                 category: record.user.category?.name ?? "-",

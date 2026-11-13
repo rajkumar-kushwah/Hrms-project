@@ -64,7 +64,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { isAdminRole, isSuperAdminRole } from "@/utilis/roleUtils";
+import { formatRole, getUserRole, isAdminRole, isSuperAdminRole } from "@/utilis/roleUtils";
 import { startOnboarding } from "@/services/onboarding.service";
 import { Textarea } from "@/components/ui/textarea";
 import { CompanySelector } from "@/pages/common/CompanySelector";
@@ -74,15 +74,14 @@ const EmployeeList = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
-  const isSuperAdmin = isSuperAdminRole(
-    user?.role?.name
-  );
+  const userRole = getUserRole(user);
+  const isSuperAdmin = isSuperAdminRole(userRole);
 
   const [selectedCompanyId, setSelectedCompanyId] =
     React.useState<string>("");
 
   // Super Admin / Company Admin can activate/deactivate
-  const canChangeStatus = isAdminRole(user?.role?.name);
+  const canChangeStatus = isAdminRole(userRole);
 
   const [employees, setEmployees] = React.useState<Employee[]>([]);
   const [open, setOpen] = React.useState(false);
@@ -567,7 +566,7 @@ const EmployeeList = () => {
                   ).values(),
                 ].map((role) => (
                   <SelectItem key={role.id} value={String(role.id)}>
-                    {role.name}
+                        {formatRole(role)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -958,7 +957,7 @@ const EmployeeList = () => {
 
                     <TableCell>
                       <Badge variant="outline">
-                        {emp.role?.name ?? "—"}
+                        {formatRole(emp.role)}
                       </Badge>
                     </TableCell>
 

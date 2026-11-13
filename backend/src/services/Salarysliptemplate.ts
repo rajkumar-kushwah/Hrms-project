@@ -6,6 +6,8 @@
 // complete HTML string ready to be rendered by Puppeteer.
 // ─────────────────────────────────────────────────────────────
 
+import { getUserDisplayName } from "../utilis/roleUtils.js";
+
 interface CompanyInfo {
     name: string;
     address?: string;
@@ -170,7 +172,7 @@ export const generateSalarySlipHTML = (
     <div class="employee-info">
         <div class="info-block">
             <div class="info-label">Employee Name</div>
-            <div class="info-value">${data.user.name}</div>
+            <div class="info-value">${getUserDisplayName(data.user)}</div>
         </div>
         <div class="info-block">
             <div class="info-label">Employee Code</div>

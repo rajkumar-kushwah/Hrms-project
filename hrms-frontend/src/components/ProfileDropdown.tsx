@@ -26,7 +26,7 @@ import {
 
 // Apne existing auth store ka import path check kar lena.
 import { useAuthStore } from "@/store/auth.store";
-import { normalizeRole } from "@/utilis/roleUtils";
+import { formatRole, getUserName, getUserRole, } from "@/utilis/roleUtils";
 import { LogoutUser } from "@/services/auth.service";
 import { toast } from "sonner";
 import React from "react";
@@ -55,13 +55,6 @@ function getInitials(name: string): string {
         .join("");
 }
 
-function formatRole(role: string): string {
-    return role
-        .split("_")
-        .filter(Boolean)
-        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(" ");
-}
 
 export function ProfileDropdown() {
     const navigate = useNavigate();
@@ -71,14 +64,15 @@ export function ProfileDropdown() {
     const [isOpen, setIsOpen] = React.useState(false);
 
     const profile = useMemo(() => {
-        const name = user?.name?.trim() || "User";
-        const role = normalizeRole(user?.role?.name ?? "");
+        const name = getUserName(user);
+        const role = getUserRole(user);
+
 
         return {
             name,
             email: user?.email ?? "",
             role,
-            roleLabel: role ? formatRole(role) : "User",
+            roleLabel: formatRole(user, "User"),
             image: "",
             initials: getInitials(name),
         };

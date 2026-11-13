@@ -29,7 +29,7 @@ const rejectMissingCompany = (res: Response) =>
 // POST /api/onboarding/start/:userId
 export const startOnboarding = async (req: Request, res: Response) => {
     try {
-        if (!isAdminRole(req.user?.role?.name)) {
+        if (!isAdminRole(req.user)) {
             return rejectUnauthorized(res);
         }
 
@@ -91,7 +91,7 @@ export const startOnboarding = async (req: Request, res: Response) => {
 // GET /api/onboarding?companyId=...&status=IN_PROGRESS
 export const getOnboardingList = async (req: Request, res: Response) => {
     try {
-        if (!isAdminRole(req.user?.role?.name)) {
+       if (!isAdminRole(req.user)) {
             return rejectUnauthorized(res);
         }
 
@@ -148,7 +148,7 @@ export const getOnboardingDetail = async (
     res: Response
 ) => {
     try {
-        if (!isAdminRole(req.user?.role?.name)) {
+        if (!isAdminRole(req.user)) {
             return rejectUnauthorized(res);
         }
 
@@ -199,7 +199,7 @@ export const toggleChecklistItem = async (
     res: Response
 ) => {
     try {
-        if (!isAdminRole(req.user?.role?.name)) {
+        if (!isAdminRole(req.user)) {
             return rejectUnauthorized(res);
         }
 
@@ -254,7 +254,7 @@ export const setStageManually = async (
     res: Response
 ) => {
     try {
-        if (!isAdminRole(req.user?.role?.name)) {
+       if (!isAdminRole(req.user)) {
             return rejectUnauthorized(res);
         }
 
@@ -313,7 +313,7 @@ export const setOnboardingStatus = async (
     res: Response
 ) => {
     try {
-        if (!isAdminRole(req.user?.role?.name)) {
+       if (!isAdminRole(req.user)) {
             return rejectUnauthorized(res);
         }
 
@@ -370,7 +370,7 @@ export const resetEmployeeOnboarding = async (
     res: Response
 ) => {
     try {
-        if (!isAdminRole(req.user?.role?.name)) {
+        if (!isAdminRole(req.user)) {
             return rejectUnauthorized(res);
         }
 
@@ -416,7 +416,7 @@ export const submitChecklistDocumentController = async (
     res: Response
 ) => {
     try {
-        if (!isAdminRole(req.user?.role?.name)) {
+       if (!isAdminRole(req.user)) {
             return rejectUnauthorized(res);
         }
 
@@ -498,7 +498,7 @@ export const uploadOnboardingDocument = async (
             });
         }
 
-        if (!isAdminRole(req.user?.role?.name)) {
+        if (!isAdminRole(req.user)) {
             return rejectUnauthorized(res);
         }
 

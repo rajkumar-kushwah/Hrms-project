@@ -45,7 +45,7 @@ import {
     updateBranch,
     permanentDeleteBranch,
 } from "@/services/branch.service";
-import LocationPicker from "@/pages/LocationPicker";
+const LocationPicker = React.lazy(() => import("@/pages/LocationPicker"));
 import {
     Select,
     SelectContent,
@@ -95,9 +95,7 @@ const initialForm: CreateBranchPayload = {
 const BranchList = () => {
     const { user } = useAuthStore();
 
-    const isSuperAdmin = isSuperAdminRole(
-        user?.role?.name
-    );
+    const isSuperAdmin = isSuperAdminRole(user)
 
     const [selectedCompanyId, setSelectedCompanyId] =
         React.useState("");
@@ -948,35 +946,29 @@ const BranchList = () => {
                 </DialogContent>
             </Dialog>
 
+
             {/* CREATE LOCATION PICKER */}
-            <LocationPicker
-                open={createMapOpen}
-                onOpenChange={
-                    setCreateMapOpen
-                }
-                initialLat={form.latitude}
-                initialLng={form.longitude}
-                initialRadius={
-                    form.geoRadius
-                }
-                initialLocationName={
-                    form.locationName
-                }
-                onConfirm={(
-                    lat,
-                    lng,
-                    radius,
-                    locationName
-                ) => {
-                    setForm((prev) => ({
-                        ...prev,
-                        latitude: lat,
-                        longitude: lng,
-                        geoRadius: radius,
-                        locationName,
-                    }));
-                }}
-            />
+            {createMapOpen && (
+                <React.Suspense fallback={null}>
+                    <LocationPicker
+                        open={createMapOpen}
+                        onOpenChange={setCreateMapOpen}
+                        initialLat={form.latitude}
+                        initialLng={form.longitude}
+                        initialRadius={form.geoRadius}
+                        initialLocationName={form.locationName}
+                        onConfirm={(lat, lng, radius, locationName) => {
+                            setForm((prev) => ({
+                                ...prev,
+                                latitude: lat,
+                                longitude: lng,
+                                geoRadius: radius,
+                                locationName,
+                            }));
+                        }}
+                    />
+                </React.Suspense>
+            )}
 
             {/* EDIT DIALOG */}
             <Dialog
@@ -1303,42 +1295,29 @@ const BranchList = () => {
                         </Button>
                     </div>
 
+                    
                     {/* EDIT LOCATION PICKER */}
-                    <LocationPicker
-                        open={editMapOpen}
-                        onOpenChange={
-                            setEditMapOpen
-                        }
-                        initialLat={
-                            editForm.latitude
-                        }
-                        initialLng={
-                            editForm.longitude
-                        }
-                        initialRadius={
-                            editForm.geoRadius
-                        }
-                        initialLocationName={
-                            editForm.locationName
-                        }
-                        onConfirm={(
-                            lat,
-                            lng,
-                            radius,
-                            locationName
-                        ) => {
-                            setEditForm(
-                                (prev) => ({
-                                    ...prev,
-                                    latitude: lat,
-                                    longitude: lng,
-                                    geoRadius:
-                                        radius,
-                                    locationName,
-                                })
-                            );
-                        }}
-                    />
+                    {editMapOpen && (
+                        <React.Suspense fallback={null}>
+                            <LocationPicker
+                                open={editMapOpen}
+                                onOpenChange={setEditMapOpen}
+                                initialLat={editForm.latitude}
+                                initialLng={editForm.longitude}
+                                initialRadius={editForm.geoRadius}
+                                initialLocationName={editForm.locationName}
+                                onConfirm={(lat, lng, radius, locationName) => {
+                                    setEditForm((prev) => ({
+                                        ...prev,
+                                        latitude: lat,
+                                        longitude: lng,
+                                        geoRadius: radius,
+                                        locationName,
+                                    }));
+                                }}
+                            />
+                        </React.Suspense>
+                    )}
 
                     {/* DANGER ZONE */}
                     {isSuperAdmin && (

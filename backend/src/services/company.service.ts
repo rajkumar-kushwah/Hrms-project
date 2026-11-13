@@ -1,6 +1,11 @@
 import bcrypt from "bcrypt";
 import { prisma } from "../config/db.js";
-import { ROLES, isAdminRole, isSuperAdminRole } from "../utilis/roleUtils.js";
+import {
+    ROLES,
+    getUserDisplayName,
+    isCompanyAdminRole,
+    isSuperAdminRole,
+} from "../utilis/roleUtils.js";
 
 // ─────────────────────────────────────────────
 // Normalize Role / Module Name
@@ -333,7 +338,7 @@ export const assignCompanyAdmin = async (
     });
 
     let companyAdminRole = companyRoles.find(
-        (role) => isAdminRole(role.name)
+        (role) => isCompanyAdminRole(role)
     );
 
     // ─────────────────────────────────────────
@@ -428,7 +433,7 @@ export const assignCompanyAdmin = async (
     return {
         user: {
             id: user.id,
-            name: user.name,
+            name: getUserDisplayName(user),
             email: user.email,
             companyId: user.companyId,
 

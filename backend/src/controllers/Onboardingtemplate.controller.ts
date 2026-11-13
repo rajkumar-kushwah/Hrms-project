@@ -1,4 +1,3 @@
-
 import type { Request, Response } from "express";
 import { prisma } from "../config/db.js";
 import * as TemplateService from "../services/Onboardingtemplate.service.js";
@@ -7,16 +6,13 @@ import {
     updateTemplateSchema,
     reorderTemplateSchema,
 } from "../validations/onboardingTemplate.validation.js";
-import { DocumentInputType, Prisma } from "@prisma/client";
+// import { DocumentInputType, Prisma } from "@prisma/client";
+import {
+    isAdminRole,
+    isSuperAdminRole,
+    isCompanyAdminRole,
+} from "../utilis/roleUtils.js";
 
-const getRole = (req: Request): string =>
-    req.user?.role?.name
-        ?.trim()
-        .toLowerCase()
-        .replace(/[\s-]+/g, "_") ?? "";
-
-const isAdminUser = (req: Request): boolean =>
-    ["super_admin", "company_admin"].includes(getRole(req));
 
 const getRequestedCompanyId = (req: Request): string | undefined => {
     const bodyCompanyId: unknown = req.body?.companyId;
@@ -40,12 +36,11 @@ const getRequestedCompanyId = (req: Request): string | undefined => {
 const resolveCompanyId = async (
     req: Request,
 ): Promise<string | null> => {
-    const role = getRole(req);
     const sessionCompanyId = req.user?.companyId;
     const requestedCompanyId = getRequestedCompanyId(req);
 
     // Super Admin must select a company.
-    if (role === "super_admin") {
+    if (isSuperAdminRole(req.user)) {
         if (!requestedCompanyId) {
             return null;
         }
@@ -63,7 +58,7 @@ const resolveCompanyId = async (
     }
 
     // Company Admin can access only their own company's templates.
-    if (role === "company_admin") {
+    if (isCompanyAdminRole(req.user)) {
         if (!sessionCompanyId) {
             return null;
         }
@@ -125,7 +120,7 @@ const sendError = (res: Response, error: unknown) => {
 // GET /api/onboarding-template?companyId=...
 export const getTemplates = async (req: Request, res: Response) => {
     try {
-        if (!isAdminUser(req)) {
+        if (!isAdminRole(req.user)) {
             return res.status(403).json({
                 success: false,
                 message: "Not authorized",
@@ -155,7 +150,7 @@ export const createTemplateItem = async (
     res: Response,
 ) => {
     try {
-        if (!isAdminUser(req)) {
+        if (!isAdminRole(req.user)) {
             return res.status(403).json({
                 success: false,
                 message: "Not authorized",
@@ -219,7 +214,7 @@ export const updateTemplateItem = async (
     res: Response,
 ) => {
     try {
-        if (!isAdminUser(req)) {
+        if (!isAdminRole(req.user)) {
             return res.status(403).json({
                 success: false,
                 message: "Not authorized",
@@ -295,7 +290,7 @@ export const deleteTemplateItem = async (
     res: Response,
 ) => {
     try {
-        if (!isAdminUser(req)) {
+        if (!isAdminRole(req.user)) {
             return res.status(403).json({
                 success: false,
                 message: "Not authorized",
@@ -334,7 +329,7 @@ export const reorderTemplateItems = async (
     res: Response,
 ) => {
     try {
-        if (!isAdminUser(req)) {
+        if (!isAdminRole(req.user)) {
             return res.status(403).json({
                 success: false,
                 message: "Not authorized",

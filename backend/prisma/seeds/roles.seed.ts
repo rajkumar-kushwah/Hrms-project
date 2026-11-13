@@ -1,20 +1,25 @@
 import { prisma } from "../../src/config/db.ts";
+import { ROLES } from "../../src/utilis/roleUtils.js";
 
 export const seedSuperAdminRole = async () => {
     let superAdminRole = await prisma.role.findFirst({
-        where: { name: "super_admin", companyId: null },
+        where: {
+            name: ROLES.SUPER_ADMIN,
+            companyId: null,
+        },
     });
 
     if (!superAdminRole) {
         superAdminRole = await prisma.role.create({
             data: {
-                name: "super_admin",
+                name: ROLES.SUPER_ADMIN,
                 description: "Full access to everything",
                 isActive: true,
                 isSystemRole: true,
                 companyId: null,
             },
         });
+
         console.log("Super Admin role created!");
     } else {
         await prisma.role.update({
@@ -27,7 +32,6 @@ export const seedSuperAdminRole = async () => {
         console.log("Super Admin role updated!");
     }
 
-    //  Early return hatao — upsert use karo
     const allModules = await prisma.module.findMany();
 
     for (const mod of allModules) {
@@ -54,6 +58,7 @@ export const seedSuperAdminRole = async () => {
         }
     }
 
-    console.log(" Super Admin permissions seeded!");
+    console.log("Super Admin permissions seeded!");
+
     return superAdminRole;
 };

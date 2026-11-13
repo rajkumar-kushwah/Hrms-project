@@ -24,15 +24,17 @@ import {
     UsersRound,
     CalendarCheck,
 } from "lucide-react";
-import { isCompanyAdminRole, isSuperAdminRole, isEmployeeRole, } from "@/utilis/roleUtils";
+import { isCompanyAdminRole, isSuperAdminRole, isEmployeeRole, getUserRole, } from "@/utilis/roleUtils";
 
 const DashboardStats = () => {
     const { user } = useAuthStore();
 
 
-    const isCompanyAdmin = isCompanyAdminRole(user?.role?.name);
-    const isSuperAdmin = isSuperAdminRole(user?.role?.name);
-    const isEmployee = isEmployeeRole(user?.role?.name);
+    const userRole = getUserRole(user);
+
+    const isCompanyAdmin = isCompanyAdminRole(userRole);
+    const isSuperAdmin = isSuperAdminRole(userRole);
+    const isEmployee = isEmployeeRole(userRole);
 
     const [companies, setCompanies] = useState<Company[]>([]);
     const [companyUsers, setCompanyUsers] = useState<CompanyUser[]>([]);

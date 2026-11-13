@@ -19,7 +19,7 @@ import {
     deleteRole,
 } from "@/services/role.service";
 import { roleSchema } from "@/validation/role.validation";
-import { isAdminRole } from "@/utilis/roleUtils";
+import { formatRole, getRoleRawName, getUserModulePermission, getUserRole, isAdminRole } from "@/utilis/roleUtils";
 
 
 
@@ -60,12 +60,13 @@ interface Role {
 
 const Roles = () => {
     const { user } = useAuthStore();
-    const rolePermission = user?.role?.permissions?.find(
-        (p) => p.module.name === "roles"
-    );
+
+    const rolePermission = getUserModulePermission(user, "roles");
     const canDelete = rolePermission?.canDelete;
 
-    const isSuperAdmin = isAdminRole(user?.role?.name);
+    const userRole = getUserRole(user);
+    const isSuperAdmin = isAdminRole(userRole);
+
 
     const [roles, setRoles] = useState<Role[]>([]);
     const [modules, setModules] = useState<Module[]>([]);
@@ -149,134 +150,6 @@ const Roles = () => {
         }
 
     };
-
-
-
-
-    // const togglePermission = (
-    //     moduleId: number,
-    //     field: "canView" | "canCreate" | "canEdit" | "canDelete"
-    // ) => {
-    //     setPermissions((prev) => {
-    //         const currentModule = modules.find((m) => m.id === moduleId);
-    //         const isParent = currentModule?.parentId == null;
-
-    //         let updated = prev.map((p) => {
-    //             if (p.moduleId !== moduleId) return p;
-
-    //             const value = !p[field];
-
-    //             // View OFF => sab OFF
-    //             if (field === "canView" && !value) {
-    //                 return {
-    //                     ...p,
-    //                     canView: false,
-    //                     canCreate: false,
-    //                     canEdit: false,
-    //                     canDelete: false,
-    //                 };
-    //             }
-
-    //             // Create/Edit/Delete ON => View bhi ON
-    //             if (field !== "canView" && value) {
-    //                 return {
-    //                     ...p,
-    //                     [field]: true,
-    //                     canView: true,
-    //                 };
-    //             }
-
-    //             return {
-    //                 ...p,
-    //                 [field]: value,
-    //             };
-    //         });
-
-    //         // Parent ka View change hua
-    //         if (field === "canView" && isParent) {
-    //             const parent = updated.find((p) => p.moduleId === moduleId);
-    //             const isNowOn = parent?.canView ?? false;
-
-    //             updated = updated.map((p) => {
-    //                 const module = modules.find((m) => m.id === p.moduleId);
-
-    //                 if (module?.parentId === moduleId) {
-    //                     return {
-    //                         ...p,
-    //                         canView: isNowOn,
-    //                         canCreate: isNowOn ? p.canCreate : false,
-    //                         canEdit: isNowOn ? p.canEdit : false,
-    //                         canDelete: isNowOn ? p.canDelete : false,
-    //                     };
-    //                 }
-
-    //                 return p;
-    //             });
-    //         }
-
-    //         return updated;
-    //     });
-    // };
-    //  Create Role
-
-    // const togglePermission = (
-    //     moduleId: number,
-    //     action: "canView" | "canCreate" | "canEdit" | "canDelete"
-    // ) => {
-    //     setForm((prev) => {
-    //         const updatedPermissions = permissions.map((permission) => {
-    //             if (permission.moduleId !== moduleId) {
-    //                 return permission;
-    //             }
-
-    //             const updatedPermission = {
-    //                 ...permission,
-    //                 [action]: !permission[action],
-    //             };
-
-    //             // View off => all actions off
-    //             if (action === "canView" && !updatedPermission.canView) {
-    //                 updatedPermission.canCreate = false;
-    //                 updatedPermission.canEdit = false;
-    //                 updatedPermission.canDelete = false;
-    //             }
-
-    //             // Any action on => View on
-    //             if (
-    //                 action !== "canView" &&
-    //                 updatedPermission[action]
-    //             ) {
-    //                 updatedPermission.canView = true;
-    //             }
-
-    //             return updatedPermission;
-    //         });
-
-    //         // Permission validation
-    //         const hasPermission = updatedPermissions.some(
-    //             (permission) =>
-    //                 permission.canView ||
-    //                 permission.canCreate ||
-    //                 permission.canEdit ||
-    //                 permission.canDelete
-    //         );
-    //         if (!hasPermission) {
-    //             toast.error("At least one permission must be selected");
-    //         }
-
-    //         setErrors((prevErrors) => ({
-    //             ...prevErrors,
-    //             permissions: hasPermission
-    //                 ? undefined
-    //                 : "At least one permission must be selected",
-    //         }));
-
-    //         return {
-    //             ...prev,
-    //             permissions: updatedPermissions,
-    //         };
-    //     });
-    // };
 
     const togglePermission = (
         moduleId: number,
@@ -405,7 +278,7 @@ const Roles = () => {
     //  Edit Role
     const handleEdit = (role: Role) => {
         setEditRole(role);
-        setForm({ name: role.name, description: role.description ?? "" });
+        setForm({ name:getRoleRawName(role), description: role.description ?? "" });
         initPermissions(role.permissions);
         setOpen(true);
     };
@@ -572,7 +445,7 @@ const Roles = () => {
                         {roles.map((role, index) => (
                             <TableRow key={role.id}>
                                 <TableCell>{index + 1}</TableCell>
-                                <TableCell className="font-medium">{role.name}</TableCell>
+                                <TableCell className="font-medium">{formatRole(role)}</TableCell>
                                 <TableCell>{role.description ?? "—"}</TableCell>
                                 <TableCell>
                                     <Badge variant="outline">{role._count?.user ?? 0} users</Badge>

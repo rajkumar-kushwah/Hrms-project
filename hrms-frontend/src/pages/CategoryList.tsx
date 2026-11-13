@@ -52,7 +52,7 @@ import {
     permanentDeleteCategory,
 } from "@/services/category.service";
 import { getBranches } from "@/services/branch.service";
-import { isSuperAdminRole } from "@/utilis/roleUtils";
+import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
 import { CompanySelector } from "@/pages/common/CompanySelector";
 
 type CategoryField = "name" | "description" | "branchId";
@@ -105,7 +105,8 @@ const validateDescription = (value: string): string => {
 
 const CategoryList = () => {
     const { user } = useAuthStore();
-    const isSuperAdmin = isSuperAdminRole(user?.role?.name);
+    const userRole = getUserRole(user);
+    const isSuperAdmin = isSuperAdminRole(userRole);
 
     const [selectedCompanyId, setSelectedCompanyId] = useState("");
     const [categories, setCategories] = useState<Category[]>([]);

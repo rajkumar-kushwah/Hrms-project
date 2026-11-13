@@ -1,6 +1,6 @@
 // pages/payroll/PayrollReport.tsx
 import React from "react";
-import * as XLSX from "xlsx";
+// import * as XLSX from "xlsx";
 
 import { Card } from "@/components/ui/card";
 // import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,7 @@ import { toast } from "sonner";
 import { getMonthlyPayrollReport } from "@/services/payrollreport.service";
 import { getCompanies } from "@/services/company.service";
 import { useAuthStore } from "@/store/auth.store";
-import { isSuperAdminRole } from "@/utilis/roleUtils";
+import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
 // Types
 
 
@@ -139,7 +139,8 @@ const PayrollReport = () => {
     const currentDate = new Date();
 
     const user = useAuthStore((state) => state.user);
-    const isSuperAdmin = isSuperAdminRole(user?.role?.name);
+    const userRole = getUserRole(user);
+    const isSuperAdmin = isSuperAdminRole(userRole);
 
     const [month, setMonth] = React.useState(
         currentDate.getMonth() + 1
@@ -245,8 +246,11 @@ const PayrollReport = () => {
 
     // Excel export
 
-    const handleExport = () => {
+    const handleExport = async () => {
         if (!report) return;
+
+        // Load XLSX only when export is clicked
+        const XLSX = await import("xlsx");
 
         const wb = XLSX.utils.book_new();
 

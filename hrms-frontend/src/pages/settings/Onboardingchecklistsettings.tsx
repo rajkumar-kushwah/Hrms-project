@@ -72,6 +72,7 @@ import {
   deleteChecklistItem,
   reorderChecklistItems,
 } from "@/services/Onboardingtemplate.service";
+import { getUserRole, isCompanyAdminRole, isSuperAdminRole } from "@/utilis/roleUtils";
 
 type Stage =
   | "OFFER"
@@ -234,14 +235,11 @@ function normalizeGroupedTemplates(data: unknown): GroupedTemplates {
 
 export default function OnboardingChecklistSettings() {
   const { user } = useAuthStore();
+  
+  const userRole = getUserRole(user);
 
-  const roleName = user?.role?.name
-    ?.trim()
-    .toLowerCase()
-    .replace(/\s+/g, "_");
-
-  const isSuperAdmin = roleName === "super_admin";
-  const isCompanyAdmin = roleName === "company_admin";
+  const isSuperAdmin = isSuperAdminRole(userRole);
+  const isCompanyAdmin = isCompanyAdminRole(userRole);
 
   // Only Super Admin selects a company. Company Admin uses getMyCompany().
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
