@@ -80,9 +80,16 @@ export function NavMain() {
   // console.log("USER:", user);
   // console.log("PERMISSIONS:", permissions);
 
-  const visibleModules = permissions
-    .filter((p) => p.canView && p.module.parentId === null)
-    .sort((a, b) => a.module.order - b.module.order);
+  const uniquePermissions = (items: typeof permissions) =>
+    Array.from(
+      new Map(items.map((p) => [p.module.id, p])).values()
+    );
+
+  const visibleModules = uniquePermissions(
+    permissions.filter(
+      (p) => p.canView && p.module.parentId === null
+    )
+  ).sort((a, b) => a.module.order - b.module.order);
 
   return (
     <SidebarGroup>
@@ -91,9 +98,11 @@ export function NavMain() {
         {visibleModules.map((p) => {
           const mod = p.module;
 
-          const children = permissions
-            .filter((cp) => cp.canView && cp.module.parentId === mod.id)
-            .sort((a, b) => a.module.order - b.module.order);
+          const children = uniquePermissions(
+            permissions.filter(
+              (cp) => cp.canView && cp.module.parentId === mod.id
+            )
+          ).sort((a, b) => a.module.order - b.module.order);
 
           // Active check - currect route match kro
           const isParenttActive =
@@ -103,7 +112,7 @@ export function NavMain() {
           // NavMain mein temporarily add karo
           return (
             <Collapsible
-              key={mod.name}
+              key={mod.id}
               asChild
               defaultOpen={isParenttActive}  // Active hone per open rahe
               className="group/collapsible"
@@ -141,7 +150,7 @@ export function NavMain() {
                         const isSubActive = location.pathname === cp.module.url
 
                         return (
-                          <SidebarMenuSubItem key={cp.module.name}>
+                          <SidebarMenuSubItem key={cp.module.id}>
                             <SidebarMenuSubButton asChild isActive={isSubActive} className={`
                                   !transition-none
                                   ${isSubActive
