@@ -5,12 +5,10 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
-    ChevronLeft,
-    ChevronRight,
-    Loader2,
+    Loader2
 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+
 import { Input } from "@/components/ui/input";
 import {
     Select,
@@ -341,12 +339,7 @@ const MonthlySheet = () => {
     // Month navigation
     // ----------------------------------------------
 
-    const shiftMonth = (delta: number) => {
-        const next = new Date(year, month - 1 + delta, 1);
-
-        setMonth(next.getMonth() + 1);
-        setYear(next.getFullYear());
-    };
+   
 
     const daysInMonth = new Date(year, month, 0).getDate();
 
@@ -483,14 +476,7 @@ const MonthlySheet = () => {
                     </Select>
                 )}
 
-                <Button
-                    variant="add"
-                    size="icon"
-                    onClick={() => shiftMonth(-1)}
-                    aria-label="Previous month"
-                >
-                    <ChevronLeft className="h-4 w-4" />
-                </Button>
+               
 
                 <Select
                     value={String(month)}
@@ -526,14 +512,7 @@ const MonthlySheet = () => {
                     className="w-24"
                 />
 
-                <Button
-                    variant="add"
-                    size="icon"
-                    onClick={() => shiftMonth(1)}
-                    aria-label="Next month"
-                >
-                    <ChevronRight className="h-4 w-4" />
-                </Button>
+               
 
                 <Input
                     type="search"
