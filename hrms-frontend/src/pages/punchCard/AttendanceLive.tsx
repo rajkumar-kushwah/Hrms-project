@@ -28,15 +28,30 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { useAuthStore } from "@/store/auth.store";
-import { getUserName, getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
+import {
+    getUserName,
+    isSuperAdminRole,
+    canViewModule,
+} from "@/utilis/roleUtils";
 import { CompanySelector } from "@/pages/common/CompanySelector";
 import { socket } from "@/lib/socket";
 
-const AttendanceLive = () => {
-    const { user } = useAuthStore();
+// --------------------------------------------------
+// Constants
+// --------------------------------------------------
 
-    const userRole = getUserRole(user);
-    const isSuperAdmin = isSuperAdminRole(userRole);
+const MODULE_NAME = "attendance_live";
+
+// --------------------------------------------------
+// Component
+// --------------------------------------------------
+
+const AttendanceLive = () => {
+    const user = useAuthStore((state) => state.user);
+
+    // PBAC
+    const canViewAttendance = canViewModule(user, MODULE_NAME);
+    const isSuperAdmin = isSuperAdminRole(user);
 
     const [attendances, setAttendances] = React.useState<Attendance[]>([]);
     const [loading, setLoading] = React.useState(false);
@@ -44,10 +59,22 @@ const AttendanceLive = () => {
     const [selectedCompanyId, setSelectedCompanyId] = React.useState("");
     const [search, setSearch] = React.useState("");
 
+    // ----------------------------------------------
+    // Load Live Attendance
+    // ----------------------------------------------
+
     const loadLiveAttendance = React.useCallback(async () => {
+        if (!canViewAttendance) {
+            setAttendances([]);
+            setLastUpdated(null);
+            setLoading(false);
+            return;
+        }
+
         if (isSuperAdmin && !selectedCompanyId) {
             setAttendances([]);
             setLastUpdated(null);
+            setLoading(false);
             return;
         }
 
@@ -71,13 +98,28 @@ const AttendanceLive = () => {
         } finally {
             setLoading(false);
         }
-    }, [isSuperAdmin, selectedCompanyId]);
+    }, [
+        canViewAttendance,
+        isSuperAdmin,
+        selectedCompanyId,
+    ]);
 
-    // Initial load and automatic refresh every 60 seconds.
+    // ----------------------------------------------
+    // Initial Load + Auto Refresh
+    // ----------------------------------------------
+
     React.useEffect(() => {
+        if (!canViewAttendance) {
+            setAttendances([]);
+            setLastUpdated(null);
+            setLoading(false);
+            return;
+        }
+
         if (isSuperAdmin && !selectedCompanyId) {
             setAttendances([]);
             setLastUpdated(null);
+            setLoading(false);
             return;
         }
 
@@ -88,9 +130,20 @@ const AttendanceLive = () => {
         }, 60000);
 
         return () => window.clearInterval(interval);
-    }, [loadLiveAttendance, isSuperAdmin, selectedCompanyId]);
-    // Real-time attendance updates
+    }, [
+        canViewAttendance,
+        loadLiveAttendance,
+        isSuperAdmin,
+        selectedCompanyId,
+    ]);
+
+    // ----------------------------------------------
+    // Real-time Attendance Updates
+    // ----------------------------------------------
+
     React.useEffect(() => {
+        if (!canViewAttendance) return;
+
         if (isSuperAdmin && !selectedCompanyId) return;
 
         const subscribeToAttendance = () => {
@@ -107,19 +160,12 @@ const AttendanceLive = () => {
             companyId: string;
             userId: string;
         }) => {
-            // Super Admin: only selected company's updates
             if (
                 isSuperAdmin &&
                 payload.companyId !== selectedCompanyId
             ) {
                 return;
             }
-
-            console.log(
-                "Real-time attendance update:",
-                payload.action,
-                payload.userId
-            );
 
             void loadLiveAttendance();
         };
@@ -131,7 +177,6 @@ const AttendanceLive = () => {
             handleAttendanceUpdated
         );
 
-        // Socket already connected ho to immediately subscribe karo.
         if (socket.connected) {
             subscribeToAttendance();
         }
@@ -145,10 +190,15 @@ const AttendanceLive = () => {
             );
         };
     }, [
+        canViewAttendance,
         isSuperAdmin,
         selectedCompanyId,
         loadLiveAttendance,
     ]);
+
+    // ----------------------------------------------
+    // Helpers
+    // ----------------------------------------------
 
     const formatTime = (dateString?: string) => {
         if (!dateString) return "—";
@@ -187,7 +237,10 @@ const AttendanceLive = () => {
         return `${Math.floor(hours)}h ${Math.round((hours % 1) * 60)}m`;
     };
 
-    // Attendance statistics
+    // ----------------------------------------------
+    // Attendance Statistics
+    // ----------------------------------------------
+
     const totalPunchedIn = attendances.length;
 
     const presentCount = attendances.filter(
@@ -208,7 +261,10 @@ const AttendanceLive = () => {
 
     const noCompanySelected = isSuperAdmin && !selectedCompanyId;
 
-    // Employee search
+    // ----------------------------------------------
+    // Employee Search
+    // ----------------------------------------------
+
     const filteredAttendances = attendances.filter((att) => {
         const searchValue = search.trim().toLowerCase();
 
@@ -222,6 +278,18 @@ const AttendanceLive = () => {
             att.status?.toLowerCase().includes(searchValue)
         );
     });
+
+    // ----------------------------------------------
+    // Permission Check
+    // ----------------------------------------------
+
+    if (!canViewAttendance) {
+        return null;
+    }
+
+    // ----------------------------------------------
+    // Render
+    // ----------------------------------------------
 
     return (
         <div className="flex flex-col gap-4">

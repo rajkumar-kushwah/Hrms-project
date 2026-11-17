@@ -14,7 +14,11 @@ import {
 import { useAuthStore } from "@/store/auth.store";
 import { getCompanies } from "@/services/company.service";
 import { getLeaveReport } from "@/services/leaveReport.service";
-import { getUserName, getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
+import {
+    getUserName,
+    isSuperAdminRole,
+    canViewModule,
+} from "@/utilis/roleUtils";
 
 import type {
     LeaveReportItem,
@@ -58,6 +62,7 @@ interface Company {
 }
 
 const PAGE_LIMIT = 10;
+const MODULE_NAME = "leave_report";
 
 const formatDate = (date: string) => {
     return new Date(date).toLocaleDateString("en-IN", {
@@ -144,8 +149,10 @@ const downloadCSV = (items: LeaveReportItem[]) => {
 
 const LeaveReport = () => {
     const user = useAuthStore((state) => state.user);
-    const userRole = getUserRole(user);
-    const isSuperAdmin = isSuperAdminRole(userRole);
+
+    // Permissions
+    const canViewLeaveReport = canViewModule(user, MODULE_NAME);
+    const isSuperAdmin = isSuperAdminRole(user);
 
     // Company
     const [companies, setCompanies] = useState<Company[]>([]);
@@ -168,9 +175,10 @@ const LeaveReport = () => {
 
     // Load companies
     useEffect(() => {
-        if (!isSuperAdmin) {
+        if (!canViewLeaveReport || !isSuperAdmin) {
             setCompanies([]);
             setSelectedCompanyId("");
+            setCompaniesLoading(false);
             return;
         }
 
@@ -218,11 +226,18 @@ const LeaveReport = () => {
         return () => {
             cancelled = true;
         };
-    }, [isSuperAdmin]);
+    }, [canViewLeaveReport, isSuperAdmin]);
 
     // Fetch report
     const fetchReport = useCallback(
         async (isRefresh = false) => {
+            if (!canViewLeaveReport) {
+                setReport(null);
+                setLoading(false);
+                setRefreshing(false);
+                return;
+            }
+
             if (isSuperAdmin && !selectedCompanyId) {
                 setReport(null);
                 setLoading(false);
@@ -265,6 +280,7 @@ const LeaveReport = () => {
             }
         },
         [
+            canViewLeaveReport,
             isSuperAdmin,
             selectedCompanyId,
             startDate,
@@ -275,9 +291,12 @@ const LeaveReport = () => {
         ]
     );
 
+    // Report effect
     useEffect(() => {
+        if (!canViewLeaveReport) return;
+
         void fetchReport();
-    }, [fetchReport]);
+    }, [canViewLeaveReport, fetchReport]);
 
     // Company selection
     const handleCompanyChange = (value: string) => {
@@ -293,6 +312,13 @@ const LeaveReport = () => {
         setStartDate("");
         setEndDate("");
         setPage(1);
+    };
+
+    // CSV Export
+    const handleExport = () => {
+        if (!canViewLeaveReport) return;
+
+        downloadCSV(report?.data ?? []);
     };
 
     const summary = report?.summary;
@@ -324,6 +350,11 @@ const LeaveReport = () => {
             icon: X,
         },
     ];
+
+    // Hide page without View permission
+    if (!canViewLeaveReport) {
+        return null;
+    }
 
     return (
         <div className="space-y-4">
@@ -377,19 +408,17 @@ const LeaveReport = () => {
                         </Select>
                     )}
 
-                    <Button
-                        variant="outline"
+                    <Button className="cursor-pointer"
+                        variant="add"
                         size="sm"
-                        onClick={() =>
-                            downloadCSV(report?.data ?? [])
-                        }
+                        onClick={handleExport}
                         disabled={!report?.data.length || loading}
                     >
                         <Download className="mr-2 h-4 w-4" />
                         Export CSV
                     </Button>
 
-                    <Button
+                    <Button className="cursor-pointer"
                         variant="add"
                         size="sm"
                         onClick={() => void fetchReport(true)}
@@ -400,7 +429,7 @@ const LeaveReport = () => {
                         }
                     >
                         <RefreshCw
-                            className={` ${refreshing ? "animate-spin" : ""
+                            className={`${refreshing ? "animate-spin" : ""
                                 }`}
                         />
                         <span>Refresh</span>
@@ -414,6 +443,7 @@ const LeaveReport = () => {
                     <div className="flex flex-wrap items-center gap-2">
 
                         <Input
+                            type="search"
                             placeholder="Search employee..."
                             value={search}
                             onChange={(event) => {
@@ -454,7 +484,7 @@ const LeaveReport = () => {
                                 <SelectValue placeholder="Status" />
                             </SelectTrigger>
 
-                            <SelectContent>
+                            <SelectContent position="popper">
                                 <SelectItem value="all">
                                     All Status
                                 </SelectItem>
@@ -473,8 +503,8 @@ const LeaveReport = () => {
                             </SelectContent>
                         </Select>
 
-                        <Button
-                            variant="outline"
+                        <Button className="cursor-pointer"
+                            variant="add"
                             size="sm"
                             onClick={handleClearFilters}
                         >
@@ -492,13 +522,13 @@ const LeaveReport = () => {
 
                     return (
                         <Card key={item.title}>
-                            <CardContent className="flex items-center justify-between p-4">
+                            <CardContent className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm text-muted-foreground">
+                                    <p className="text-xs text-muted-foreground">
                                         {item.title}
                                     </p>
 
-                                    <p className="mt-1 text-2xl font-semibold">
+                                    <p className="mt-1 text-xl font-semibold">
                                         {item.value}
                                     </p>
                                 </div>
@@ -568,6 +598,7 @@ const LeaveReport = () => {
                                                 <div className="font-medium">
                                                     {getUserName(item.user, "N/A")}
                                                 </div>
+
                                                 <div className="text-xs text-muted-foreground">
                                                     {item.user.email}
                                                 </div>
@@ -670,8 +701,7 @@ const LeaveReport = () => {
                                                     )
                                                 }
                                                 className={
-                                                    page >=
-                                                        report.pagination.totalPages
+                                                    page >= report.pagination.totalPages
                                                         ? "pointer-events-none opacity-50"
                                                         : "cursor-pointer"
                                                 }

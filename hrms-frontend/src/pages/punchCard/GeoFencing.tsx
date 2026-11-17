@@ -1,4 +1,3 @@
-
 import React from "react";
 import {
     MapPin,
@@ -25,7 +24,10 @@ import {
 
 import { getGeoFencingOverview } from "@/services/branch.service";
 import { useAuthStore } from "@/store/auth.store";
-import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
+import {
+    isSuperAdminRole,
+    canViewModule,
+} from "@/utilis/roleUtils";
 import { CompanySelector } from "@/pages/common/CompanySelector";
 import { Button } from "@/components/ui/button";
 
@@ -52,10 +54,14 @@ interface GeoFenceBranch {
     employees: GeoFenceEmployee[];
 }
 
+const MODULE_NAME = "geo_fencing";
+
 const GeoFencing = () => {
     const { user } = useAuthStore();
-    const userRole = getUserRole(user);
-    const isSuperAdmin = isSuperAdminRole(userRole);
+
+    // Permissions
+    const canViewGeoFencing = canViewModule(user, MODULE_NAME);
+    const isSuperAdmin = isSuperAdminRole(user);
 
     const [branches, setBranches] = React.useState<GeoFenceBranch[]>([]);
     const [loading, setLoading] = React.useState(false);
@@ -63,6 +69,11 @@ const GeoFencing = () => {
     const [search, setSearch] = React.useState("");
 
     const loadData = React.useCallback(async () => {
+        if (!canViewGeoFencing) {
+            setBranches([]);
+            return;
+        }
+
         if (isSuperAdmin && !selectedCompanyId) {
             setBranches([]);
             return;
@@ -87,11 +98,17 @@ const GeoFencing = () => {
         } finally {
             setLoading(false);
         }
-    }, [isSuperAdmin, selectedCompanyId]);
+    }, [
+        canViewGeoFencing,
+        isSuperAdmin,
+        selectedCompanyId,
+    ]);
 
     React.useEffect(() => {
+        if (!canViewGeoFencing) return;
+
         void loadData();
-    }, [loadData]);
+    }, [canViewGeoFencing, loadData]);
 
     const filteredBranches = React.useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -127,6 +144,11 @@ const GeoFencing = () => {
         0
     );
 
+    // Hide page when user does not have View permission
+    if (!canViewGeoFencing) {
+        return null;
+    }
+
     return (
         <div className="flex flex-col gap-4">
             {isSuperAdmin && (
@@ -144,19 +166,21 @@ const GeoFencing = () => {
                     <h2 className="text-lg font-semibold">
                         Geo Fencing Overview
                     </h2>
+
                     <p className="text-xs text-muted-foreground">
                         Branch-wise location settings and today's attendance validation
                     </p>
                 </div>
 
-                <Button variant="add"
+                <Button
+                    variant="add"
                     type="button"
                     onClick={() => void loadData()}
                     disabled={loading || (isSuperAdmin && !selectedCompanyId)}
                     className="cursor-pointer"
                 >
                     <RefreshCw
-                        className={` ${loading ? "animate-spin" : ""}`}
+                        className={`${loading ? "animate-spin" : ""}`}
                     />
                     Refresh
                 </Button>
@@ -174,8 +198,10 @@ const GeoFencing = () => {
                                 <p className="text-xs text-muted-foreground">
                                     Total Employees
                                 </p>
+
                                 <Users className="h-4 w-4 text-muted-foreground" />
                             </div>
+
                             <p className="text-xl font-semibold mt-2">
                                 {totalEmployees}
                             </p>
@@ -186,8 +212,10 @@ const GeoFencing = () => {
                                 <p className="text-xs text-muted-foreground">
                                     Inside Fence
                                 </p>
+
                                 <CheckCircle className="h-4 w-4 text-green-600" />
                             </div>
+
                             <p className="text-xl font-semibold text-green-600 mt-2">
                                 {totalInside}
                             </p>
@@ -198,8 +226,10 @@ const GeoFencing = () => {
                                 <p className="text-xs text-muted-foreground">
                                     Outside Fence
                                 </p>
+
                                 <XCircle className="h-4 w-4 text-red-600" />
                             </div>
+
                             <p className="text-xl font-semibold text-red-600 mt-2">
                                 {totalOutside}
                             </p>
@@ -210,8 +240,10 @@ const GeoFencing = () => {
                                 <p className="text-xs text-muted-foreground">
                                     Punched In Today
                                 </p>
+
                                 <MapPin className="h-4 w-4 text-muted-foreground" />
                             </div>
+
                             <p className="text-xl font-semibold mt-2">
                                 {totalPunchedIn}
                             </p>
@@ -221,6 +253,7 @@ const GeoFencing = () => {
                     <div className="flex items-center justify-between gap-3">
                         <div className="relative w-full max-w-sm">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+
                             <Input
                                 type="search"
                                 placeholder="Search branch, city or location..."
@@ -260,8 +293,12 @@ const GeoFencing = () => {
                             <TableBody>
                                 {loading ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="h-32 text-center">
+                                        <TableCell
+                                            colSpan={7}
+                                            className="h-32 text-center"
+                                        >
                                             <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2 text-muted-foreground" />
+
                                             <span className="text-sm text-muted-foreground">
                                                 Loading geo fencing data...
                                             </span>
@@ -269,7 +306,10 @@ const GeoFencing = () => {
                                     </TableRow>
                                 ) : filteredBranches.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="h-32 text-center text-sm text-muted-foreground">
+                                        <TableCell
+                                            colSpan={7}
+                                            className="h-32 text-center text-sm text-muted-foreground"
+                                        >
                                             {branches.length === 0
                                                 ? "No branches with location set."
                                                 : "No matching branches found."}
@@ -289,6 +329,7 @@ const GeoFencing = () => {
                                                             <p className="font-medium text-sm">
                                                                 {branch.name}
                                                             </p>
+
                                                             <p className="text-xs text-muted-foreground">
                                                                 {branch.city ?? "—"}
                                                             </p>
@@ -298,6 +339,7 @@ const GeoFencing = () => {
                                                     <TableCell>
                                                         <div className="flex items-center gap-1.5 max-w-52">
                                                             <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+
                                                             <span className="text-xs truncate">
                                                                 {hasLocation
                                                                     ? branch.locationName ??
@@ -358,6 +400,7 @@ const GeoFencing = () => {
                                                                                 <p className="text-xs font-medium">
                                                                                     {emp.name}
                                                                                 </p>
+
                                                                                 <p className="text-[10px] text-muted-foreground">
                                                                                     {emp.employeeCode ?? "—"}
                                                                                 </p>

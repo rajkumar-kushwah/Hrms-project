@@ -1,10 +1,10 @@
-// pages/payroll/PayrollReport.tsx
+
 import React from "react";
-// import * as XLSX from "xlsx";
 
 import { Card } from "@/components/ui/card";
-// import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
 import {
     Select,
     SelectContent,
@@ -12,6 +12,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+
 import {
     Table,
     TableBody,
@@ -21,17 +22,27 @@ import {
     TableRow,
 } from "@/components/ui/table";
 
-import { RefreshCw, FileSpreadsheet } from "lucide-react";
+import {
+    RefreshCw,
+    FileSpreadsheet,
+    Search,
+    X,
+} from "lucide-react";
+
 import { toast } from "sonner";
-
-
-
 
 import { getMonthlyPayrollReport } from "@/services/payrollreport.service";
 import { getCompanies } from "@/services/company.service";
+
 import { useAuthStore } from "@/store/auth.store";
-import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
-// Types
+
+import {
+    isSuperAdminRole,
+    canViewModule,
+} from "@/utilis/roleUtils";
+
+
+// TYPES
 
 
 type PayrollStatus = "DRAFT" | "CONFIRMED" | "PAID";
@@ -64,6 +75,7 @@ interface EmployeeRow {
 interface Report {
     month: number;
     year: number;
+
     totals: {
         employeeCount: number;
         totalGross: number;
@@ -75,14 +87,28 @@ interface Report {
         confirmedCount: number;
         paidCount: number;
     };
+
     byBranch: GroupTotals[];
     byCategory: GroupTotals[];
     employees: EmployeeRow[];
 }
 
+interface CompanyOption {
+    id: string;
+    name: string;
+}
 
-// Constants / helpers
+interface SummaryCard {
+    title: string;
+    value: string | number;
+    className?: string;
+}
 
+
+// CONSTANTS
+
+
+const MODULE_NAME = "payroll_report";
 
 const MONTHS = [
     { value: 1, label: "January" },
@@ -101,66 +127,216 @@ const MONTHS = [
 
 const getYearOptions = () => {
     const currentYear = new Date().getFullYear();
-    return Array.from({ length: 5 }, (_, i) => currentYear - i);
-};
 
-const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
-
-// const STATUS_BADGE_VARIANT: Record<PayrollStatus, "secondary" | "default" | "destructive"> = {
-//     DRAFT: "secondary",
-//     CONFIRMED: "default",
-//     PAID: "default",
-// };
-
-const StatusBadge = ({ status }: { status: PayrollStatus }) => {
-    const colorClass =
-        status === "PAID"
-            ? "bg-green-100 text-green-700"
-            : status === "CONFIRMED"
-                ? "bg-yellow-100 text-yellow-700"
-                : "bg-gray-200 text-gray-700";
-
-    return (
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colorClass}`}>
-            {status}
-        </span>
+    return Array.from(
+        { length: 5 },
+        (_, index) => currentYear - index
     );
 };
 
-interface CompanyOption {
-    id: string;
-    name: string;
-}
+const inr = (value: number) =>
+    `₹${Math.round(value).toLocaleString("en-IN")}`;
 
-// Page
+
+// STATUS CONFIGURATION
+
+
+const STATUS_CLASSES: Record<PayrollStatus, string> = {
+    DRAFT: "bg-gray-200 text-gray-700",
+    CONFIRMED: "bg-yellow-100 text-yellow-700",
+    PAID: "bg-green-100 text-green-700",
+};
+
+const StatusBadge = ({ status }: { status: PayrollStatus }) => (
+    <span
+        className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASSES[status]}`}
+    >
+        {status}
+    </span>
+);
+
+
+// TABLE CONFIGURATION
+
+
+const BRANCH_COLUMNS = [
+    {
+        label: "Name",
+        headerClass: "font-semibold",
+        cellClass: "font-medium",
+        render: (row: GroupTotals) => row.name,
+    },
+    {
+        label: "Employees",
+        headerClass: "text-right font-semibold",
+        cellClass: "text-right",
+        render: (row: GroupTotals) => row.employeeCount,
+    },
+    {
+        label: "Gross",
+        headerClass: "text-right font-semibold",
+        cellClass: "text-right",
+        render: (row: GroupTotals) => inr(row.totalGross),
+    },
+    {
+        label: "Earned",
+        headerClass: "text-right font-semibold",
+        cellClass: "text-right",
+        render: (row: GroupTotals) => inr(row.totalEarned),
+    },
+    {
+        label: "Deduction",
+        headerClass: "text-right font-semibold",
+        cellClass: "text-right text-red-600",
+        render: (row: GroupTotals) => inr(row.totalDeduction),
+    },
+    {
+        label: "Net Payable",
+        headerClass: "text-right font-semibold",
+        cellClass: "text-right font-semibold text-green-600",
+        render: (row: GroupTotals) => inr(row.totalNet),
+    },
+];
+
+const EMPLOYEE_COLUMNS = [
+    {
+        label: "Employee",
+        headerClass: "font-semibold",
+        cellClass: "whitespace-nowrap font-medium",
+        render: (row: EmployeeRow) => row.name,
+    },
+    {
+        label: "Code",
+        headerClass: "font-semibold",
+        cellClass: "text-muted-foreground",
+        render: (row: EmployeeRow) => row.employeeCode ?? "-",
+    },
+    {
+        label: "Branch",
+        headerClass: "font-semibold",
+        cellClass: "text-muted-foreground",
+        render: (row: EmployeeRow) => row.branchName,
+    },
+    {
+        label: "Category",
+        headerClass: "font-semibold",
+        cellClass: "text-muted-foreground",
+        render: (row: EmployeeRow) => row.categoryName,
+    },
+    {
+        label: "Gross",
+        headerClass: "text-right font-semibold",
+        cellClass: "whitespace-nowrap text-right",
+        render: (row: EmployeeRow) => inr(row.gross),
+    },
+    {
+        label: "Earned",
+        headerClass: "text-right font-semibold",
+        cellClass: "whitespace-nowrap text-right",
+        render: (row: EmployeeRow) => inr(row.earned),
+    },
+    {
+        label: "Per Day Salary",
+        headerClass: "text-right font-semibold",
+        cellClass: "whitespace-nowrap text-right text-green-600",
+        render: (row: EmployeeRow) => inr(row.perDaySalary),
+    },
+    {
+        label: "Deduction",
+        headerClass: "text-right font-semibold",
+        cellClass: "whitespace-nowrap text-right text-red-600",
+        render: (row: EmployeeRow) => inr(row.deduction),
+    },
+    {
+        label: "Net",
+        headerClass: "text-right font-semibold",
+        cellClass: "whitespace-nowrap text-right font-semibold text-green-600",
+        render: (row: EmployeeRow) => inr(row.net),
+    },
+    {
+        label: "Status",
+        headerClass: "font-semibold",
+        cellClass: "",
+        render: (row: EmployeeRow) => <StatusBadge status={row.status} />,
+    },
+];
+
+
+// HELPERS
+
+
+const sumBy = <T,>(
+    items: T[],
+    pick: (item: T) => number
+) =>
+    Number(
+        items.reduce((total, item) => total + pick(item), 0).toFixed(2)
+    );
+
+const fitColumns = (
+    rows: Record<string, string | number>[]
+) => {
+    if (rows.length === 0) return [];
+
+    return Object.keys(rows[0]).map((key) => ({
+        wch:
+            Math.max(
+                key.length,
+                ...rows.map((row) =>
+                    String(row[key] ?? "").length
+                )
+            ) + 2,
+    }));
+};
+
+
+// PAGE
 
 
 const PayrollReport = () => {
     const currentDate = new Date();
 
     const user = useAuthStore((state) => state.user);
-    const userRole = getUserRole(user);
-    const isSuperAdmin = isSuperAdminRole(userRole);
+
+    // Permissions
+
+    const canViewPayrollReport = canViewModule(user, MODULE_NAME);
+    const isSuperAdmin = isSuperAdminRole(user);
+
+    // Month / Year
 
     const [month, setMonth] = React.useState(
         currentDate.getMonth() + 1
     );
+
     const [year, setYear] = React.useState(
         currentDate.getFullYear()
     );
 
+    // Report
+
     const [report, setReport] = React.useState<Report | null>(null);
     const [loading, setLoading] = React.useState(true);
+
+    // Companies
 
     const [companies, setCompanies] = React.useState<CompanyOption[]>([]);
     const [selectedCompanyId, setSelectedCompanyId] = React.useState("");
     const [companiesLoading, setCompaniesLoading] = React.useState(false);
 
-    // Load companies for Super Admin
+    // Employee filters
+
+    const [search, setSearch] = React.useState("");
+
+  
+    // LOAD COMPANIES
+  
+
     React.useEffect(() => {
-        if (!isSuperAdmin) {
+        if (!canViewPayrollReport || !isSuperAdmin) {
             setCompanies([]);
             setSelectedCompanyId("");
+            setCompaniesLoading(false);
             return;
         }
 
@@ -171,7 +347,9 @@ const PayrollReport = () => {
 
             try {
                 const response = await getCompanies();
-                const companyList: CompanyOption[] = response.data.data ?? [];
+
+                const companyList: CompanyOption[] =
+                    response.data.data ?? [];
 
                 if (!cancelled) {
                     setCompanies(companyList);
@@ -179,7 +357,9 @@ const PayrollReport = () => {
                     setSelectedCompanyId((current) => {
                         if (
                             current &&
-                            companyList.some((company) => company.id === current)
+                            companyList.some(
+                                (company) => company.id === current
+                            )
                         ) {
                             return current;
                         }
@@ -205,22 +385,26 @@ const PayrollReport = () => {
         return () => {
             cancelled = true;
         };
-    }, [isSuperAdmin]);
+    }, [canViewPayrollReport, isSuperAdmin]);
 
-    // Load payroll report
+  
+    // LOAD PAYROLL REPORT
+  
+
     const loadReport = React.useCallback(async () => {
+        if (!canViewPayrollReport) {
+            setReport(null);
+            setLoading(false);
+            return;
+        }
+
         if (isSuperAdmin && !selectedCompanyId) {
             setReport(null);
             setLoading(false);
             return;
         }
 
-        // Sirf first load par loading screen dikhao.
-        // Existing report hone par use visible rakho.
-        if (!report) {
-            setLoading(true);
-        }
-
+        setLoading(true);
 
         try {
             const response = await getMonthlyPayrollReport(
@@ -236,156 +420,357 @@ const PayrollReport = () => {
         } finally {
             setLoading(false);
         }
-    }, [month, year, isSuperAdmin, selectedCompanyId]);
+    }, [
+        canViewPayrollReport,
+        month,
+        year,
+        isSuperAdmin,
+        selectedCompanyId,
+    ]);
+
+    // Automatically load report
 
     React.useEffect(() => {
+        if (!canViewPayrollReport) return;
+
         void loadReport();
-    }, [loadReport]);
+    }, [canViewPayrollReport, loadReport]);
 
-    // Yahan apna existing handleExport function rakho.
+  
+    // SUMMARY CARD DATA
+  
 
-    // Excel export
-
-    const handleExport = async () => {
-        if (!report) return;
-
-        // Load XLSX only when export is clicked
-        const XLSX = await import("xlsx");
-
-        const wb = XLSX.utils.book_new();
-
-        const sum = <T,>(items: T[], pick: (i: T) => number) =>
-            Number(items.reduce((s, i) => s + pick(i), 0).toFixed(2));
-
-        const fitColumns = (rows: Record<string, string | number>[]) => {
-            if (rows.length === 0) return [];
-            return Object.keys(rows[0]).map((key) => ({
-                wch: Math.max(key.length, ...rows.map((r) => String(r[key] ?? "").length)) + 2,
-            }));
-        };
-
-        const makeSheet = (rows: Record<string, string | number>[]) => {
-            const ws = XLSX.utils.json_to_sheet(rows);
-            ws["!cols"] = fitColumns(rows);
-            return ws;
-        };
-
-        const groupRows = (rows: GroupTotals[]) => [
-            ...rows.map((r) => ({
-                Name: r.name,
-                Employees: r.employeeCount,
-                Gross: r.totalGross,
-                Earned: r.totalEarned,
-                Deduction: r.totalDeduction,
-                perDaySalary: r.totalperDaySalary,
-                "Net Payable": r.totalNet,
-            })),
+    const summaryCards: SummaryCard[] = report
+        ? [
             {
-                Name: "TOTAL",
-                Employees: sum(rows, (r) => r.employeeCount),
-                Gross: sum(rows, (r) => r.totalGross),
-                Earned: sum(rows, (r) => r.totalEarned),
-                Deduction: sum(rows, (r) => r.totalDeduction),
-                perDaySalary: sum(rows, (r) => r.totalperDaySalary),
-                "Net Payable": sum(rows, (r) => r.totalNet),
+                title: "Employees",
+                value: report.totals.employeeCount,
             },
-        ];
+            {
+                title: "Total Gross",
+                value: inr(report.totals.totalGross),
+            },
+            {
+                title: "Total Earned",
+                value: inr(report.totals.totalEarned),
+            },
+            {
+                title: "Total Deduction",
+                value: inr(report.totals.totalDeduction),
+                className: "text-red-600",
+            },
+            {
+                title: "Total Disbursed",
+                value: inr(report.totals.totalNet),
+                className: "text-green-600",
+            },
+        ]
+        : [];
 
-        const sortedEmployees = [...report.employees].sort(
-            (a, b) =>
-                a.branchName.localeCompare(b.branchName) ||
-                a.categoryName.localeCompare(b.categoryName) ||
-                a.name.localeCompare(b.name)
+  
+    // PAYROLL STATUS DATA
+  
+
+    const payrollStatuses: {
+        status: PayrollStatus;
+        count: number;
+    }[] = report
+            ? [
+                {
+                    status: "DRAFT",
+                    count: report.totals.draftCount,
+                },
+                {
+                    status: "CONFIRMED",
+                    count: report.totals.confirmedCount,
+                },
+                {
+                    status: "PAID",
+                    count: report.totals.paidCount,
+                },
+            ]
+            : [];
+
+  
+    // FILTER EMPLOYEES
+  
+
+    const filteredEmployees = React.useMemo(() => {
+        if (!report) return [];
+
+        const searchValue = search.trim().toLowerCase();
+
+        if (!searchValue) return report.employees;
+
+        return report.employees.filter((employee) =>
+            employee.name.toLowerCase().includes(searchValue) ||
+            (employee.employeeCode ?? "")
+                .toLowerCase()
+                .includes(searchValue)
         );
+    }, [report, search]);
 
-        const employeeRows = [
-            ...sortedEmployees.map((e) => ({
-                Code: e.employeeCode ?? "",
-                Name: e.name,
-                Branch: e.branchName,
-                Category: e.categoryName,
-                Gross: e.gross,
-                Earned: e.earned,
-                Deduction: e.deduction,
-                perDaySalary: e.perDaySalary,
-                "Net Payable": e.net,
-                Status: e.status,
-            })),
-            {
-                Code: "",
-                Name: "TOTAL",
-                Branch: "",
-                Category: "",
-                Gross: sum(sortedEmployees, (e) => e.gross),
-                Earned: sum(sortedEmployees, (e) => e.earned),
-                Deduction: sum(sortedEmployees, (e) => e.deduction),
-                perDaySalary: sum(sortedEmployees, (e) => e.perDaySalary),
-                "Net Payable": sum(sortedEmployees, (e) => e.net),
-                Status: "",
-            },
-        ];
+    // Clear filters
 
-        // Branch-wise Detail sheet: employees grouped under their branch
-        const detailHeader = ["Branch / Employee", "Code", "Category", "Gross", "Earned", "Deduction", "PerDaySalary", "Net Payable"];
-        const detailRows: (string | number)[][] = [detailHeader];
-        const branchNames = Array.from(new Set(sortedEmployees.map((e) => e.branchName)));
-
-        for (const branchName of branchNames) {
-            const members = sortedEmployees.filter((e) => e.branchName === branchName);
-            detailRows.push([branchName.toUpperCase(), "", "", "", "", "", "", ""]);
-            for (const e of members) {
-                detailRows.push([`   ${e.name}`, e.employeeCode ?? "", e.categoryName, e.gross, e.earned, e.deduction, e.perDaySalary, e.net]);
-            }
-            detailRows.push([
-                `Branch Total (${members.length} employees)`, "", "",
-                sum(members, (e) => e.gross), sum(members, (e) => e.earned),
-                sum(members, (e) => e.deduction), sum(members, (e) => e.perDaySalary), sum(members, (e) => e.net),
-            ]);
-            detailRows.push(["", "", "", "", "", "", "", ""]);
-        }
-        detailRows.push([
-            `GRAND TOTAL (${sortedEmployees.length} employees)`, "", "",
-            sum(sortedEmployees, (e) => e.gross), sum(sortedEmployees, (e) => e.earned),
-            sum(sortedEmployees, (e) => e.deduction), sum(sortedEmployees, (e) => e.perDaySalary), sum(sortedEmployees, (e) => e.net),
-        ]);
-
-        const detailSheet = XLSX.utils.aoa_to_sheet(detailRows);
-        detailSheet["!cols"] = detailHeader.map((h, i) => ({
-            wch: Math.max(h.length, ...detailRows.map((r) => String(r[i] ?? "").length)) + 2,
-        }));
-
-        XLSX.utils.book_append_sheet(wb, detailSheet, "Branch-wise Detail");
-        XLSX.utils.book_append_sheet(wb, makeSheet(groupRows(report.byBranch)), "By Branch");
-        XLSX.utils.book_append_sheet(wb, makeSheet(groupRows(report.byCategory)), "By Category");
-        XLSX.utils.book_append_sheet(wb, makeSheet(employeeRows), "Employees");
-
-        XLSX.writeFile(wb, `payroll-report-${month}-${year}.xlsx`);
+    const clearFilters = () => {
+        setSearch("");
     };
 
+    const hasActiveFilters = search.trim() !== "";
 
+  
+    // EXCEL EXPORT
+  
+
+    const handleExport = async () => {
+        if (!canViewPayrollReport || !report) return;
+
+        try {
+            const XLSX = await import("xlsx");
+
+            const workbook = XLSX.utils.book_new();
+
+            // Create JSON sheet
+
+            const makeSheet = (
+                rows: Record<string, string | number>[]
+            ) => {
+                const worksheet = XLSX.utils.json_to_sheet(rows);
+
+                worksheet["!cols"] = fitColumns(rows);
+
+                return worksheet;
+            };
+
+            // Group-wise rows
+
+            const groupRows = (rows: GroupTotals[]) => [
+                ...rows.map((row) => ({
+                    Name: row.name,
+                    Employees: row.employeeCount,
+                    Gross: row.totalGross,
+                    Earned: row.totalEarned,
+                    Deduction: row.totalDeduction,
+                    perDaySalary: row.totalperDaySalary,
+                    "Net Payable": row.totalNet,
+                })),
+
+                {
+                    Name: "TOTAL",
+                    Employees: sumBy(rows, (row) => row.employeeCount),
+                    Gross: sumBy(rows, (row) => row.totalGross),
+                    Earned: sumBy(rows, (row) => row.totalEarned),
+                    Deduction: sumBy(rows, (row) => row.totalDeduction),
+                    perDaySalary: sumBy(
+                        rows,
+                        (row) => row.totalperDaySalary
+                    ),
+                    "Net Payable": sumBy(rows, (row) => row.totalNet),
+                },
+            ];
+
+            // Sort employees
+
+            const sortedEmployees = [...report.employees].sort(
+                (a, b) =>
+                    a.branchName.localeCompare(b.branchName) ||
+                    a.categoryName.localeCompare(b.categoryName) ||
+                    a.name.localeCompare(b.name)
+            );
+
+            // Employees sheet
+
+            const employeeRows = [
+                ...sortedEmployees.map((employee) => ({
+                    Code: employee.employeeCode ?? "",
+                    Name: employee.name,
+                    Branch: employee.branchName,
+                    Category: employee.categoryName,
+                    Gross: employee.gross,
+                    Earned: employee.earned,
+                    Deduction: employee.deduction,
+                    perDaySalary: employee.perDaySalary,
+                    "Net Payable": employee.net,
+                    Status: employee.status,
+                })),
+
+                {
+                    Code: "",
+                    Name: "TOTAL",
+                    Branch: "",
+                    Category: "",
+                    Gross: sumBy(sortedEmployees, (e) => e.gross),
+                    Earned: sumBy(sortedEmployees, (e) => e.earned),
+                    Deduction: sumBy(sortedEmployees, (e) => e.deduction),
+                    perDaySalary: sumBy(
+                        sortedEmployees,
+                        (e) => e.perDaySalary
+                    ),
+                    "Net Payable": sumBy(sortedEmployees, (e) => e.net),
+                    Status: "",
+                },
+            ];
+
+            // Branch-wise Detail sheet
+
+            const detailHeader = [
+                "Branch / Employee",
+                "Code",
+                "Category",
+                "Gross",
+                "Earned",
+                "Deduction",
+                "PerDaySalary",
+                "Net Payable",
+            ];
+
+            const detailRows: (string | number)[][] = [detailHeader];
+
+            const branchNames = Array.from(
+                new Set(
+                    sortedEmployees.map((employee) => employee.branchName)
+                )
+            );
+
+            for (const branchName of branchNames) {
+                const members = sortedEmployees.filter(
+                    (employee) => employee.branchName === branchName
+                );
+
+                detailRows.push([
+                    branchName.toUpperCase(),
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                ]);
+
+                for (const employee of members) {
+                    detailRows.push([
+                        `   ${employee.name}`,
+                        employee.employeeCode ?? "",
+                        employee.categoryName,
+                        employee.gross,
+                        employee.earned,
+                        employee.deduction,
+                        employee.perDaySalary,
+                        employee.net,
+                    ]);
+                }
+
+                detailRows.push([
+                    `Branch Total (${members.length} employees)`,
+                    "",
+                    "",
+                    sumBy(members, (e) => e.gross),
+                    sumBy(members, (e) => e.earned),
+                    sumBy(members, (e) => e.deduction),
+                    sumBy(members, (e) => e.perDaySalary),
+                    sumBy(members, (e) => e.net),
+                ]);
+
+                detailRows.push(["", "", "", "", "", "", "", ""]);
+            }
+
+            detailRows.push([
+                `GRAND TOTAL (${sortedEmployees.length} employees)`,
+                "",
+                "",
+                sumBy(sortedEmployees, (e) => e.gross),
+                sumBy(sortedEmployees, (e) => e.earned),
+                sumBy(sortedEmployees, (e) => e.deduction),
+                sumBy(sortedEmployees, (e) => e.perDaySalary),
+                sumBy(sortedEmployees, (e) => e.net),
+            ]);
+
+            const detailSheet = XLSX.utils.aoa_to_sheet(detailRows);
+
+            detailSheet["!cols"] = detailHeader.map((header, index) => ({
+                wch:
+                    Math.max(
+                        header.length,
+                        ...detailRows.map((row) =>
+                            String(row[index] ?? "").length
+                        )
+                    ) + 2,
+            }));
+
+            // Append sheets
+
+            XLSX.utils.book_append_sheet(
+                workbook,
+                detailSheet,
+                "Branch-wise Detail"
+            );
+
+            XLSX.utils.book_append_sheet(
+                workbook,
+                makeSheet(groupRows(report.byBranch)),
+                "By Branch"
+            );
+
+            XLSX.utils.book_append_sheet(
+                workbook,
+                makeSheet(employeeRows),
+                "Employees"
+            );
+
+            // Download
+
+            XLSX.writeFile(
+                workbook,
+                `payroll-report-${month}-${year}.xlsx`
+            );
+
+            toast.success("Payroll report exported successfully.");
+        } catch {
+            toast.error("Failed to export payroll report.");
+        }
+    };
+
+  
+    // PERMISSION CHECK
+  
+
+    if (!canViewPayrollReport) {
+        return null;
+    }
+
+  
     // UI
-
+  
 
     return (
         <div className="w-full space-y-5">
 
             {/* HEADER */}
+
             <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h2 className="text-lg font-semibold tracking-tight">
                         Payroll Report
                     </h2>
+
                     <p className="mt-0.5 text-xs text-muted-foreground">
                         Monthly payroll summary — view and export only
                     </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+
+                    {/* COMPANY SELECT */}
+
                     {isSuperAdmin && (
                         <Select
                             value={selectedCompanyId}
                             onValueChange={setSelectedCompanyId}
-                            disabled={companiesLoading || companies.length === 0}
+                            disabled={
+                                companiesLoading ||
+                                companies.length === 0
+                            }
                         >
                             <SelectTrigger className="h-9 w-[190px]">
                                 <SelectValue
@@ -401,53 +786,66 @@ const PayrollReport = () => {
 
                             <SelectContent position="popper">
                                 {companies.map((company) => (
-                                    <SelectItem key={company.id} value={company.id}>
+                                    <SelectItem
+                                        key={company.id}
+                                        value={company.id}
+                                    >
                                         {company.name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
                     )}
+
+                    {/* MONTH SELECT */}
+
                     <Select
                         value={String(month)}
-                        onValueChange={(v) => setMonth(Number(v))}
+                        onValueChange={(value) => setMonth(Number(value))}
                     >
                         <SelectTrigger className="h-9 w-[135px]">
                             <SelectValue placeholder="Month" />
                         </SelectTrigger>
 
                         <SelectContent position="popper">
-                            {MONTHS.map((m) => (
+                            {MONTHS.map((item) => (
                                 <SelectItem
-                                    key={m.value}
-                                    value={String(m.value)}
+                                    key={item.value}
+                                    value={String(item.value)}
                                 >
-                                    {m.label}
+                                    {item.label}
                                 </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
 
+                    {/* YEAR SELECT */}
+
                     <Select
                         value={String(year)}
-                        onValueChange={(v) => setYear(Number(v))}
+                        onValueChange={(value) => setYear(Number(value))}
                     >
                         <SelectTrigger className="h-9 w-[100px]">
                             <SelectValue placeholder="Year" />
                         </SelectTrigger>
 
                         <SelectContent position="popper">
-                            {getYearOptions().map((y) => (
-                                <SelectItem key={y} value={String(y)}>
-                                    {y}
+                            {getYearOptions().map((item) => (
+                                <SelectItem
+                                    key={item}
+                                    value={String(item)}
+                                >
+                                    {item}
                                 </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
 
+                    {/* EXPORT BUTTON */}
+
                     <Button
                         variant="add"
-                        className="h-9 "
+                        className="h-9"
                         onClick={handleExport}
                         disabled={!report || loading}
                     >
@@ -456,6 +854,9 @@ const PayrollReport = () => {
                     </Button>
                 </div>
             </div>
+
+            {/* REPORT STATES */}
+
             {isSuperAdmin && !selectedCompanyId ? (
                 <div className="flex min-h-[300px] items-center justify-center rounded-lg border bg-card text-sm text-muted-foreground">
                     Please select a company to view the payroll report.
@@ -474,89 +875,57 @@ const PayrollReport = () => {
             ) : (
                 <>
                     {/* SUMMARY CARDS */}
+
                     <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-                        <Card className="p-4">
-                            <p className="text-xs font-medium text-muted-foreground">
-                                Employees
-                            </p>
-                            <p className="mt-1 text-xl font-bold tracking-tight">
-                                {report.totals.employeeCount}
-                            </p>
-                        </Card>
+                        {summaryCards.map((item) => (
+                            <Card
+                                key={item.title}
+                                className="p-4"
+                            >
+                                <p className="text-xs font-medium text-muted-foreground">
+                                    {item.title}
+                                </p>
 
-                        <Card className="p-4">
-                            <p className="text-xs font-medium text-muted-foreground">
-                                Total Gross
-                            </p>
-                            <p className="mt-1 text-xl font-bold tracking-tight">
-                                {inr(report.totals.totalGross)}
-                            </p>
-                        </Card>
-
-                        <Card className="p-4">
-                            <p className="text-xs font-medium text-muted-foreground">
-                                Total Earned
-                            </p>
-                            <p className="mt-1 text-xl font-bold tracking-tight">
-                                {inr(report.totals.totalEarned)}
-                            </p>
-                        </Card>
-
-                        <Card className="p-4">
-                            <p className="text-xs font-medium text-muted-foreground">
-                                Total Deduction
-                            </p>
-                            <p className="mt-1 text-xl font-bold tracking-tight text-red-600">
-                                {inr(report.totals.totalDeduction)}
-                            </p>
-                        </Card>
-
-                        <Card className="p-4">
-                            <p className="text-xs font-medium text-muted-foreground">
-                                Total Disbursed
-                            </p>
-                            <p className="mt-1 text-xl font-bold tracking-tight text-green-600">
-                                {inr(report.totals.totalNet)}
-                            </p>
-                        </Card>
+                                <p
+                                    className={`mt-1 text-xl font-bold tracking-tight ${item.className ?? ""}`}
+                                >
+                                    {item.value}
+                                </p>
+                            </Card>
+                        ))}
                     </div>
 
-                    {/* STATUS SUMMARY */}
-                    <div className="p-3 transition-none duration-0 ease-none hover:opacity-100 hover:scale-100 active:scale-100">
+                    {/* PAYROLL STATUS */}
+
+                    <div className="p-3">
                         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                             <span className="text-xs font-semibold text-muted-foreground">
                                 Payroll Status
                             </span>
 
-                            <span className="flex items-center gap-2 text-sm">
-                                <StatusBadge status="DRAFT" />
-                                <span className="font-medium">
-                                    {report.totals.draftCount}
-                                </span>
-                            </span>
+                            {payrollStatuses.map((item) => (
+                                <span
+                                    key={item.status}
+                                    className="flex items-center gap-2 text-sm"
+                                >
+                                    <StatusBadge status={item.status} />
 
-                            <span className="flex items-center gap-2 text-sm">
-                                <StatusBadge status="CONFIRMED" />
-                                <span className="font-medium">
-                                    {report.totals.confirmedCount}
+                                    <span className="font-medium">
+                                        {item.count}
+                                    </span>
                                 </span>
-                            </span>
-
-                            <span className="flex items-center gap-2 text-sm">
-                                <StatusBadge status="PAID" />
-                                <span className="font-medium">
-                                    {report.totals.paidCount}
-                                </span>
-                            </span>
+                            ))}
                         </div>
                     </div>
 
                     {/* BRANCH-WISE SUMMARY */}
+
                     <section>
                         <div className="mb-2">
                             <h3 className="text-sm font-semibold">
                                 Branch-wise Summary
                             </h3>
+
                             <p className="text-xs text-muted-foreground">
                                 Payroll totals grouped by branch
                             </p>
@@ -567,25 +936,14 @@ const PayrollReport = () => {
                                 <Table>
                                     <TableHeader className="bg-muted/60">
                                         <TableRow className="hover:bg-transparent">
-                                            <TableHead className="font-semibold">
-                                                Name
-                                            </TableHead>
-                                            <TableHead className="text-right font-semibold">
-                                                Employees
-                                            </TableHead>
-                                            <TableHead className="text-right font-semibold">
-                                                Gross
-                                            </TableHead>
-                                            <TableHead className="text-right font-semibold">
-                                                Earned
-                                            </TableHead>
-                                            <TableHead className="text-right font-semibold">
-                                                Deduction
-                                            </TableHead>
-
-                                            <TableHead className="text-right font-semibold">
-                                                Net Payable
-                                            </TableHead>
+                                            {BRANCH_COLUMNS.map((column) => (
+                                                <TableHead
+                                                    key={column.label}
+                                                    className={column.headerClass}
+                                                >
+                                                    {column.label}
+                                                </TableHead>
+                                            ))}
                                         </TableRow>
                                     </TableHeader>
 
@@ -593,126 +951,26 @@ const PayrollReport = () => {
                                         {report.byBranch.length === 0 ? (
                                             <TableRow>
                                                 <TableCell
-                                                    colSpan={6}
+                                                    colSpan={BRANCH_COLUMNS.length}
                                                     className="py-8 text-center text-sm text-muted-foreground"
                                                 >
                                                     No data
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
-                                            report.byBranch.map((b) => (
+                                            report.byBranch.map((branch) => (
                                                 <TableRow
-                                                    key={b.id ?? b.name}
+                                                    key={branch.id ?? branch.name}
                                                     className="hover:bg-muted/30"
                                                 >
-                                                    <TableCell className="font-medium">
-                                                        {b.name}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right">
-                                                        {b.employeeCount}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right">
-                                                        {inr(b.totalGross)}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right">
-                                                        {inr(b.totalEarned)}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right text-red-600">
-                                                        {inr(b.totalDeduction)}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right font-semibold text-green-600">
-                                                        {inr(b.totalNet)}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* CATEGORY-WISE SUMMARY */}
-                    <section>
-                        <div className="mb-2">
-                            <h3 className="text-sm font-semibold">
-                                Category-wise Summary
-                            </h3>
-                            <p className="text-xs text-muted-foreground">
-                                Payroll totals grouped by category
-                            </p>
-                        </div>
-
-                        <div className="overflow-hidden rounded-lg border bg-card">
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader className="bg-muted/60">
-                                        <TableRow className="hover:bg-transparent">
-                                            <TableHead className="font-semibold">
-                                                Name
-                                            </TableHead>
-                                            <TableHead className="text-right font-semibold">
-                                                Employees
-                                            </TableHead>
-                                            <TableHead className="text-right font-semibold">
-                                                Gross
-                                            </TableHead>
-                                            <TableHead className="text-right font-semibold">
-                                                Earned
-                                            </TableHead>
-                                            <TableHead className="text-right font-semibold">
-                                                Deduction
-                                            </TableHead>
-                                            <TableHead className="text-right font-semibold">
-                                                Net Payable
-                                            </TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-
-                                    <TableBody>
-                                        {report.byCategory.length === 0 ? (
-                                            <TableRow>
-                                                <TableCell
-                                                    colSpan={6}
-                                                    className="py-8 text-center text-sm text-muted-foreground"
-                                                >
-                                                    No data
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : (
-                                            report.byCategory.map((c) => (
-                                                <TableRow
-                                                    key={c.id ?? c.name}
-                                                    className="hover:bg-muted/30"
-                                                >
-                                                    <TableCell className="font-medium">
-                                                        {c.name}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right">
-                                                        {c.employeeCount}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right">
-                                                        {inr(c.totalGross)}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right">
-                                                        {inr(c.totalEarned)}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right text-red-600">
-                                                        {inr(c.totalDeduction)}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right font-semibold text-green-600">
-                                                        {inr(c.totalNet)}
-                                                    </TableCell>
+                                                    {BRANCH_COLUMNS.map((column) => (
+                                                        <TableCell
+                                                            key={column.label}
+                                                            className={column.cellClass}
+                                                        >
+                                                            {column.render(branch)}
+                                                        </TableCell>
+                                                    ))}
                                                 </TableRow>
                                             ))
                                         )}
@@ -723,108 +981,99 @@ const PayrollReport = () => {
                     </section>
 
                     {/* EMPLOYEE-WISE DETAIL */}
+
                     <section>
                         <div className="mb-2">
                             <h3 className="text-sm font-semibold">
                                 Employee-wise Detail
                             </h3>
+
                             <p className="text-xs text-muted-foreground">
                                 Individual employee payroll details
                             </p>
                         </div>
+
+                        {/* SEARCH */}
+
+                        <div className="mb-3 flex flex-wrap gap-2 rounded-lg border bg-card p-3 sm:items-center">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+                                <Input
+                                    value={search}
+                                    onChange={(event) =>
+                                        setSearch(event.target.value)
+                                    }
+                                    placeholder="Search employee name or code..."
+                                    className="h-9 w-auto pl-9"
+                                />
+                            </div>
+
+                            <Button
+                                type="button"
+                                variant="add"
+                                className="h-9"
+                                onClick={clearFilters}
+                                disabled={!hasActiveFilters}
+                            >
+                                <X className="mr-2 h-4 w-4" />
+                                Clear
+                            </Button>
+                        </div>
+
+                        {/* FILTER RESULT COUNT */}
+
+                        <div className="mb-2 flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">
+                                Showing {filteredEmployees.length} of{" "}
+                                {report.employees.length} employees
+                            </p>
+                        </div>
+
+                        {/* EMPLOYEE TABLE */}
 
                         <div className="overflow-hidden rounded-lg border bg-card">
                             <div className="overflow-x-auto">
                                 <Table>
                                     <TableHeader className="bg-muted/60">
                                         <TableRow className="hover:bg-transparent">
-                                            <TableHead className="font-semibold">
-                                                Employee
-                                            </TableHead>
-                                            <TableHead className="font-semibold">
-                                                Code
-                                            </TableHead>
-                                            <TableHead className="font-semibold">
-                                                Branch
-                                            </TableHead>
-                                            <TableHead className="font-semibold">
-                                                Category
-                                            </TableHead>
-                                            <TableHead className="text-right font-semibold">
-                                                Gross
-                                            </TableHead>
-                                            <TableHead className="text-right font-semibold">
-                                                Earned
-                                            </TableHead>
-                                            <TableHead className="text-right font-semibold">
-                                                perDaySalary
-                                            </TableHead>
-                                            <TableHead className="text-right font-semibold">
-                                                Deduction
-                                            </TableHead>
-                                            <TableHead className="text-right font-semibold">
-                                                Net
-                                            </TableHead>
-                                            <TableHead className="font-semibold">
-                                                Status
-                                            </TableHead>
+                                            {EMPLOYEE_COLUMNS.map((column) => (
+                                                <TableHead
+                                                    key={column.label}
+                                                    className={column.headerClass}
+                                                >
+                                                    {column.label}
+                                                </TableHead>
+                                            ))}
                                         </TableRow>
                                     </TableHeader>
 
                                     <TableBody>
-                                        {report.employees.length === 0 ? (
+                                        {filteredEmployees.length === 0 ? (
                                             <TableRow>
                                                 <TableCell
-                                                    colSpan={9}
+                                                    colSpan={EMPLOYEE_COLUMNS.length}
                                                     className="py-8 text-center text-sm text-muted-foreground"
                                                 >
-                                                    No employees found
+                                                    {report.employees.length === 0
+                                                        ? "No employees found"
+                                                        : "No employees match your search or filters"}
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
-                                            report.employees.map((e) => (
+                                            filteredEmployees.map((employee) => (
                                                 <TableRow
-                                                    key={e.userId}
+                                                    key={employee.userId}
                                                     className="hover:bg-muted/30"
                                                 >
-                                                    <TableCell className="font-medium whitespace-nowrap">
-                                                        {e.name}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-muted-foreground">
-                                                        {e.employeeCode ?? "-"}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-muted-foreground">
-                                                        {e.branchName}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-muted-foreground">
-                                                        {e.categoryName}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right whitespace-nowrap">
-                                                        {inr(e.gross)}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right whitespace-nowrap">
-                                                        {inr(e.earned)}
-                                                    </TableCell>
-                                                    <TableCell className="text-right whitespace-nowrap text-green-600">
-                                                        {inr(e.perDaySalary)}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right whitespace-nowrap text-red-600">
-                                                        {inr(e.deduction)}
-                                                    </TableCell>
-
-                                                    <TableCell className="text-right whitespace-nowrap font-semibold text-green-600">
-                                                        {inr(e.net)}
-                                                    </TableCell>
-
-                                                    <TableCell>
-                                                        <StatusBadge status={e.status} />
-                                                    </TableCell>
+                                                    {EMPLOYEE_COLUMNS.map((column) => (
+                                                        <TableCell
+                                                            key={column.label}
+                                                            className={column.cellClass}
+                                                        >
+                                                            {column.render(employee)}
+                                                        </TableCell>
+                                                    ))}
                                                 </TableRow>
                                             ))
                                         )}

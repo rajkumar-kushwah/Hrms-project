@@ -26,7 +26,12 @@ import {
 import { downloadBlobAsFile } from "@/utilis/downloadFile";
 import { useCompanyStore } from "@/store/company.store";
 import { CompanySelector } from "@/pages/common/CompanySelector";
-
+import { useAuthStore } from "@/store/auth.store";
+import {
+  canViewModule,
+  canCreateInModule,
+  canEditInModule,
+} from "@/utilis/roleUtils";
 
 interface PayrollEmployee {
   userId: string;
@@ -69,13 +74,19 @@ export default function PayrollTable({
   onMonthChange,
   onYearChange,
   isSuperAdmin,
-  // selectedDraftEmployees,
   selectedConfirmedEmployees,
   selectedDraftIds,
   selectedConfirmedIds,
   onActionComplete,
 }: PayrollTableProps) {
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
+
+  const { user } = useAuthStore();
+
+  // Payroll permissions
+  const canViewPayroll = canViewModule(user, "payroll");
+  const canCreatePayroll = canCreateInModule(user, "payroll");
+  const canEditPayroll = canEditInModule(user, "payroll");
 
   const selectedCompanyId = useCompanyStore(
     (state) => state.selectedCompanyId
@@ -92,12 +103,17 @@ export default function PayrollTable({
     selectedIds.size === 0 ||
     companyRequired;
 
-
   const runAction = async (
     action: string,
     operation: (companyIdAtSubmit?: string) => Promise<unknown>,
-    successMessage: string
+    successMessage: string,
+    hasPermission: boolean
   ) => {
+    if (!canViewPayroll || !hasPermission) {
+      toast.error("You don't have permission to perform this action.");
+      return;
+    }
+
     if (isSuperAdmin && !selectedCompanyId) {
       toast.error("Please select a company first.");
       return;
@@ -110,11 +126,9 @@ export default function PayrollTable({
     try {
       await operation(companyIdAtSubmit || undefined);
 
-      // Do not refresh or report success for a different selection.
       if (
         isSuperAdmin &&
-        useCompanyStore.getState().selectedCompanyId !==
-        companyIdAtSubmit
+        useCompanyStore.getState().selectedCompanyId !== companyIdAtSubmit
       ) {
         return;
       }
@@ -124,30 +138,29 @@ export default function PayrollTable({
     } catch (error: unknown) {
       if (
         isSuperAdmin &&
-        useCompanyStore.getState().selectedCompanyId !==
-        companyIdAtSubmit
+        useCompanyStore.getState().selectedCompanyId !== companyIdAtSubmit
       ) {
         return;
       }
 
       const message =
         typeof error === "object" &&
-          error !== null &&
-          "response" in error
+        error !== null &&
+        "response" in error
           ? (
-            error as {
-              response?: {
-                data?: { message?: string };
-              };
-            }
-          ).response?.data?.message
+              error as {
+                response?: {
+                  data?: { message?: string };
+                };
+              }
+            ).response?.data?.message
           : undefined;
 
       toast.error(
         message ??
-        (error instanceof Error
-          ? error.message
-          : "Something went wrong.")
+          (error instanceof Error
+            ? error.message
+            : "Something went wrong.")
       );
     } finally {
       setLoadingAction(null);
@@ -165,11 +178,9 @@ export default function PayrollTable({
           companyIdAtSubmit
         );
 
-        // Prevent downloading a response for a company no longer selected.
         if (
           isSuperAdmin &&
-          useCompanyStore.getState().selectedCompanyId !==
-          companyIdAtSubmit
+          useCompanyStore.getState().selectedCompanyId !== companyIdAtSubmit
         ) {
           return;
         }
@@ -179,7 +190,8 @@ export default function PayrollTable({
           `salary-slips-${months[month - 1]}-${year}.zip`
         );
       },
-      "Salary slips downloaded successfully."
+      "Salary slips downloaded successfully.",
+      canViewPayroll
     );
 
   const handleConfirm = () =>
@@ -192,7 +204,8 @@ export default function PayrollTable({
           year,
           isSuperAdmin ? companyIdAtSubmit : undefined
         ),
-      "Payroll confirmed successfully."
+      "Payroll confirmed successfully.",
+      canCreatePayroll
     );
 
   const handleMarkPaid = () =>
@@ -206,7 +219,8 @@ export default function PayrollTable({
           undefined,
           isSuperAdmin ? companyIdAtSubmit : undefined
         ),
-      "Payroll marked as paid successfully."
+      "Payroll marked as paid successfully.",
+      canEditPayroll
     );
 
   const handleRevert = () =>
@@ -224,13 +238,21 @@ export default function PayrollTable({
           )
         );
       },
-      "Payroll reverted to draft successfully."
+      "Payroll reverted to draft successfully.",
+      canEditPayroll
     );
+
+  if (!canViewPayroll) return null;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-2">
-        {isSuperAdmin && <CompanySelector selectedCompanyId={selectedCompanyId} onCompanyChange={setSelectedCompanyId} />}
+        {isSuperAdmin && (
+          <CompanySelector
+            selectedCompanyId={selectedCompanyId}
+            onCompanyChange={setSelectedCompanyId}
+          />
+        )}
 
         <Select
           value={String(month)}
@@ -239,12 +261,10 @@ export default function PayrollTable({
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="Select month" />
           </SelectTrigger>
+
           <SelectContent position="popper">
             {months.map((name, index) => (
-              <SelectItem
-                key={name}
-                value={String(index + 1)}
-              >
+              <SelectItem key={name} value={String(index + 1)}>
                 {name}
               </SelectItem>
             ))}
@@ -258,15 +278,13 @@ export default function PayrollTable({
           <SelectTrigger className="w-[100px]">
             <SelectValue placeholder="Select year" />
           </SelectTrigger>
+
           <SelectContent position="popper">
             {Array.from(
               { length: 6 },
               (_, index) => year - 2 + index
             ).map((itemYear) => (
-              <SelectItem
-                key={itemYear}
-                value={String(itemYear)}
-              >
+              <SelectItem key={itemYear} value={String(itemYear)}>
                 {itemYear}
               </SelectItem>
             ))}
@@ -275,6 +293,8 @@ export default function PayrollTable({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+
+        {/* Download Slips */}
         <Button
           variant="add"
           onClick={handleDownloadSlips}
@@ -288,56 +308,65 @@ export default function PayrollTable({
           Download Slips
         </Button>
 
-        <Button
-          variant="add"
-          onClick={handleConfirm}
-          disabled={
-            loadingAction !== null ||
-            selectedDraftIds.length === 0 ||
-            companyRequired
-          }
-        >
-          {loadingAction === "confirm" ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-          )}
-          Confirm Payroll
-        </Button>
+        {/* Confirm Payroll */}
+        {canCreatePayroll && (
+          <Button
+            variant="add"
+            onClick={handleConfirm}
+            disabled={
+              loadingAction !== null ||
+              selectedDraftIds.length === 0 ||
+              companyRequired
+            }
+          >
+            {loadingAction === "confirm" ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+            )}
+            Confirm Payroll
+          </Button>
+        )}
 
-        <Button
-          variant="add"
-          onClick={handleMarkPaid}
-          disabled={
-            loadingAction !== null ||
-            selectedConfirmedIds.length === 0 ||
-            companyRequired
-          }
-        >
-          {loadingAction === "paid" ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Banknote className="mr-2 h-4 w-4" />
-          )}
-          Mark Paid
-        </Button>
+        {/* Mark Paid */}
+        {canEditPayroll && (
+          <Button
+            variant="add"
+            onClick={handleMarkPaid}
+            disabled={
+              loadingAction !== null ||
+              selectedConfirmedIds.length === 0 ||
+              companyRequired
+            }
+          >
+            {loadingAction === "paid" ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Banknote className="mr-2 h-4 w-4" />
+            )}
+            Mark Paid
+          </Button>
+        )}
 
-        <Button
-          variant="add"
-          onClick={handleRevert}
-          disabled={
-            loadingAction !== null ||
-            selectedConfirmedEmployees.length === 0 ||
-            companyRequired
-          }
-        >
-          {loadingAction === "revert" ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Undo2 className="mr-2 h-4 w-4" />
-          )}
-          Revert to Draft
-        </Button>
+        {/* Revert to Draft */}
+        {canEditPayroll && (
+          <Button
+            variant="add"
+            onClick={handleRevert}
+            disabled={
+              loadingAction !== null ||
+              selectedConfirmedEmployees.length === 0 ||
+              companyRequired
+            }
+          >
+            {loadingAction === "revert" ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Undo2 className="mr-2 h-4 w-4" />
+            )}
+            Revert to Draft
+          </Button>
+        )}
       </div>
 
       {selectedConfirmedEmployees.length > 0 && (

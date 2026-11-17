@@ -1,3 +1,4 @@
+
 // src/pages/onboarding/OnboardingList.tsx
 import React from "react";
 import {
@@ -29,13 +30,15 @@ import { toast } from "sonner";
 import {
     getOnboardingList,
     startOnboarding,
-    resetOnboarding
+    resetOnboarding,
 } from "@/services/onboarding.service";
 import { useNavigate } from "react-router-dom";
-import type { OnboardingEmployee, OnboardingStatus } from "@/types/onboardingList.types";
+import type {
+    OnboardingEmployee,
+    OnboardingStatus,
+} from "@/types/onboardingList.types";
 import {
     AlertDialog,
-    // AlertDialogAction,
     AlertDialogCancel,
     AlertDialogContent,
     AlertDialogDescription,
@@ -44,33 +47,52 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuthStore } from "@/store/auth.store";
-import { getUserName, getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
+import {
+    getUserName,
+    isSuperAdminRole,
+    canViewModule,
+    canCreateInModule,
+    // canEditInModule,
+    canDeleteInModule,
+} from "@/utilis/roleUtils";
 import { CompanySelector } from "../common/CompanySelector";
+
+const MODULE_NAME = "onboarding";
 
 const OnboardingList = () => {
     const navigate = useNavigate();
     const { user } = useAuthStore();
 
-    const userRole = getUserRole(user);
-    const isSuperAdmin = isSuperAdminRole(userRole);
+    // Role check only for company selection
+    const isSuperAdmin = isSuperAdminRole(user);
+
+    // Module permissions
+    const canViewOnboarding = canViewModule(user, MODULE_NAME);
+    const canCreateOnboarding = canCreateInModule(user, MODULE_NAME);
+    // const canEditOnboarding = canEditInModule(user, MODULE_NAME);
+    const canDeleteOnboarding = canDeleteInModule(user, MODULE_NAME);
 
     const [selectedCompanyId, setSelectedCompanyId] =
         React.useState("");
 
-
-    const [onboardings, setOnboardings] = React.useState<OnboardingEmployee[]>(
-        []
-    );
+    const [onboardings, setOnboardings] = React.useState<
+        OnboardingEmployee[]
+    >([]);
 
     const [searchQuery, setSearchQuery] = React.useState("");
     const [statusFilter, setStatusFilter] = React.useState("all");
     const [loading, setLoading] = React.useState(false);
 
+    const [resetDialogOpen, setResetDialogOpen] =
+        React.useState(false);
 
-    const [resetDialogOpen, setResetDialogOpen] = React.useState(false);
-    const [selectedOnboarding, setSelectedOnboarding] = React.useState<OnboardingEmployee | null>(null);
+    const [selectedOnboarding, setSelectedOnboarding] =
+        React.useState<OnboardingEmployee | null>(null);
 
+    // Load onboarding records
     const loadOnboardings = React.useCallback(async () => {
+        if (!canViewOnboarding) return;
+
         if (isSuperAdmin && !selectedCompanyId) {
             setOnboardings([]);
             setLoading(false);
@@ -97,43 +119,69 @@ const OnboardingList = () => {
         } finally {
             setLoading(false);
         }
-    }, [isSuperAdmin, selectedCompanyId, statusFilter]);
+    }, [
+        canViewOnboarding,
+        isSuperAdmin,
+        selectedCompanyId,
+        statusFilter,
+    ]);
 
     React.useEffect(() => {
         void loadOnboardings();
     }, [loadOnboardings]);
-    React.useEffect(() => {
-        loadOnboardings();
-    }, [selectedCompanyId, isSuperAdmin]);
 
     const handleStatusFilter = (value: string) => {
         setStatusFilter(value);
     };
 
+    // Start / Restart onboarding
     const handleStartOnboarding = async (userId: string) => {
+        if (!canCreateOnboarding) {
+            toast.error("You don't have permission to start onboarding");
+            return;
+        }
+
         try {
-            await startOnboarding(userId, isSuperAdmin ? selectedCompanyId : undefined);
+            await startOnboarding(
+                userId,
+                isSuperAdmin ? selectedCompanyId : undefined
+            );
 
             toast.success("Onboarding started successfully");
 
             await loadOnboardings();
         } catch (err: any) {
-            toast.error(err?.message || "Failed to start onboarding");
+            toast.error(
+                err?.message || "Failed to start onboarding"
+            );
         }
     };
 
+    // Reset onboarding
     const handleResetOnboarding = async () => {
-        if (!selectedOnboarding) return
+        if (!canDeleteOnboarding) {
+            toast.error("You don't have permission to reset onboarding");
+            return;
+        }
+
+        if (!selectedOnboarding) return;
+
         try {
-            await resetOnboarding(selectedOnboarding.userId, isSuperAdmin ? selectedCompanyId : undefined);
+            await resetOnboarding(
+                selectedOnboarding.userId,
+                isSuperAdmin ? selectedCompanyId : undefined
+            );
 
             toast.success("Onboarding reset successfully");
+
             setResetDialogOpen(false);
             setSelectedOnboarding(null);
-            // list dobara load karo
+
             await loadOnboardings();
         } catch (err: any) {
-            toast.error(err?.message || "Failed to reset onboarding");
+            toast.error(
+                err?.message || "Failed to reset onboarding"
+            );
         }
     };
 
@@ -142,8 +190,12 @@ const OnboardingList = () => {
 
         return (
             getUserName(item.user).toLowerCase().includes(search) ||
-            (item.user.employeeCode ?? "").toLowerCase().includes(search) ||
-            (item.user.designation ?? "").toLowerCase().includes(search)
+            (item.user.employeeCode ?? "")
+                .toLowerCase()
+                .includes(search) ||
+            (item.user.designation ?? "")
+                .toLowerCase()
+                .includes(search)
         );
     });
 
@@ -185,12 +237,19 @@ const OnboardingList = () => {
         return new Date(date).toLocaleDateString("en-IN");
     };
 
+    // Hide page if user cannot view onboarding
+    if (!canViewOnboarding) return null;
+
+    const hasActions =
+        canCreateOnboarding || canViewOnboarding || canDeleteOnboarding;
+
     return (
         <div className="flex flex-col gap-4">
 
             {/* Filters */}
             <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-3 flex-wrap">
+
                     {isSuperAdmin && (
                         <div className="w-full max-w-60">
                             <CompanySelector
@@ -207,7 +266,9 @@ const OnboardingList = () => {
                         type="search"
                         placeholder="Search name, code or designation..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) =>
+                            setSearchQuery(e.target.value)
+                        }
                         autoComplete="off"
                         className="h-9 w-full sm:w-72"
                     />
@@ -221,10 +282,18 @@ const OnboardingList = () => {
                         </SelectTrigger>
 
                         <SelectContent position="popper">
-                            <SelectItem value="all">All Status</SelectItem>
-                            <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                            <SelectItem value="ON_HOLD">On Hold</SelectItem>
-                            <SelectItem value="COMPLETED">Completed</SelectItem>
+                            <SelectItem value="all">
+                                All Status
+                            </SelectItem>
+                            <SelectItem value="IN_PROGRESS">
+                                In Progress
+                            </SelectItem>
+                            <SelectItem value="ON_HOLD">
+                                On Hold
+                            </SelectItem>
+                            <SelectItem value="COMPLETED">
+                                Completed
+                            </SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -235,50 +304,60 @@ const OnboardingList = () => {
                     </p>
                 )}
             </div>
-            <AlertDialog
-                open={resetDialogOpen}
-                onOpenChange={setResetDialogOpen}
-            >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>
-                            Reset Onboarding? {getUserName(selectedOnboarding?.user)}
-                        </AlertDialogTitle>
 
-                        <AlertDialogDescription>
-                            This will delete <span className="font-bold">{getUserName(selectedOnboarding?.user)}</span>'s current onboarding
-                            checklist and reset the onboarding process. The employee
-                            can then be started again using the latest configured
-                            checklist templates.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
+            {/* Reset Confirmation Dialog */}
+            {canDeleteOnboarding && (
+                <AlertDialog
+                    open={resetDialogOpen}
+                    onOpenChange={(open) => {
+                        setResetDialogOpen(open);
 
-                    <AlertDialogFooter>
-                        <AlertDialogCancel className="cursor-pointer">
-                            Cancel
-                        </AlertDialogCancel>
+                        if (!open) {
+                            setSelectedOnboarding(null);
+                        }
+                    }}
+                >
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>
+                                Reset Onboarding?{" "}
+                                {getUserName(selectedOnboarding?.user)}
+                            </AlertDialogTitle>
 
-                        <Button
-                            onClick={handleResetOnboarding}
-                            className="bg-[var(--logo-green)] text-black hover:bg-[var(--logo-green)]/80 cursor-pointer"
-                        >
-                            Reset Onboarding
-                        </Button>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+                            <AlertDialogDescription>
+                                This will delete{" "}
+                                <span className="font-bold">
+                                    {getUserName(selectedOnboarding?.user)}
+                                </span>
+                                's current onboarding checklist and reset
+                                the onboarding process. The employee can
+                                then be started again using the latest
+                                configured checklist templates.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+
+                        <AlertDialogFooter>
+                            <AlertDialogCancel className="cursor-pointer">
+                                Cancel
+                            </AlertDialogCancel>
+
+                            <Button
+                                onClick={handleResetOnboarding}
+                                className="bg-[var(--logo-green)] text-black hover:bg-[var(--logo-green)]/80 cursor-pointer"
+                            >
+                                Reset Onboarding
+                            </Button>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            )}
 
             {/* Table */}
             <div className="bg-card grid grid-cols-1 rounded border w-full overflow-hidden">
-
                 <div className="h-full overflow-auto">
-
                     <Table>
-
                         <TableHeader className="bg-muted sticky top-0 z-10">
-
                             <TableRow>
-
                                 <TableHead>#</TableHead>
 
                                 <TableHead className="min-w-25">
@@ -313,20 +392,17 @@ const OnboardingList = () => {
                                     Target Date
                                 </TableHead>
 
-                                <TableHead className="sticky right-0 bg-muted">
-                                    Actions
-                                </TableHead>
-
+                                {hasActions && (
+                                    <TableHead className="sticky right-0 bg-muted">
+                                        Actions
+                                    </TableHead>
+                                )}
                             </TableRow>
-
                         </TableHeader>
 
                         <TableBody>
-
                             {filteredOnboardings.map((item, index) => (
-
                                 <TableRow key={item.id}>
-
                                     <TableCell>
                                         {index + 1}
                                     </TableCell>
@@ -367,111 +443,107 @@ const OnboardingList = () => {
                                         {formatDate(item.targetDate)}
                                     </TableCell>
 
-                                    <TableCell className="sticky right-0 bg-card">
-
-                                        <DropdownMenu>
-
-                                            <DropdownMenuTrigger asChild>
-
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                >
-                                                    <MoreVertical className="h-4 w-4" />
-                                                </Button>
-
-                                            </DropdownMenuTrigger>
-
-                                            <DropdownMenuContent align="end">
-
-                                                <DropdownMenuItem
-                                                    onClick={() => {
-                                                        const detailUrl = isSuperAdmin
-                                                            ? `/onboarding/${item.userId}?companyId=${encodeURIComponent(selectedCompanyId)}`
-                                                            : `/onboarding/${item.userId}`;
-
-                                                        navigate(detailUrl);
-                                                    }}
-                                                >
-                                                    Continue Onboarding
-                                                </DropdownMenuItem>
-
-                                                {item.status !== "COMPLETED" && (
-                                                    <DropdownMenuItem
-                                                        onClick={() =>
-                                                            handleStartOnboarding(
-                                                                item.userId
-                                                            )
-                                                        }
+                                    {hasActions && (
+                                        <TableCell className="sticky right-0 bg-card">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
                                                     >
-                                                        Restart Onboarding
-                                                    </DropdownMenuItem>
-                                                )}
+                                                        <MoreVertical className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
 
-                                                <DropdownMenuItem
-                                                    variant="destructive"
-                                                    onClick={() => {
-                                                        setSelectedOnboarding(item);
-                                                        setResetDialogOpen(true);
-                                                    }}
-                                                >
-                                                    Reset Onboarding
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
+                                                <DropdownMenuContent align="end">
 
-                                        </DropdownMenu>
+                                                    {/* Continue Onboarding */}
+                                                    {canViewOnboarding && (
+                                                        <DropdownMenuItem
+                                                            onClick={() => {
+                                                                const detailUrl = isSuperAdmin
+                                                                    ? `/onboarding/${item.userId}?companyId=${encodeURIComponent(selectedCompanyId)}`
+                                                                    : `/onboarding/${item.userId}`;
 
-                                    </TableCell>
+                                                                navigate(detailUrl);
+                                                            }}
+                                                        >
+                                                            Continue Onboarding
+                                                        </DropdownMenuItem>
+                                                    )}
 
+                                                    {/* Restart Onboarding */}
+                                                    {canCreateOnboarding &&
+                                                        item.status !== "COMPLETED" && (
+                                                            <DropdownMenuItem
+                                                                onClick={() =>
+                                                                    handleStartOnboarding(
+                                                                        item.userId
+                                                                    )
+                                                                }
+                                                            >
+                                                                Restart Onboarding
+                                                            </DropdownMenuItem>
+                                                        )}
+
+                                                    {/* Reset Onboarding */}
+                                                    {canDeleteOnboarding && (
+                                                        <DropdownMenuItem
+                                                            variant="destructive"
+                                                            onClick={() => {
+                                                                setSelectedOnboarding(item);
+                                                                setResetDialogOpen(true);
+                                                            }}
+                                                        >
+                                                            Reset Onboarding
+                                                        </DropdownMenuItem>
+                                                    )}
+
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    )}
                                 </TableRow>
-
                             ))}
 
-                            {!loading && filteredOnboardings.length === 0 && (
-                                <TableRow>
-                                    <TableCell
-                                        colSpan={10}
-                                        className="py-10 text-center"
-                                    >
-                                        <div className="flex flex-col items-center gap-1">
-                                            <p className="font-medium">
-                                                {isSuperAdmin && !selectedCompanyId
-                                                    ? "Select a company first"
-                                                    : "No onboarding records found"}
-                                            </p>
+                            {!loading &&
+                                filteredOnboardings.length === 0 && (
+                                    <TableRow>
+                                        <TableCell
+                                            colSpan={hasActions ? 10 : 9}
+                                            className="py-10 text-center"
+                                        >
+                                            <div className="flex flex-col items-center gap-1">
+                                                <p className="font-medium">
+                                                    {isSuperAdmin && !selectedCompanyId
+                                                        ? "Select a company first"
+                                                        : "No onboarding records found"}
+                                                </p>
 
-                                            <p className="text-sm text-muted-foreground">
-                                                {isSuperAdmin && !selectedCompanyId
-                                                    ? "Choose a company to view its onboarding records."
-                                                    : "Configure onboarding checklist templates and start onboarding for an employee."}
-                                            </p>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            )}
+                                                <p className="text-sm text-muted-foreground">
+                                                    {isSuperAdmin && !selectedCompanyId
+                                                        ? "Choose a company to view its onboarding records."
+                                                        : "Configure onboarding checklist templates and start onboarding for an employee."}
+                                                </p>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+
                             {loading && (
-
                                 <TableRow>
-
                                     <TableCell
-                                        colSpan={10}
+                                        colSpan={hasActions ? 10 : 9}
                                         className="text-center text-muted-foreground py-8"
                                     >
                                         Loading onboarding records...
                                     </TableCell>
-
                                 </TableRow>
-
                             )}
-
                         </TableBody>
-
                     </Table>
-
                 </div>
-
             </div>
-
         </div>
     );
 };

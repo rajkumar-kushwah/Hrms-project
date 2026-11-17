@@ -1,3 +1,4 @@
+
 import React from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -14,9 +15,7 @@ import { getEmployeeById } from "@/services/employee.service";
 import type { EmployeeDetail } from "@/types/employee.types";
 
 import { Button } from "@/components/ui/button";
-import {
-    CardContent,
-} from "@/components/ui/card";
+import { CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -25,57 +24,155 @@ import {
     TabsList,
     TabsTrigger,
 } from "@/components/ui/tabs";
+
 import { formatRole, getRoleName } from "@/utilis/roleUtils";
 
+// --------------------------------------------------
+// Constants & Configurations
+// --------------------------------------------------
+
+const EMPLOYEE_TABS = [
+    { value: "overview", label: "Overview" },
+    { value: "personal", label: "Personal" },
+    { value: "employment", label: "Employment" },
+    { value: "bank", label: "Bank & ID" },
+];
+
+const TAB_CONTENT_CLASS = "bg-card border rounded-xl p-6 mt-3";
+
+const getInitials = (name?: string | null) => {
+    if (!name) return "NA";
+
+    return name
+        .trim()
+        .split(/\s+/)
+        .map((part) => part[0])
+        .join("")
+        .toUpperCase();
+};
+
+const formatDate = (date?: string | null) => {
+    if (!date) return "—";
+
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) return "—";
+
+    return parsedDate.toLocaleDateString();
+};
+
+const formatSalary = (salary?: number | null) => {
+    if (salary === null || salary === undefined) return "—";
+
+    return `₹${salary.toLocaleString("en-IN")}`;
+};
+
+// --------------------------------------------------
+// Types
+// --------------------------------------------------
+
+interface InfoItemProps {
+    icon?: React.ReactNode;
+    label: string;
+    value?: string | number | null;
+    className?: string;
+}
+
+// --------------------------------------------------
+// Info Item Component
+// --------------------------------------------------
+
+const InfoItem = ({
+    icon,
+    label,
+    value,
+    className,
+}: InfoItemProps) => (
+    <div className={className}>
+        <p className="flex items-center gap-1 text-sm text-muted-foreground">
+            {icon}
+            {label}
+        </p>
+
+        <p className="mt-0.5 font-medium">
+            {value ?? "—"}
+        </p>
+    </div>
+);
+
+// --------------------------------------------------
+// Employee View
+// --------------------------------------------------
 
 const EmployeeView = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
 
-
     const [searchParams] = useSearchParams();
 
     const companyId = searchParams.get("companyId") ?? undefined;
-    const [employee, setEmployee] = React.useState<EmployeeDetail | null>(null);
+
+    const [employee, setEmployee] =
+        React.useState<EmployeeDetail | null>(null);
+
     const [loading, setLoading] = React.useState(true);
 
+    // --------------------------------------------------
+    // Load Employee
+    // --------------------------------------------------
+
     React.useEffect(() => {
-        if (!id) return;
+        let isMounted = true;
+
+        if (!id) {
+            setEmployee(null);
+            setLoading(false);
+            return;
+        }
 
         const loadEmployee = async () => {
             try {
                 setLoading(true);
 
-                const res = await getEmployeeById(id, companyId);
-                setEmployee(res.data.data);
-            } catch (err: any) {
-                const message = err?.message ||
-                    "Failed to load employee details";
+                const response = await getEmployeeById(id, companyId);
 
-                toast.error(message);
+                if (isMounted) {
+                    setEmployee(response.data.data);
+                }
+            } catch (error: unknown) {
+                if (!isMounted) return;
+
+                setEmployee(null);
+
+                const responseMessage = (
+                    error as {
+                        response?: { data?: { message?: string } };
+                    }
+                )?.response?.data?.message;
+
+                toast.error(
+                    responseMessage ||
+                    (error instanceof Error
+                        ? error.message
+                        : "Failed to load employee details")
+                );
             } finally {
-                setLoading(false);
+                if (isMounted) {
+                    setLoading(false);
+                }
             }
         };
 
-        loadEmployee();
-    }, [id]);
+        void loadEmployee();
 
-    const getInitials = (name?: string | null) => {
-        if (!name) return "NA";
+        return () => {
+            isMounted = false;
+        };
+    }, [id, companyId]);
 
-        return name
-            .split(" ")
-            .map((n) => n[0])
-            .join("")
-            .toUpperCase();
-    };
-
-    const formatDate = (date?: string | null) => {
-        if (!date) return "—";
-
-        return new Date(date).toLocaleDateString();
-    };
+    // --------------------------------------------------
+    // Loading State
+    // --------------------------------------------------
 
     if (loading) {
         return (
@@ -86,6 +183,10 @@ const EmployeeView = () => {
             </div>
         );
     }
+
+    // --------------------------------------------------
+    // Not Found State
+    // --------------------------------------------------
 
     if (!employee) {
         return (
@@ -98,12 +199,132 @@ const EmployeeView = () => {
                     variant="add"
                     onClick={() => navigate("/employee")}
                 >
-                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    <ArrowLeft className="mr-2 h-4 w-4" />
                     Back to Employee List
                 </Button>
             </div>
         );
     }
+
+    // --------------------------------------------------
+    // Employee Information Configurations
+    // --------------------------------------------------
+
+    const overviewDetails = [
+        {
+            label: "Branch",
+            value: employee.branch?.name,
+            icon: <Briefcase className="h-4 w-4" />,
+        },
+        {
+            label: "Category",
+            value: employee.category?.name,
+            icon: <Briefcase className="h-4 w-4" />,
+        },
+        {
+            label: "Role",
+            value: getRoleName(employee.role),
+            icon: <Briefcase className="h-4 w-4" />,
+        },
+        {
+            label: "Joining Date",
+            value: formatDate(employee.joiningDate),
+            icon: <Calendar className="h-4 w-4" />,
+        },
+    ];
+
+    const personalDetails = [
+        {
+            label: "Date of Birth",
+            value: formatDate(employee.dateOfBirth),
+        },
+        {
+            label: "Gender",
+            value: employee.gender,
+        },
+        {
+            label: "Blood Group",
+            value: employee.bloodGroup,
+        },
+        {
+            label: "Marital Status",
+            value: employee.maritalStatus,
+        },
+        {
+            label: "Current Address",
+            value: employee.currentAddress,
+            icon: <MapPin className="h-4 w-4" />,
+            className: "md:col-span-2",
+        },
+        {
+            label: "Permanent Address",
+            value: employee.permanentAddress,
+            icon: <MapPin className="h-4 w-4" />,
+            className: "md:col-span-2",
+        },
+        {
+            label: "Emergency Contact Name",
+            value: employee.emergencyContactName,
+        },
+        {
+            label: "Emergency Contact Phone",
+            value: employee.emergencyContactPhone,
+        },
+    ];
+
+    const employmentDetails = [
+        {
+            label: "Employment Type",
+            value: employee.employmentType,
+        },
+        {
+            label: "Work Shift",
+            value: employee.workShift,
+        },
+        {
+            label: "Reporting Manager",
+            value: employee.reportingManager?.name,
+        },
+        {
+            label: "Gross Monthly Salary",
+            value: formatSalary(employee.grossSalary),
+        },
+    ];
+
+    const bankDetails = [
+        {
+            label: "PAN Number",
+            value: employee.panNumber,
+        },
+        {
+            label: "Aadhar Number",
+            value: employee.aadharNumber,
+        },
+        {
+            label: "Bank Name",
+            value: employee.bankName,
+        },
+        {
+            label: "Bank Account",
+            value: employee.bankAccountNumber,
+        },
+        {
+            label: "IFSC Code",
+            value: employee.bankIFSC,
+        },
+        {
+            label: "PF Number",
+            value: employee.pfNumber,
+        },
+        {
+            label: "ESI Number",
+            value: employee.esiNumber,
+        },
+    ];
+
+    // --------------------------------------------------
+    // Render
+    // --------------------------------------------------
 
     return (
         <div className="flex flex-col gap-4">
@@ -114,12 +335,12 @@ const EmployeeView = () => {
                 className="w-fit cursor-pointer hover:bg-muted hover:text-muted-foreground"
                 onClick={() => navigate("/employee")}
             >
-                <ArrowLeft className="h-4 w-4 mr-2" />
+                <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to Employee List
             </Button>
 
             {/* Employee Header */}
-            <div className="border border-1 rounded-lg">
+            <div className="rounded-lg border">
                 <CardContent className="p-6">
                     <div className="flex items-center gap-4">
                         <Avatar className="h-20 w-20">
@@ -133,12 +354,13 @@ const EmployeeView = () => {
                                 {employee.name}
                             </h2>
 
-                            <p className="text-muted-foreground text-sm">
-                                {employee.designation || formatRole(employee.role)}{" "}
-                                • {employee.employeeCode ?? "—"}
+                            <p className="text-sm text-muted-foreground">
+                                {employee.designation || formatRole(employee.role)}
+                                {" • "}
+                                {employee.employeeCode ?? "—"}
                             </p>
 
-                            <div className="flex flex-wrap gap-4 mt-2 text-xs text-muted-foreground">
+                            <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
                                 <span className="flex items-center gap-1">
                                     <Mail className="h-3 w-3" />
                                     {employee.email}
@@ -169,212 +391,85 @@ const EmployeeView = () => {
             {/* Employee Details */}
             <Tabs defaultValue="overview">
                 <TabsList>
-                    <TabsTrigger value="overview">
-                        Overview
-                    </TabsTrigger>
-
-                    <TabsTrigger value="personal">
-                        Personal
-                    </TabsTrigger>
-
-                    <TabsTrigger value="employment">
-                        Employment
-                    </TabsTrigger>
-
-                    <TabsTrigger value="bank">
-                        Bank & ID
-                    </TabsTrigger>
-
+                    {EMPLOYEE_TABS.map((tab) => (
+                        <TabsTrigger
+                            key={tab.value}
+                            value={tab.value}
+                        >
+                            {tab.label}
+                        </TabsTrigger>
+                    ))}
                 </TabsList>
 
                 {/* Overview */}
                 <TabsContent
                     value="overview"
-                    className="bg-card border rounded-xl p-6 mt-3"
+                    className={TAB_CONTENT_CLASS}
                 >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <InfoItem
-                            icon={<Briefcase className="h-4 w-4" />}
-                            label="Branch"
-                            value={employee.branch?.name}
-                        />
-
-                        <InfoItem
-                            icon={<Briefcase className="h-4 w-4" />}
-                            label="Category"
-                            value={employee.category?.name}
-                        />
-
-                        <InfoItem
-                            icon={<Briefcase className="h-4 w-4" />}
-                            label="Role"
-                            value={getRoleName(employee.role)}
-                        />
-
-                        <InfoItem
-                            icon={<Calendar className="h-4 w-4" />}
-                            label="Joining Date"
-                            value={formatDate(employee.joiningDate)}
-                        />
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                        {overviewDetails.map((item) => (
+                            <InfoItem
+                                key={item.label}
+                                icon={item.icon}
+                                label={item.label}
+                                value={item.value}
+                            />
+                        ))}
                     </div>
                 </TabsContent>
 
                 {/* Personal */}
                 <TabsContent
                     value="personal"
-                    className="bg-card border rounded-xl p-6 mt-3"
+                    className={TAB_CONTENT_CLASS}
                 >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <InfoItem
-                            label="Date of Birth"
-                            value={formatDate(employee.dateOfBirth)}
-                        />
-
-                        <InfoItem
-                            label="Gender"
-                            value={employee.gender}
-                        />
-
-                        <InfoItem
-                            label="Blood Group"
-                            value={employee.bloodGroup}
-                        />
-
-                        <InfoItem
-                            label="Marital Status"
-                            value={employee.maritalStatus}
-                        />
-
-                        <InfoItem
-                            className="md:col-span-2"
-                            icon={<MapPin className="h-4 w-4" />}
-                            label="Current Address"
-                            value={employee.currentAddress}
-                        />
-
-                        <InfoItem
-                            className="md:col-span-2"
-                            icon={<MapPin className="h-4 w-4" />}
-                            label="Permanent Address"
-                            value={employee.permanentAddress}
-                        />
-
-                        <InfoItem
-                            label="Emergency Contact Name"
-                            value={employee.emergencyContactName}
-                        />
-
-                        <InfoItem
-                            label="Emergency Contact Phone"
-                            value={employee.emergencyContactPhone}
-                        />
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                        {personalDetails.map((item) => (
+                            <InfoItem
+                                key={item.label}
+                                icon={item.icon}
+                                label={item.label}
+                                value={item.value}
+                                className={item.className}
+                            />
+                        ))}
                     </div>
                 </TabsContent>
 
                 {/* Employment */}
                 <TabsContent
                     value="employment"
-                    className="bg-card border rounded-xl p-6 mt-3"
+                    className={TAB_CONTENT_CLASS}
                 >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <InfoItem
-                            label="Employment Type"
-                            value={employee.employmentType}
-                        />
-
-                        <InfoItem
-                            label="Work Shift"
-                            value={employee.workShift}
-                        />
-
-                        <InfoItem
-                            label="Reporting Manager"
-                            value={employee.reportingManager?.name}
-                        />
-
-                        <InfoItem
-                            label="Gross Monthly Salary"
-                            value={
-                                employee.grossSalary !== null &&
-                                    employee.grossSalary !== undefined
-                                    ? `₹${employee.grossSalary.toLocaleString("en-IN")}`
-                                    : "—"
-                            }
-                        />
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                        {employmentDetails.map((item) => (
+                            <InfoItem
+                                key={item.label}
+                                label={item.label}
+                                value={item.value}
+                            />
+                        ))}
                     </div>
                 </TabsContent>
 
                 {/* Bank & ID */}
                 <TabsContent
                     value="bank"
-                    className="bg-card border rounded-xl p-6 mt-3"
+                    className={TAB_CONTENT_CLASS}
                 >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <InfoItem
-                            label="PAN Number"
-                            value={employee.panNumber}
-                        />
-
-                        <InfoItem
-                            label="Aadhar Number"
-                            value={employee.aadharNumber}
-                        />
-
-                        <InfoItem
-                            label="Bank Name"
-                            value={employee.bankName}
-                        />
-
-                        <InfoItem
-                            label="Bank Account"
-                            value={employee.bankAccountNumber}
-                        />
-
-                        <InfoItem
-                            label="IFSC Code"
-                            value={employee.bankIFSC}
-                        />
-
-                        <InfoItem
-                            label="PF Number"
-                            value={employee.pfNumber}
-                        />
-
-                        <InfoItem
-                            label="ESI Number"
-                            value={employee.esiNumber}
-                        />
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                        {bankDetails.map((item) => (
+                            <InfoItem
+                                key={item.label}
+                                label={item.label}
+                                value={item.value}
+                            />
+                        ))}
                     </div>
                 </TabsContent>
-
             </Tabs>
         </div>
     );
 };
-
-interface InfoItemProps {
-    icon?: React.ReactNode;
-    label: string;
-    value?: string | null;
-    className?: string;
-}
-
-const InfoItem = ({
-    icon,
-    label,
-    value,
-    className,
-}: InfoItemProps) => (
-    <div className={className}>
-        <p className="text-sm text-muted-foreground flex items-center gap-1">
-            {icon}
-            {label}
-        </p>
-
-        <p className="font-medium mt-0.5">
-            {value ?? "—"}
-        </p>
-    </div>
-);
 
 export default EmployeeView;

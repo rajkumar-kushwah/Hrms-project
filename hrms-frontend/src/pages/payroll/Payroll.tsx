@@ -22,8 +22,10 @@ import { useCompanyStore } from "@/store/company.store";
 import PayrollTable from "./Payrolltable";
 import {
     getUserName,
-    getUserRole,
     isSuperAdminRole,
+    canViewModule,
+    canCreateInModule,
+    canEditInModule,
 } from "@/utilis/roleUtils";
 
 const formatCurrency = (amount: number) =>
@@ -52,8 +54,15 @@ const Payroll = () => {
         (state) => state.selectedCompanyId
     );
 
-    const userRole = getUserRole(user);
-    const isSuperAdmin = isSuperAdminRole(userRole);
+    // Centralized payroll permissions
+    const isSuperAdmin = isSuperAdminRole(user);
+
+    const canViewPayroll = canViewModule(user, "payroll");
+    const canCreatePayroll = canCreateInModule(user, "payroll");
+    const canEditPayroll = canEditInModule(user, "payroll");
+
+    const canSelectEmployees =
+        canCreatePayroll || canEditPayroll;
 
     const currentDate = new Date();
 
@@ -68,12 +77,16 @@ const Payroll = () => {
 
     const requestIdRef = useRef(0);
 
-    // Fetch payroll for the current company and period.
+    // Fetch payroll only when user has view permission.
     useEffect(() => {
         const requestId = ++requestIdRef.current;
 
         const loadPayroll = async () => {
-            if (!user || (isSuperAdmin && !selectedCompanyId)) {
+            if (
+                !canViewPayroll ||
+                !user ||
+                (isSuperAdmin && !selectedCompanyId)
+            ) {
                 setPayrollData([]);
                 setSelectedIds(new Set());
                 setLoading(false);
@@ -150,6 +163,7 @@ const Payroll = () => {
         };
     }, [
         user,
+        canViewPayroll,
         month,
         year,
         isSuperAdmin,
@@ -188,6 +202,8 @@ const Payroll = () => {
 
     // Select or deselect all filtered employees.
     const toggleSelectAll = () => {
+        if (!canSelectEmployees) return;
+
         setSelectedIds((previous) => {
             const next = new Set(previous);
 
@@ -203,6 +219,8 @@ const Payroll = () => {
 
     // Select or deselect individual employee.
     const toggleEmployee = (userId: string) => {
+        if (!canSelectEmployees) return;
+
         setSelectedIds((previous) => {
             const next = new Set(previous);
 
@@ -248,6 +266,9 @@ const Payroll = () => {
             selectedConfirmedEmployees.map((employee) => employee.userId),
         [selectedConfirmedEmployees]
     );
+
+    // Hide entire page without view permission.
+    if (!canViewPayroll) return null;
 
     return (
         <div className="space-y-4 p-1">
@@ -307,26 +328,28 @@ const Payroll = () => {
                 <Table className="table-auto">
                     <TableHeader className="bg-muted">
                         <TableRow>
-                            <TableHead className="w-[50px]">
-                                <button
-                                    type="button"
-                                    onClick={toggleSelectAll}
-                                    disabled={
-                                        loading ||
-                                        filteredEmployeeIds.length === 0
-                                    }
-                                    className={`flex h-4 w-4 items-center justify-center rounded-sm border transition-colors ${
-                                        allFilteredSelected
-                                            ? "border-[var(--themePrimary)] bg-[var(--themePrimary)] text-white"
-                                            : "border-input bg-background"
-                                    }`}
-                                    aria-label="Select all employees"
-                                >
-                                    {allFilteredSelected && (
-                                        <Check className="h-3 w-3" />
-                                    )}
-                                </button>
-                            </TableHead>
+                            {canSelectEmployees && (
+                                <TableHead className="w-[50px]">
+                                    <button
+                                        type="button"
+                                        onClick={toggleSelectAll}
+                                        disabled={
+                                            loading ||
+                                            filteredEmployeeIds.length === 0
+                                        }
+                                        className={`flex h-4 w-4 items-center justify-center rounded-sm border transition-colors ${
+                                            allFilteredSelected
+                                                ? "border-[var(--themePrimary)] bg-[var(--themePrimary)] text-white"
+                                                : "border-input bg-background"
+                                        }`}
+                                        aria-label="Select all employees"
+                                    >
+                                        {allFilteredSelected && (
+                                            <Check className="h-3 w-3" />
+                                        )}
+                                    </button>
+                                </TableHead>
+                            )}
 
                             <TableHead>Employee</TableHead>
                             <TableHead>Designation</TableHead>
@@ -347,7 +370,7 @@ const Payroll = () => {
                         {loading ? (
                             <TableRow>
                                 <TableCell
-                                    colSpan={13}
+                                    colSpan={canSelectEmployees ? 13 : 12}
                                     className="py-8 text-center text-muted-foreground"
                                 >
                                     <div className="flex items-center justify-center gap-2">
@@ -359,7 +382,7 @@ const Payroll = () => {
                         ) : filteredEmployees.length === 0 ? (
                             <TableRow>
                                 <TableCell
-                                    colSpan={13}
+                                    colSpan={canSelectEmployees ? 13 : 12}
                                     className="py-8 text-center text-muted-foreground"
                                 >
                                     {isSuperAdmin && !selectedCompanyId
@@ -380,24 +403,26 @@ const Payroll = () => {
                                             isSelected ? "bg-muted/50" : ""
                                         }
                                     >
-                                        <TableCell>
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    toggleEmployee(employee.userId)
-                                                }
-                                                className={`flex h-4 w-4 items-center justify-center rounded-sm border transition-colors ${
-                                                    isSelected
-                                                        ? "border-[var(--themePrimary)] bg-[var(--themePrimary)] text-white"
-                                                        : "border-input bg-background"
-                                                }`}
-                                                aria-label={`Select ${getUserName(employee.user)}`}
-                                            >
-                                                {isSelected && (
-                                                    <Check className="h-3 w-3" />
-                                                )}
-                                            </button>
-                                        </TableCell>
+                                        {canSelectEmployees && (
+                                            <TableCell>
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        toggleEmployee(employee.userId)
+                                                    }
+                                                    className={`flex h-4 w-4 items-center justify-center rounded-sm border transition-colors ${
+                                                        isSelected
+                                                            ? "border-[var(--themePrimary)] bg-[var(--themePrimary)] text-white"
+                                                            : "border-input bg-background"
+                                                    }`}
+                                                    aria-label={`Select ${getUserName(employee.user)}`}
+                                                >
+                                                    {isSelected && (
+                                                        <Check className="h-3 w-3" />
+                                                    )}
+                                                </button>
+                                            </TableCell>
+                                        )}
 
                                         <TableCell>
                                             <p className="font-medium">

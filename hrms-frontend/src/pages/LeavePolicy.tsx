@@ -35,8 +35,10 @@ import {
 } from "@/services/leaveType.service";
 import { useAuthStore } from "@/store/auth.store";
 import {
-    getUserRole,
-    isEmployeeRole,
+    canViewModule,
+    canCreateInModule,
+    canEditInModule,
+    canDeleteInModule,
     isSuperAdminRole,
 } from "@/utilis/roleUtils";
 import { CompanySelector } from "@/pages/common/CompanySelector";
@@ -55,6 +57,8 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+const MODULE_NAME = "leave_policy";
+
 const initialForm = {
     name: "",
     description: "",
@@ -65,10 +69,15 @@ const initialForm = {
 const LeavePolicy = () => {
     const { user } = useAuthStore();
 
-    const userRole = getUserRole(user);
+    const isSuperAdmin = isSuperAdminRole(user);
 
-    const isSuperAdmin = isSuperAdminRole(userRole);
-    const canChangeStatus = !isEmployeeRole(userRole);
+    // Module permissions
+    const canViewLeavePolicy = canViewModule(user, MODULE_NAME);
+    const canCreateLeavePolicy = canCreateInModule(user, MODULE_NAME);
+    const canEditLeavePolicy = canEditInModule(user, MODULE_NAME);
+    const canDeleteLeavePolicy = canDeleteInModule(user, MODULE_NAME);
+
+    const hasActions = canEditLeavePolicy || canDeleteLeavePolicy;
 
     const [leaveTypes, setLeaveTypes] = React.useState<LeaveType[]>([]);
     const [selectedCompanyId, setSelectedCompanyId] =
@@ -82,6 +91,7 @@ const LeavePolicy = () => {
 
     const [form, setForm] = React.useState(initialForm);
     const [errors, setErrors] = React.useState<Record<string, string>>({});
+
     const [deactivateDialogOpen, setDeactivateDialogOpen] =
         React.useState(false);
 
@@ -91,6 +101,12 @@ const LeavePolicy = () => {
     const [deactivating, setDeactivating] = React.useState(false);
 
     const loadLeaveTypes = React.useCallback(async () => {
+        if (!canViewLeavePolicy) {
+            setLeaveTypes([]);
+            setLoading(false);
+            return;
+        }
+
         if (isSuperAdmin && !selectedCompanyId) {
             setLeaveTypes([]);
             setLoading(false);
@@ -117,7 +133,11 @@ const LeavePolicy = () => {
         } finally {
             setLoading(false);
         }
-    }, [isSuperAdmin, selectedCompanyId]);
+    }, [
+        canViewLeavePolicy,
+        isSuperAdmin,
+        selectedCompanyId,
+    ]);
 
     React.useEffect(() => {
         void loadLeaveTypes();
@@ -164,8 +184,17 @@ const LeavePolicy = () => {
         }));
     };
 
-
     const handleSubmit = async () => {
+        if (editType && !canEditLeavePolicy) {
+            toast.error("You don't have permission to edit leave types");
+            return;
+        }
+
+        if (!editType && !canCreateLeavePolicy) {
+            toast.error("You don't have permission to create leave types");
+            return;
+        }
+
         if (isSuperAdmin && !selectedCompanyId) {
             toast.error("Please select a company first");
             return;
@@ -227,6 +256,11 @@ const LeavePolicy = () => {
     };
 
     const handleDelete = async () => {
+        if (!canDeleteLeavePolicy) {
+            toast.error("You don't have permission to deactivate leave types");
+            return;
+        }
+
         if (!selectedLeaveType) return;
 
         setDeactivating(true);
@@ -254,6 +288,11 @@ const LeavePolicy = () => {
     };
 
     const handleActivate = async (id: string) => {
+        if (!canEditLeavePolicy) {
+            toast.error("You don't have permission to edit leave types");
+            return;
+        }
+
         try {
             await updateLeaveType(
                 id,
@@ -273,6 +312,8 @@ const LeavePolicy = () => {
     };
 
     const handleEdit = (leaveType: LeaveType) => {
+        if (!canEditLeavePolicy) return;
+
         setEditType(leaveType);
 
         setForm({
@@ -286,6 +327,18 @@ const LeavePolicy = () => {
         setOpen(true);
     };
 
+    const handleAdd = () => {
+        if (!canCreateLeavePolicy) return;
+
+        setEditType(null);
+        setForm(initialForm);
+        setErrors({});
+        setOpen(true);
+    };
+
+    // Hide complete page when user has no view permission
+    if (!canViewLeavePolicy) return null;
+
     return (
         <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -296,13 +349,13 @@ const LeavePolicy = () => {
                     />
                 )}
 
-                {canChangeStatus && (
+                {canCreateLeavePolicy && (
                     <Button
                         size="sm"
                         className="cursor-pointer"
                         variant="add"
                         disabled={isSuperAdmin && !selectedCompanyId}
-                        onClick={() => setOpen(true)}
+                        onClick={handleAdd}
                     >
                         <PlusIcon className="mr-2 h-4 w-4" />
                         Add Leave Type
@@ -412,20 +465,19 @@ const LeavePolicy = () => {
                     </div>
                 </DialogContent>
             </Dialog>
+
             <AlertDialog
                 open={deactivateDialogOpen}
-                onOpenChange={(open) => {
+                onOpenChange={(nextOpen) => {
                     if (!deactivating) {
-                        setDeactivateDialogOpen(open);
+                        setDeactivateDialogOpen(nextOpen);
 
-                        if (!open) {
+                        if (!nextOpen) {
                             setSelectedLeaveType(null);
                         }
                     }
                 }}
             >
-                {/* confirm dialogue box for deactivating leave type */}
-
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>
@@ -473,7 +525,8 @@ const LeavePolicy = () => {
                                 <TableHead>Description</TableHead>
                                 <TableHead>Days/Year</TableHead>
                                 <TableHead>Status</TableHead>
-                                {canChangeStatus && (
+
+                                {hasActions && (
                                     <TableHead className="sticky right-0 bg-muted">
                                         Actions
                                     </TableHead>
@@ -485,7 +538,7 @@ const LeavePolicy = () => {
                             {loading ? (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={canChangeStatus ? 6 : 5}
+                                        colSpan={hasActions ? 6 : 5}
                                         className="h-32 text-center"
                                     >
                                         <div className="flex items-center justify-center gap-2 text-muted-foreground">
@@ -497,7 +550,7 @@ const LeavePolicy = () => {
                             ) : leaveTypes.length === 0 ? (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={canChangeStatus ? 6 : 5}
+                                        colSpan={hasActions ? 6 : 5}
                                         className="h-32 text-center text-muted-foreground"
                                     >
                                         {isSuperAdmin && !selectedCompanyId
@@ -509,13 +562,17 @@ const LeavePolicy = () => {
                                 leaveTypes.map((leaveType, index) => (
                                     <TableRow key={leaveType.id}>
                                         <TableCell>{index + 1}</TableCell>
+
                                         <TableCell>{leaveType.name}</TableCell>
+
                                         <TableCell>
                                             {leaveType.description ?? "—"}
                                         </TableCell>
+
                                         <TableCell>
                                             {leaveType.daysPerYear}
                                         </TableCell>
+
                                         <TableCell>
                                             <Badge
                                                 className={
@@ -530,7 +587,7 @@ const LeavePolicy = () => {
                                             </Badge>
                                         </TableCell>
 
-                                        {canChangeStatus && (
+                                        {hasActions && (
                                             <TableCell className="sticky right-0 bg-card">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
@@ -543,35 +600,39 @@ const LeavePolicy = () => {
                                                     </DropdownMenuTrigger>
 
                                                     <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem
-                                                            onClick={() =>
-                                                                handleEdit(leaveType)
-                                                            }
-                                                        >
-                                                            Edit
-                                                        </DropdownMenuItem>
-
-                                                        {leaveType.isActive ? (
+                                                        {canEditLeavePolicy && (
                                                             <DropdownMenuItem
-                                                                variant="destructive"
-                                                                onClick={() => {
-                                                                    setSelectedLeaveType(leaveType);
-                                                                    setDeactivateDialogOpen(true);
-                                                                }}
-                                                            >
-                                                                Deactivate
-                                                            </DropdownMenuItem>
-                                                        ) : (
-                                                            <DropdownMenuItem
-                                                                className="text-[var(--theme-primary)]"
                                                                 onClick={() =>
-                                                                    handleActivate(
-                                                                        leaveType.id
-                                                                    )
+                                                                    handleEdit(leaveType)
                                                                 }
                                                             >
-                                                                Activate
+                                                                Edit
                                                             </DropdownMenuItem>
+                                                        )}
+
+                                                        {leaveType.isActive ? (
+                                                            canDeleteLeavePolicy && (
+                                                                <DropdownMenuItem
+                                                                    variant="destructive"
+                                                                    onClick={() => {
+                                                                        setSelectedLeaveType(leaveType);
+                                                                        setDeactivateDialogOpen(true);
+                                                                    }}
+                                                                >
+                                                                    Deactivate
+                                                                </DropdownMenuItem>
+                                                            )
+                                                        ) : (
+                                                            canEditLeavePolicy && (
+                                                                <DropdownMenuItem
+                                                                    className="text-[var(--theme-primary)]"
+                                                                    onClick={() =>
+                                                                        handleActivate(leaveType.id)
+                                                                    }
+                                                                >
+                                                                    Activate
+                                                                </DropdownMenuItem>
+                                                            )
                                                         )}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>

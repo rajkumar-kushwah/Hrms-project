@@ -19,7 +19,7 @@ import {
     deleteRole,
 } from "@/services/role.service";
 import { roleSchema } from "@/validation/role.validation";
-import { formatRole, getRoleRawName, getUserModulePermission, getUserRole, isAdminRole } from "@/utilis/roleUtils";
+import { canCreateInModule, canDeleteInModule, canEditInModule, canModifyModule, canViewModule, formatRole, getRoleRawName, } from "@/utilis/roleUtils";
 
 
 
@@ -61,11 +61,13 @@ interface Role {
 const Roles = () => {
     const { user } = useAuthStore();
 
-    const rolePermission = getUserModulePermission(user, "roles");
-    const canDelete = rolePermission?.canDelete;
+    // const canDelete = getUserModulePermission(user, "roles", "canDelete");
 
-    const userRole = getUserRole(user);
-    const isSuperAdmin = isAdminRole(userRole);
+
+    const canViewRoles = canViewModule(user, "roles");
+    const canCreateRoles = canCreateInModule(user, "roles");
+    const canEditRoles = canEditInModule(user, "roles");
+    const canDeleteRoles = canDeleteInModule(user, "roles");
 
 
     const [roles, setRoles] = useState<Role[]>([]);
@@ -278,7 +280,7 @@ const Roles = () => {
     //  Edit Role
     const handleEdit = (role: Role) => {
         setEditRole(role);
-        setForm({ name:getRoleRawName(role), description: role.description ?? "" });
+        setForm({ name: getRoleRawName(role), description: role.description ?? "" });
         initPermissions(role.permissions);
         setOpen(true);
     };
@@ -303,20 +305,26 @@ const Roles = () => {
         setForm({ name: "", description: "" });
         setErrors({})
         initPermissions();
-    };
+
+    }; if (!canViewRoles) {
+        return <div>You don't have permission to view roles.</div>;
+    }
 
     return (
         <div className="flex flex-col gap-4">
 
             {/* Header */}
             <div className="flex items-center justify-end">
-                <Button variant="add" size="sm" onClick={() => {
-                    handleClose();
-                    setOpen(true);
-                }}>
-                    <PlusIcon className="h-4 w-4 mr-2" />
-                    Add Role
-                </Button>
+                {canCreateRoles && (
+
+                    <Button variant="add" size="sm" onClick={() => {
+                        handleClose();
+                        setOpen(true);
+                    }}>
+                        <PlusIcon className="h-4 w-4 mr-2" />
+                        Add Role
+                    </Button>
+                )}
             </div>
 
             {/* Create/Edit Dialog */}
@@ -467,27 +475,27 @@ const Roles = () => {
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
-                                            {isSuperAdmin && (
-                                                <>
-                                                    <DropdownMenuItem onClick={() => handleEdit(role)}>
-                                                        Edit
-                                                    </DropdownMenuItem>
-                                                    {canDelete && (
-
-                                                        <DropdownMenuItem variant="destructive"
-                                                            className="text-red-600"
-                                                            onClick={() => handleDelete(role.id)}
-                                                        >
-                                                            Delete
-                                                        </DropdownMenuItem>
-                                                    )}
-                                                </>
+                                            {canEditRoles && (
+                                                <DropdownMenuItem onClick={() => handleEdit(role)}>
+                                                    Edit
+                                                </DropdownMenuItem>
                                             )}
-                                            {!isSuperAdmin && (
+
+                                            {canDeleteRoles && (
+                                                <DropdownMenuItem
+                                                    variant="destructive"
+                                                    onClick={() => handleDelete(role.id)}
+                                                >
+                                                    Delete
+                                                </DropdownMenuItem>
+                                            )}
+
+                                            {!canModifyModule(user, "roles") && (
                                                 <DropdownMenuItem disabled>
                                                     Cannot modify
                                                 </DropdownMenuItem>
                                             )}
+                                            
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </TableCell>

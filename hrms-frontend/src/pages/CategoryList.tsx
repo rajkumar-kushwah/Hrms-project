@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
 
@@ -52,7 +53,15 @@ import {
     permanentDeleteCategory,
 } from "@/services/category.service";
 import { getBranches } from "@/services/branch.service";
-import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
+
+import {
+    canViewModule,
+    canCreateInModule,
+    canEditInModule,
+    canDeleteInModule,
+    isSuperAdminRole,
+} from "@/utilis/roleUtils";
+
 import { CompanySelector } from "@/pages/common/CompanySelector";
 
 type CategoryField = "name" | "description" | "branchId";
@@ -105,8 +114,15 @@ const validateDescription = (value: string): string => {
 
 const CategoryList = () => {
     const { user } = useAuthStore();
-    const userRole = getUserRole(user);
-    const isSuperAdmin = isSuperAdminRole(userRole);
+
+    // Role-based access is only used for company selection.
+    const isSuperAdmin = isSuperAdminRole(user);
+
+    // Category module permissions.
+    const canViewCategory = canViewModule(user, "category");
+    const canCreateCategory = canCreateInModule(user, "category");
+    const canEditCategory = canEditInModule(user, "category");
+    const canDeleteCategory = canDeleteInModule(user, "category");
 
     const [selectedCompanyId, setSelectedCompanyId] = useState("");
     const [categories, setCategories] = useState<Category[]>([]);
@@ -181,12 +197,12 @@ const CategoryList = () => {
         setConfirmText("");
     };
 
-    // Load categories and branches for the currently selected company.
+    // Load categories and branches only when the user can view the module.
     useEffect(() => {
         let cancelled = false;
 
         const loadData = async () => {
-            if (!companyReady) {
+            if (!canViewCategory || !companyReady) {
                 setCategories([]);
                 setBranches([]);
                 setLoading(false);
@@ -219,8 +235,12 @@ const CategoryList = () => {
 
                 setCategories([]);
                 setBranches([]);
+
                 toast.error(
-                    getErrorMessage(error, "Failed to load categories and branches."),
+                    getErrorMessage(
+                        error,
+                        "Failed to load categories and branches.",
+                    ),
                 );
             } finally {
                 if (!cancelled) {
@@ -234,7 +254,12 @@ const CategoryList = () => {
         return () => {
             cancelled = true;
         };
-    }, [selectedCompanyId, isSuperAdmin, companyReady]);
+    }, [
+        selectedCompanyId,
+        isSuperAdmin,
+        companyReady,
+        canViewCategory,
+    ]);
 
     const handleCreateChange = (event: ChangeEvent<HTMLInputElement>) => {
         const { name, value } = event.target;
@@ -373,6 +398,11 @@ const CategoryList = () => {
     };
 
     const handleCreate = async () => {
+        if (!canCreateCategory) {
+            toast.error("You do not have permission to create categories.");
+            return;
+        }
+
         if (!companyReady) {
             toast.error("Please select a company first.");
             return;
@@ -395,6 +425,7 @@ const CategoryList = () => {
             const response = await createCategory(payload);
 
             setCategories((prev) => [response.data.data, ...prev]);
+
             toast.success("Category created successfully.");
 
             setOpen(false);
@@ -409,6 +440,11 @@ const CategoryList = () => {
     };
 
     const handleUpdate = async () => {
+        if (!canEditCategory) {
+            toast.error("You do not have permission to edit categories.");
+            return;
+        }
+
         if (!selectedCategory) return;
 
         if (!validateEditForm()) {
@@ -446,6 +482,7 @@ const CategoryList = () => {
             );
 
             toast.success("Category updated successfully.");
+
             setEditOpen(false);
             setSelectedCategory(null);
             setEditForm({});
@@ -461,6 +498,11 @@ const CategoryList = () => {
     };
 
     const handleToggleStatus = async () => {
+        if (!canEditCategory) {
+            toast.error("You do not have permission to edit categories.");
+            return;
+        }
+
         if (!selectedCategory) return;
 
         const nextStatus = !selectedCategory.isActive;
@@ -496,6 +538,11 @@ const CategoryList = () => {
     };
 
     const handlePermanentDelete = async () => {
+        if (!canDeleteCategory) {
+            toast.error("You do not have permission to delete categories.");
+            return;
+        }
+
         if (!selectedCategory) return;
 
         if (confirmText !== selectedCategory.name) {
@@ -513,13 +560,17 @@ const CategoryList = () => {
             );
 
             toast.success("Category permanently deleted.");
+
             setDangerOpen(false);
             setEditOpen(false);
             setSelectedCategory(null);
             setConfirmText("");
         } catch (error: unknown) {
             toast.error(
-                getErrorMessage(error, "Failed to permanently delete category."),
+                getErrorMessage(
+                    error,
+                    "Failed to permanently delete category.",
+                ),
             );
         } finally {
             setDeleting(false);
@@ -527,11 +578,18 @@ const CategoryList = () => {
     };
 
     const openEditDialog = (category: Category) => {
+        if (!canEditCategory && !canDeleteCategory) {
+            toast.error("You do not have permission to manage categories.");
+            return;
+        }
+
         setSelectedCategory(category);
+
         setEditForm({
             name: category.name,
             description: category.description ?? "",
         });
+
         setEditErrors({});
         setEditTouched({});
         setEditOpen(true);
@@ -556,24 +614,28 @@ const CategoryList = () => {
     });
 
     const fieldClass = (hasError: boolean) =>
-        `h-10 w-full ${hasError ? "border-destructive focus-visible:ring-destructive" : ""}`;
+        `h-10 w-full ${hasError
+            ? "border-destructive focus-visible:ring-destructive"
+            : ""
+        }`;
+
+    // Hide the entire page when the user does not have view permission.
+    if (!canViewCategory) {
+        return null;
+    }
+
+    const hasActions = canEditCategory || canDeleteCategory;
+
+    const tableColSpan =
+        6 +
+        (isSuperAdmin ? 1 : 0) +
+        (hasActions ? 1 : 0);
 
     return (
         <div className="flex min-w-0 flex-col gap-4">
-            {/* Header and filters */}
             {/* Header and Filters */}
-            <div className="flex flex-col gap-3">
-                {/* Company + Add Button */}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                    {isSuperAdmin && (
-                        <div className="w-full min-w-0 sm:max-w-60">
-                            <CompanySelector
-                                selectedCompanyId={selectedCompanyId}
-                                onCompanyChange={handleCompanyChange}
-                            />
-                        </div>
-                    )}
-
+            <div className="flex flex-col gap-3  ">
+                {canCreateCategory && (
                     <Button
                         size="sm"
                         variant="add"
@@ -587,101 +649,65 @@ const CategoryList = () => {
                         <PlusIcon className="mr-2 h-4 w-4" />
                         Add Category
                     </Button>
-                </div>
-
-                {/* Search + Filters */}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <Input
-                        type="search"
-                        name="category-search"
-                        autoComplete="off"
-                        placeholder="Search category name..."
-                        value={searchQuery}
-                        onChange={(event) => setSearchQuery(event.target.value)}
-                        className="h-9 w-full sm:max-w-60"
-                    />
-                    <div className="flex gap-2">
-                        <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="h-9 sm:w-36 sm:shrink-0">
-                                <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent position="popper">
-                                <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="inactive">Inactive</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        <Select value={branchFilter} onValueChange={setBranchFilter}>
-                            <SelectTrigger className="h-9 sm:w-44 sm:shrink-0">
-                                <SelectValue placeholder="All Branches" />
-                            </SelectTrigger>
-                            <SelectContent position="popper">
-                                <SelectItem value="all">All Branches</SelectItem>
-                                {branches.map((branch) => (
-                                    <SelectItem key={branch.id} value={branch.id}>
-                                        {branch.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-
-                {isSuperAdmin && !selectedCompanyId && (
-                    <p className="text-sm text-muted-foreground">
-                        Select a company to view and manage its categories.
-                    </p>
                 )}
-            </div>
+                {/* Search + Filters */}
+                <div className="flex flex-wrap gap-3 sm:flex-row sm:items-center">
 
-            {/* Create Category Dialog */}
-            <Dialog
-                open={open}
-                onOpenChange={(nextOpen) => {
-                    setOpen(nextOpen);
-                    if (!nextOpen) resetCreateForm();
-                }}
-            >
-                <DialogContent className="w-[calc(100%-2rem)] max-w-lg rounded-lg">
-                    <DialogHeader>
-                        <DialogTitle>Add Category</DialogTitle>
-                        <DialogDescription>
-                            Enter the category details below.
-                        </DialogDescription>
-                    </DialogHeader>
+                    {isSuperAdmin && (
+                        <div className="w-full min-w-0 sm:max-w-60">
+                            <CompanySelector
+                                selectedCompanyId={selectedCompanyId}
+                                onCompanyChange={handleCompanyChange}
+                            />
+                        </div>
+                    )}
 
-                    <div className="flex flex-col gap-4">
-                        <div className="flex flex-col gap-2">
-                            <Label htmlFor="category-branch">
-                                Branch <span className="text-destructive">*</span>
-                            </Label>
+                    <div className="flex md:flex-row gap-3 sm:flex-row sm:items-end sm:justify-between">
+                        {/* Company + Add Button */}
 
+                        <Input
+                            type="search"
+                            name="category-search"
+                            autoComplete="off"
+                            placeholder="Search category name..."
+                            value={searchQuery}
+                            onChange={(event) =>
+                                setSearchQuery(event.target.value)
+                            }
+                            className="h-9 w-full sm:max-w-60"
+                        />
+
+                        <div className="flex gap-2">
                             <Select
-                                value={form.branchId}
-                                onValueChange={handleBranchChange}
-                                disabled={!companyReady || branches.length === 0}
+                                value={statusFilter}
+                                onValueChange={setStatusFilter}
                             >
-                                <SelectTrigger
-                                    id="category-branch"
-                                    className={`h-10 w-full ${formErrors.branchId
-                                        ? "border-destructive focus:ring-destructive"
-                                        : ""
-                                        }`}
-                                    onBlur={() => handleCreateBlur("branchId")}
-                                >
-                                    <SelectValue
-                                        placeholder={
-                                            !companyReady
-                                                ? "Select a company first"
-                                                : branches.length === 0
-                                                    ? "No active branches available"
-                                                    : "Select branch"
-                                        }
-                                    />
+                                <SelectTrigger className="h-9 sm:w-36 sm:shrink-0">
+                                    <SelectValue placeholder="Status" />
                                 </SelectTrigger>
 
-                                <SelectContent position="popper" className="max-h-60">
+                                <SelectContent position="popper">
+                                    <SelectItem value="all">All Status</SelectItem>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="inactive">
+                                        Inactive
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Select
+                                value={branchFilter}
+                                onValueChange={setBranchFilter}
+                            >
+                                <SelectTrigger className="h-9 sm:w-44 sm:shrink-0">
+                                    <SelectValue placeholder="All Branches" />
+                                </SelectTrigger>
+
+                                <SelectContent position="popper">
+                                    <SelectItem value="all">
+                                        All Branches
+                                    </SelectItem>
+
                                     {branches.map((branch) => (
                                         <SelectItem
                                             key={branch.id}
@@ -692,338 +718,496 @@ const CategoryList = () => {
                                     ))}
                                 </SelectContent>
                             </Select>
-
-                            {formErrors.branchId && (
-                                <p className="text-xs text-destructive">
-                                    {formErrors.branchId}
-                                </p>
-                            )}
                         </div>
 
-                        <div className="flex flex-col gap-2">
-                            <div className="flex items-center justify-between gap-2">
-                                <Label htmlFor="category-name">
-                                    Category Name{" "}
-                                    <span className="text-destructive">*</span>
+                    </div>
+                </div>
+
+
+                {isSuperAdmin && !selectedCompanyId && (
+                    <p className="text-sm text-muted-foreground">
+                        Select a company to view and manage its categories.
+                    </p>
+                )}
+            </div>
+
+            {/* Create Category Dialog */}
+            {canCreateCategory && (
+                <Dialog
+                    open={open}
+                    onOpenChange={(nextOpen) => {
+                        setOpen(nextOpen);
+
+                        if (!nextOpen) {
+                            resetCreateForm();
+                        }
+                    }}
+                >
+                    <DialogContent className="w-[calc(100%-2rem)] max-w-lg rounded-lg">
+                        <DialogHeader>
+                            <DialogTitle>Add Category</DialogTitle>
+                            <DialogDescription>
+                                Enter the category details below.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="flex flex-col gap-4">
+                            <div className="flex flex-col gap-2">
+                                <Label htmlFor="category-branch">
+                                    Branch{" "}
+                                    <span className="text-destructive">
+                                        *
+                                    </span>
                                 </Label>
-                                <span className="text-xs text-muted-foreground">
-                                    {form.name.length}/{NAME_MAX_LENGTH}
-                                </span>
-                            </div>
 
-                            <Input
-                                id="category-name"
-                                name="name"
-                                placeholder="e.g. Sales Team"
-                                value={form.name}
-                                maxLength={NAME_MAX_LENGTH + 1}
-                                onChange={handleCreateChange}
-                                onBlur={() => handleCreateBlur("name")}
-                                aria-invalid={Boolean(formErrors.name)}
-                                className={fieldClass(Boolean(formErrors.name))}
-                            />
+                                <Select
+                                    value={form.branchId}
+                                    onValueChange={handleBranchChange}
+                                    disabled={
+                                        !companyReady ||
+                                        branches.length === 0
+                                    }
+                                >
+                                    <SelectTrigger
+                                        id="category-branch"
+                                        className={`h-10 w-full ${formErrors.branchId
+                                            ? "border-destructive focus:ring-destructive"
+                                            : ""
+                                            }`}
+                                        onBlur={() =>
+                                            handleCreateBlur("branchId")
+                                        }
+                                    >
+                                        <SelectValue
+                                            placeholder={
+                                                !companyReady
+                                                    ? "Select a company first"
+                                                    : branches.length === 0
+                                                        ? "No active branches available"
+                                                        : "Select branch"
+                                            }
+                                        />
+                                    </SelectTrigger>
 
-                            {formErrors.name && (
-                                <p className="text-xs text-destructive">
-                                    {formErrors.name}
-                                </p>
-                            )}
-                        </div>
+                                    <SelectContent
+                                        position="popper"
+                                        className="max-h-60"
+                                    >
+                                        {branches.map((branch) => (
+                                            <SelectItem
+                                                key={branch.id}
+                                                value={branch.id}
+                                            >
+                                                {branch.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
 
-                        <div className="flex flex-col gap-2">
-                            <div className="flex items-center justify-between gap-2">
-                                <Label htmlFor="category-description">
-                                    Description
-                                </Label>
-                                <span className="text-xs text-muted-foreground">
-                                    {(form.description ?? "").length}/
-                                    {DESCRIPTION_MAX_LENGTH}
-                                </span>
-                            </div>
-
-                            <Input
-                                id="category-description"
-                                name="description"
-                                placeholder="Description (optional)"
-                                value={form.description ?? ""}
-                                maxLength={DESCRIPTION_MAX_LENGTH + 1}
-                                onChange={handleCreateChange}
-                                onBlur={() =>
-                                    handleCreateBlur("description")
-                                }
-                                aria-invalid={Boolean(formErrors.description)}
-                                className={fieldClass(
-                                    Boolean(formErrors.description),
+                                {formErrors.branchId && (
+                                    <p className="text-xs text-destructive">
+                                        {formErrors.branchId}
+                                    </p>
                                 )}
-                            />
+                            </div>
 
-                            {formErrors.description && (
-                                <p className="text-xs text-destructive">
-                                    {formErrors.description}
+                            <div className="flex flex-col gap-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <Label htmlFor="category-name">
+                                        Category Name{" "}
+                                        <span className="text-destructive">
+                                            *
+                                        </span>
+                                    </Label>
+
+                                    <span className="text-xs text-muted-foreground">
+                                        {form.name.length}/{NAME_MAX_LENGTH}
+                                    </span>
+                                </div>
+
+                                <Input
+                                    id="category-name"
+                                    name="name"
+                                    placeholder="e.g. Sales Team"
+                                    value={form.name}
+                                    maxLength={NAME_MAX_LENGTH + 1}
+                                    onChange={handleCreateChange}
+                                    onBlur={() =>
+                                        handleCreateBlur("name")
+                                    }
+                                    aria-invalid={Boolean(formErrors.name)}
+                                    className={fieldClass(
+                                        Boolean(formErrors.name),
+                                    )}
+                                />
+
+                                {formErrors.name && (
+                                    <p className="text-xs text-destructive">
+                                        {formErrors.name}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="flex flex-col gap-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <Label htmlFor="category-description">
+                                        Description
+                                    </Label>
+
+                                    <span className="text-xs text-muted-foreground">
+                                        {(form.description ?? "").length}/
+                                        {DESCRIPTION_MAX_LENGTH}
+                                    </span>
+                                </div>
+
+                                <Input
+                                    id="category-description"
+                                    name="description"
+                                    placeholder="Description (optional)"
+                                    value={form.description ?? ""}
+                                    maxLength={DESCRIPTION_MAX_LENGTH + 1}
+                                    onChange={handleCreateChange}
+                                    onBlur={() =>
+                                        handleCreateBlur("description")
+                                    }
+                                    aria-invalid={Boolean(
+                                        formErrors.description,
+                                    )}
+                                    className={fieldClass(
+                                        Boolean(formErrors.description),
+                                    )}
+                                />
+
+                                {formErrors.description && (
+                                    <p className="text-xs text-destructive">
+                                        {formErrors.description}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-1">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setOpen(false)}
+                                    disabled={submitting}
+                                >
+                                    Cancel
+                                </Button>
+
+                                <Button
+                                    variant="add"
+                                    onClick={handleCreate}
+                                    disabled={
+                                        submitting || !companyReady
+                                    }
+                                >
+                                    {submitting
+                                        ? "Creating..."
+                                        : "Create Category"}
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
+
+            {/* Edit / Manage Category Dialog */}
+            {(canEditCategory || canDeleteCategory) && (
+                <Dialog
+                    open={editOpen}
+                    onOpenChange={(nextOpen) => {
+                        setEditOpen(nextOpen);
+
+                        if (!nextOpen) {
+                            setDangerOpen(false);
+                            setConfirmText("");
+                        }
+                    }}
+                >
+                    <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-lg">
+                        <DialogHeader>
+                            <DialogTitle>
+                                {canEditCategory
+                                    ? "Edit Category"
+                                    : "Manage Category"}
+                                {selectedCategory
+                                    ? ` — ${selectedCategory.name}`
+                                    : ""}
+                            </DialogTitle>
+
+                            <DialogDescription>
+                                {canEditCategory
+                                    ? "Update the category details below."
+                                    : "Manage the category deletion settings below."}
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        {canEditCategory && (
+                            <div className="flex flex-col gap-4">
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <Label htmlFor="edit-category-name">
+                                            Category Name{" "}
+                                            <span className="text-destructive">
+                                                *
+                                            </span>
+                                        </Label>
+
+                                        <span className="text-xs text-muted-foreground">
+                                            {String(
+                                                editForm.name ?? "",
+                                            ).length}
+                                            /{NAME_MAX_LENGTH}
+                                        </span>
+                                    </div>
+
+                                    <Input
+                                        id="edit-category-name"
+                                        name="name"
+                                        value={String(
+                                            editForm.name ?? "",
+                                        )}
+                                        maxLength={NAME_MAX_LENGTH + 1}
+                                        onChange={handleEditChange}
+                                        onBlur={() =>
+                                            handleEditBlur("name")
+                                        }
+                                        aria-invalid={Boolean(
+                                            editErrors.name,
+                                        )}
+                                        className={fieldClass(
+                                            Boolean(editErrors.name),
+                                        )}
+                                    />
+
+                                    {editErrors.name && (
+                                        <p className="text-xs text-destructive">
+                                            {editErrors.name}
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <Label htmlFor="edit-category-description">
+                                            Description
+                                        </Label>
+
+                                        <span className="text-xs text-muted-foreground">
+                                            {String(
+                                                editForm.description ?? "",
+                                            ).length}
+                                            /{DESCRIPTION_MAX_LENGTH}
+                                        </span>
+                                    </div>
+
+                                    <Input
+                                        id="edit-category-description"
+                                        name="description"
+                                        value={String(
+                                            editForm.description ?? "",
+                                        )}
+                                        maxLength={
+                                            DESCRIPTION_MAX_LENGTH + 1
+                                        }
+                                        onChange={handleEditChange}
+                                        onBlur={() =>
+                                            handleEditBlur("description")
+                                        }
+                                        aria-invalid={Boolean(
+                                            editErrors.description,
+                                        )}
+                                        className={fieldClass(
+                                            Boolean(
+                                                editErrors.description,
+                                            ),
+                                        )}
+                                    />
+
+                                    {editErrors.description && (
+                                        <p className="text-xs text-destructive">
+                                            {editErrors.description}
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="flex justify-end gap-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setEditOpen(false)}
+                                        disabled={updating}
+                                    >
+                                        Cancel
+                                    </Button>
+
+                                    <Button
+                                        variant="add"
+                                        onClick={handleUpdate}
+                                        disabled={updating}
+                                    >
+                                        {updating
+                                            ? "Updating..."
+                                            : "Update Category"}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Permanent Delete - canDelete permission */}
+                        {canDeleteCategory && (
+                            <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+                                <h4 className="flex items-center gap-2 text-sm font-semibold text-destructive">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    Danger Zone
+                                </h4>
+
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    Permanently delete this category. This may
+                                    fail if employees or users are assigned
+                                    to it.
                                 </p>
-                            )}
+
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    className="mt-3 cursor-pointer"
+                                    onClick={() => {
+                                        setConfirmText("");
+                                        setDangerOpen(true);
+                                    }}
+                                >
+                                    Permanent Delete
+                                </Button>
+                            </div>
+                        )}
+                    </DialogContent>
+                </Dialog>
+            )}
+
+            {/* Permanent Delete Confirmation */}
+            {canDeleteCategory && (
+                <Dialog
+                    open={dangerOpen}
+                    onOpenChange={setDangerOpen}
+                >
+                    <DialogContent className="w-[calc(100%-2rem)] max-w-md rounded-lg">
+                        <DialogHeader>
+                            <DialogTitle className="text-destructive">
+                                Permanently Delete Category
+                            </DialogTitle>
+
+                            <DialogDescription>
+                                This action cannot be undone. Type the
+                                category name exactly to confirm deletion.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="flex flex-col gap-2">
+                            <Label htmlFor="confirm-category-delete">
+                                Type{" "}
+                                <span className="font-semibold text-foreground">
+                                    {selectedCategory?.name}
+                                </span>{" "}
+                                to confirm
+                            </Label>
+
+                            <Input
+                                id="confirm-category-delete"
+                                name="confirm"
+                                autoComplete="off"
+                                value={confirmText}
+                                onChange={(event) =>
+                                    setConfirmText(event.target.value)
+                                }
+                                className="h-10 w-full"
+                            />
                         </div>
 
-                        <div className="flex justify-end gap-2 pt-1">
+                        <div className="flex flex-wrap justify-end gap-2">
                             <Button
                                 variant="outline"
-                                onClick={() => setOpen(false)}
-                                disabled={submitting}
+                                onClick={() => setDangerOpen(false)}
+                                disabled={deleting}
                             >
                                 Cancel
                             </Button>
+
                             <Button
-                                variant="add"
-                                onClick={handleCreate}
-                                disabled={submitting || !companyReady}
+                                variant="destructive"
+                                disabled={
+                                    deleting ||
+                                    confirmText !== selectedCategory?.name
+                                }
+                                onClick={handlePermanentDelete}
                             >
-                                {submitting ? "Creating..." : "Create Category"}
+                                {deleting
+                                    ? "Deleting..."
+                                    : "Delete Permanently"}
                             </Button>
                         </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
+                    </DialogContent>
+                </Dialog>
+            )}
 
-            {/* Edit Category Dialog */}
-            <Dialog
-                open={editOpen}
-                onOpenChange={(nextOpen) => {
-                    setEditOpen(nextOpen);
+            {/* Activate / Deactivate Confirmation */}
+            {canEditCategory && (
+                <Dialog
+                    open={statusDialogOpen}
+                    onOpenChange={setStatusDialogOpen}
+                >
+                    <DialogContent className="w-[calc(100%-2rem)] max-w-md rounded-lg">
+                        <DialogHeader>
+                            <DialogTitle>
+                                Update Category Status
+                            </DialogTitle>
 
-                    if (!nextOpen) {
-                        setDangerOpen(false);
-                        setConfirmText("");
-                    }
-                }}
-            >
-                <DialogContent className="max-h-[90vh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-lg">
-                    <DialogHeader>
-                        <DialogTitle>
-                            Edit Category
-                            {selectedCategory ? ` — ${selectedCategory.name}` : ""}
-                        </DialogTitle>
-                        <DialogDescription>
-                            Update the category details below.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="flex flex-col gap-4">
-                        <div className="flex flex-col gap-2">
-                            <div className="flex items-center justify-between gap-2">
-                                <Label htmlFor="edit-category-name">
-                                    Category Name{" "}
-                                    <span className="text-destructive">*</span>
-                                </Label>
-                                <span className="text-xs text-muted-foreground">
-                                    {String(editForm.name ?? "").length}/
-                                    {NAME_MAX_LENGTH}
-                                </span>
-                            </div>
-
-                            <Input
-                                id="edit-category-name"
-                                name="name"
-                                value={String(editForm.name ?? "")}
-                                maxLength={NAME_MAX_LENGTH + 1}
-                                onChange={handleEditChange}
-                                onBlur={() => handleEditBlur("name")}
-                                aria-invalid={Boolean(editErrors.name)}
-                                className={fieldClass(Boolean(editErrors.name))}
-                            />
-
-                            {editErrors.name && (
-                                <p className="text-xs text-destructive">
-                                    {editErrors.name}
-                                </p>
-                            )}
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-                            <div className="flex items-center justify-between gap-2">
-                                <Label htmlFor="edit-category-description">
-                                    Description
-                                </Label>
-                                <span className="text-xs text-muted-foreground">
-                                    {String(editForm.description ?? "").length}/
-                                    {DESCRIPTION_MAX_LENGTH}
-                                </span>
-                            </div>
-
-                            <Input
-                                id="edit-category-description"
-                                name="description"
-                                value={String(editForm.description ?? "")}
-                                maxLength={DESCRIPTION_MAX_LENGTH + 1}
-                                onChange={handleEditChange}
-                                onBlur={() =>
-                                    handleEditBlur("description")
-                                }
-                                aria-invalid={Boolean(editErrors.description)}
-                                className={fieldClass(
-                                    Boolean(editErrors.description),
-                                )}
-                            />
-
-                            {editErrors.description && (
-                                <p className="text-xs text-destructive">
-                                    {editErrors.description}
-                                </p>
-                            )}
-                        </div>
+                            <DialogDescription>
+                                You are about to{" "}
+                                <strong>
+                                    {selectedCategory?.isActive
+                                        ? "deactivate"
+                                        : "activate"}
+                                </strong>{" "}
+                                <strong>
+                                    {selectedCategory?.name}
+                                </strong>
+                                .
+                                {selectedCategory?.isActive
+                                    ? " You can activate it again later."
+                                    : " You can deactivate it again later."}
+                            </DialogDescription>
+                        </DialogHeader>
 
                         <div className="flex justify-end gap-2">
                             <Button
                                 variant="outline"
-                                onClick={() => setEditOpen(false)}
+                                onClick={() =>
+                                    setStatusDialogOpen(false)
+                                }
                                 disabled={updating}
                             >
                                 Cancel
                             </Button>
+
                             <Button
-                                variant="add"
-                                onClick={handleUpdate}
+                                variant={
+                                    selectedCategory?.isActive
+                                        ? "add"
+                                        : "destructive"
+                                }
+                                onClick={handleToggleStatus}
                                 disabled={updating}
                             >
-                                {updating ? "Updating..." : "Update Category"}
+                                {updating
+                                    ? "Updating..."
+                                    : selectedCategory?.isActive
+                                        ? "Deactivate"
+                                        : "Activate"}
                             </Button>
                         </div>
-                    </div>
-
-                    {isSuperAdmin && (
-                        <div className="mt-2 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-                            <h4 className="flex items-center gap-2 text-sm font-semibold text-destructive">
-                                <AlertTriangle className="h-4 w-4" />
-                                Danger Zone
-                            </h4>
-
-                            <p className="mt-1 text-xs text-muted-foreground">
-                                Permanently delete this category. This may fail
-                                if employees or users are assigned to it.
-                            </p>
-
-                            <Button
-                                variant="destructive"
-                                size="sm"
-                                className="mt-3 cursor-pointer"
-                                onClick={() => {
-                                    setConfirmText("");
-                                    setDangerOpen(true);
-                                }}
-                            >
-                                Permanent Delete
-                            </Button>
-                        </div>
-                    )}
-                </DialogContent>
-            </Dialog>
-
-            {/* Permanent Delete Confirmation */}
-            <Dialog
-                open={dangerOpen}
-                onOpenChange={setDangerOpen}
-            >
-                <DialogContent className="w-[calc(100%-2rem)] max-w-md rounded-lg">
-                    <DialogHeader>
-                        <DialogTitle className="text-destructive">
-                            Permanently Delete Category
-                        </DialogTitle>
-                        <DialogDescription>
-                            This action cannot be undone. Type the category
-                            name exactly to confirm deletion.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="flex flex-col gap-2">
-                        <Label htmlFor="confirm-category-delete">
-                            Type{" "}
-                            <span className="font-semibold text-foreground">
-                                {selectedCategory?.name}
-                            </span>{" "}
-                            to confirm
-                        </Label>
-
-                        <Input
-                            id="confirm-category-delete"
-                            name="confirm"
-                            autoComplete="off"
-                            value={confirmText}
-                            onChange={(event) =>
-                                setConfirmText(event.target.value)
-                            }
-                            className="h-10 w-full"
-                        />
-                    </div>
-
-                    <div className="flex flex-wrap justify-end gap-2">
-                        <Button
-                            variant="outline"
-                            onClick={() => setDangerOpen(false)}
-                            disabled={deleting}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            disabled={
-                                deleting ||
-                                confirmText !== selectedCategory?.name
-                            }
-                            onClick={handlePermanentDelete}
-                        >
-                            {deleting ? "Deleting..." : "Delete Permanently"}
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
-
-            {/* Activate / Deactivate Confirmation */}
-            <Dialog
-                open={statusDialogOpen}
-                onOpenChange={setStatusDialogOpen}
-            >
-                <DialogContent className="w-[calc(100%-2rem)] max-w-md rounded-lg">
-                    <DialogHeader>
-                        <DialogTitle>Update Category Status</DialogTitle>
-                        <DialogDescription>
-                            You are about to{" "}
-                            <strong>
-                                {selectedCategory?.isActive
-                                    ? "deactivate"
-                                    : "activate"}
-                            </strong>{" "}
-                            <strong>{selectedCategory?.name}</strong>.
-                            {selectedCategory?.isActive
-                                ? " You can activate it again later."
-                                : " You can deactivate it again later."}
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="flex justify-end gap-2">
-                        <Button
-                            variant="outline"
-                            onClick={() => setStatusDialogOpen(false)}
-                            disabled={updating}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant={
-                                selectedCategory?.isActive
-                                    ? "destructive"
-                                    : "add"
-                            }
-                            onClick={handleToggleStatus}
-                            disabled={updating}
-                        >
-                            {updating
-                                ? "Updating..."
-                                : selectedCategory?.isActive
-                                    ? "Deactivate"
-                                    : "Activate"}
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+                    </DialogContent>
+                </Dialog>
+            )}
 
             {/* Categories Table */}
             <div className="w-full overflow-hidden rounded-md border bg-card">
@@ -1032,26 +1216,34 @@ const CategoryList = () => {
                         <TableHeader className="sticky top-0 z-10 bg-muted">
                             <TableRow>
                                 <TableHead className="w-14">#</TableHead>
+
                                 <TableHead className="min-w-36">
                                     Name
                                 </TableHead>
+
                                 <TableHead className="min-w-36">
                                     Branch
                                 </TableHead>
+
                                 {isSuperAdmin && (
                                     <TableHead className="min-w-36">
                                         Company
                                     </TableHead>
                                 )}
+
                                 <TableHead className="min-w-48">
                                     Description
                                 </TableHead>
+
                                 <TableHead className="min-w-24">
                                     Status
                                 </TableHead>
-                                <TableHead className="sticky right-0 z-10 min-w-20 bg-muted text-right">
-                                    Actions
-                                </TableHead>
+
+                                {hasActions && (
+                                    <TableHead className="sticky right-0 z-10 min-w-20 bg-muted text-right">
+                                        Actions
+                                    </TableHead>
+                                )}
                             </TableRow>
                         </TableHeader>
 
@@ -1059,7 +1251,7 @@ const CategoryList = () => {
                             {loading ? (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={isSuperAdmin ? 7 : 6}
+                                        colSpan={tableColSpan}
                                         className="h-24 text-center text-muted-foreground"
                                     >
                                         Loading categories...
@@ -1068,7 +1260,7 @@ const CategoryList = () => {
                             ) : !companyReady ? (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={isSuperAdmin ? 7 : 6}
+                                        colSpan={tableColSpan}
                                         className="h-24 text-center text-muted-foreground"
                                     >
                                         Select a company to view categories.
@@ -1077,7 +1269,7 @@ const CategoryList = () => {
                             ) : filteredCategories.length === 0 ? (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={isSuperAdmin ? 7 : 6}
+                                        colSpan={tableColSpan}
                                         className="h-24 text-center text-muted-foreground"
                                     >
                                         {categories.length === 0
@@ -1088,10 +1280,14 @@ const CategoryList = () => {
                             ) : (
                                 filteredCategories.map((category, index) => (
                                     <TableRow key={category.id}>
-                                        <TableCell>{index + 1}</TableCell>
+                                        <TableCell>
+                                            {index + 1}
+                                        </TableCell>
+
                                         <TableCell className="font-medium">
                                             {category.name}
                                         </TableCell>
+
                                         <TableCell>
                                             {category.branch?.name ?? "—"}
                                         </TableCell>
@@ -1120,48 +1316,58 @@ const CategoryList = () => {
                                             </Badge>
                                         </TableCell>
 
-                                        <TableCell className="sticky right-0 bg-card text-right">
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        aria-label={`Actions for ${category.name}`}
-                                                    >
-                                                        <MoreVertical className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuGroup>
-                                                        <DropdownMenuItem
-                                                            onClick={() =>
-                                                                openEditDialog(
-                                                                    category,
-                                                                )
-                                                            }
+                                        {hasActions && (
+                                            <TableCell className="sticky right-0 bg-card text-right">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            aria-label={`Actions for ${category.name}`}
                                                         >
-                                                            Edit
-                                                        </DropdownMenuItem>
+                                                            <MoreVertical className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
 
-                                                        <DropdownMenuItem
-                                                            onClick={() => {
-                                                                setSelectedCategory(
-                                                                    category,
-                                                                );
-                                                                setStatusDialogOpen(
-                                                                    true,
-                                                                );
-                                                            }}
-                                                        >
-                                                            {category.isActive
-                                                                ? "Deactivate"
-                                                                : "Activate"}
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuGroup>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </TableCell>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuGroup>
+                                                            {(canEditCategory ||
+                                                                canDeleteCategory) && (
+                                                                    <DropdownMenuItem
+                                                                        onClick={() =>
+                                                                            openEditDialog(
+                                                                                category,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        {canEditCategory
+                                                                            ? "Edit"
+                                                                            : "Manage"}
+                                                                    </DropdownMenuItem>
+                                                                )}
+
+                                                            {canEditCategory && (
+                                                                <DropdownMenuItem variant="destructive"
+                                                                    onClick={() => {
+                                                                        setSelectedCategory(
+                                                                            category,
+                                                                        );
+
+                                                                        setStatusDialogOpen(
+                                                                            true,
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    {category.isActive
+                                                                        ? "Deactivate"
+                                                                        : "Activate"}
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                        </DropdownMenuGroup>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
+                                        )}
                                     </TableRow>
                                 ))
                             )}

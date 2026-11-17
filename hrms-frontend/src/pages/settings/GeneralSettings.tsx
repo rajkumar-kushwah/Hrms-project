@@ -1,3 +1,4 @@
+
 import React from "react";
 import {
     Card,
@@ -22,16 +23,24 @@ import { useCompanyStore } from "@/store/company.store";
 import { CompanySelector } from "@/pages/common/CompanySelector";
 
 import type { Company } from "@/types/company.types";
-import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
+
+import {
+    isSuperAdminRole,
+    canViewModule,
+    canEditInModule,
+} from "@/utilis/roleUtils";
+
+const MODULE_NAME = "settings_general";
+
 const GeneralSettings = () => {
     const { user } = useAuthStore();
 
-    const userRole = getUserRole(user);
-    const isSuperAdmin = isSuperAdminRole(userRole);
+    const isSuperAdmin = isSuperAdminRole(user);
 
+    const canViewGeneral = canViewModule(user, MODULE_NAME);
+    const canEditGeneral = canEditInModule(user, MODULE_NAME);
 
     const [selectedCompanyId, setSelectedCompanyId] = React.useState("");
-
 
     const [company, setCompany] = React.useState<Company | null>(null);
     const [loading, setLoading] = React.useState(true);
@@ -39,12 +48,11 @@ const GeneralSettings = () => {
 
     const requestIdRef = React.useRef(0);
 
-    // Load company details whenever the selected company changes.
     React.useEffect(() => {
         const requestId = ++requestIdRef.current;
 
         const loadCompany = async () => {
-            if (!user) {
+            if (!canViewGeneral || !user) {
                 setCompany(null);
                 setLoading(false);
                 return;
@@ -114,9 +122,19 @@ const GeneralSettings = () => {
         return () => {
             requestIdRef.current += 1;
         };
-    }, [user, isSuperAdmin, selectedCompanyId]);
+    }, [
+        user,
+        isSuperAdmin,
+        selectedCompanyId,
+        canViewGeneral,
+    ]);
 
     const handleSave = async () => {
+        if (!canEditGeneral) {
+            toast.error("You don't have permission to edit General Settings.");
+            return;
+        }
+
         if (!company) {
             toast.error("Company details not found.");
             return;
@@ -148,7 +166,6 @@ const GeneralSettings = () => {
                 address: company.address,
             });
 
-            // Avoid showing success for an outdated company selection.
             if (
                 isSuperAdmin &&
                 useCompanyStore.getState().selectedCompanyId !==
@@ -174,10 +191,16 @@ const GeneralSettings = () => {
         field: K,
         value: Company[K]
     ) => {
+        if (!canEditGeneral) return;
+
         setCompany((current) =>
             current ? { ...current, [field]: value } : current
         );
     };
+
+    if (!canViewGeneral) {
+        return null;
+    }
 
     return (
         <Card>
@@ -189,9 +212,12 @@ const GeneralSettings = () => {
             </CardHeader>
 
             <CardContent className="flex flex-col gap-4">
-                {isSuperAdmin && <CompanySelector
-                    selectedCompanyId={selectedCompanyId}
-                    onCompanyChange={setSelectedCompanyId} />}
+                {isSuperAdmin && (
+                    <CompanySelector
+                        selectedCompanyId={selectedCompanyId}
+                        onCompanyChange={setSelectedCompanyId}
+                    />
+                )}
 
                 {loading ? (
                     <div className="py-8 text-center text-muted-foreground">
@@ -212,6 +238,7 @@ const GeneralSettings = () => {
                             <Input
                                 id="company-name"
                                 value={company.name}
+                                disabled={!canEditGeneral}
                                 onChange={(event) =>
                                     updateCompanyField(
                                         "name",
@@ -223,11 +250,14 @@ const GeneralSettings = () => {
 
                         <div className="flex flex-col gap-3 sm:flex-row">
                             <div className="min-w-0 flex-1 space-y-2">
-                                <Label htmlFor="company-email">Email</Label>
+                                <Label htmlFor="company-email">
+                                    Email
+                                </Label>
                                 <Input
                                     id="company-email"
                                     type="email"
                                     value={company.email ?? ""}
+                                    disabled={!canEditGeneral}
                                     onChange={(event) =>
                                         updateCompanyField(
                                             "email",
@@ -238,10 +268,13 @@ const GeneralSettings = () => {
                             </div>
 
                             <div className="min-w-0 flex-1 space-y-2">
-                                <Label htmlFor="company-phone">Phone</Label>
+                                <Label htmlFor="company-phone">
+                                    Phone
+                                </Label>
                                 <Input
                                     id="company-phone"
                                     value={company.phone ?? ""}
+                                    disabled={!canEditGeneral}
                                     onChange={(event) =>
                                         updateCompanyField(
                                             "phone",
@@ -253,10 +286,13 @@ const GeneralSettings = () => {
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="company-website">Website</Label>
+                            <Label htmlFor="company-website">
+                                Website
+                            </Label>
                             <Input
                                 id="company-website"
                                 value={company.website ?? ""}
+                                disabled={!canEditGeneral}
                                 onChange={(event) =>
                                     updateCompanyField(
                                         "website",
@@ -267,10 +303,13 @@ const GeneralSettings = () => {
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="company-address">Address</Label>
+                            <Label htmlFor="company-address">
+                                Address
+                            </Label>
                             <Input
                                 id="company-address"
                                 value={company.address ?? ""}
+                                disabled={!canEditGeneral}
                                 onChange={(event) =>
                                     updateCompanyField(
                                         "address",
@@ -280,18 +319,19 @@ const GeneralSettings = () => {
                             />
                         </div>
 
-                        <Button
-                            onClick={handleSave}
-                            disabled={
-                                saving ||
-                                loading ||
-                                (isSuperAdmin &&
-                                    !selectedCompanyId)
-                            }
-                            className="w-fit"
-                        >
-                            {saving ? "Saving..." : "Save Changes"}
-                        </Button>
+                        {canEditGeneral && (
+                            <Button
+                                onClick={handleSave}
+                                disabled={
+                                    saving ||
+                                    loading ||
+                                    (isSuperAdmin && !selectedCompanyId)
+                                }
+                                className="w-fit"
+                            >
+                                {saving ? "Saving..." : "Save Changes"}
+                            </Button>
+                        )}
                     </>
                 )}
             </CardContent>

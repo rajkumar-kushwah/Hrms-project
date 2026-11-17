@@ -42,8 +42,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/store/auth.store";
 import {
+    canDeleteInModule,
+    canEditInModule,
+    canViewModule,
     getUserName,
-    getUserRole,
+
     isEmployeeRole,
     isSuperAdminRole,
 } from "@/utilis/roleUtils";
@@ -52,10 +55,11 @@ import { CompanySelector } from "@/pages/common/CompanySelector";
 const LeaveApproval = () => {
     const { user } = useAuthStore();
 
-    const userRole = getUserRole(user);
-
-    const isEmployee = isEmployeeRole(userRole);
-    const isSuperAdmin = isSuperAdminRole(userRole);
+    const isEmployee = isEmployeeRole(user);
+    const isSuperAdmin = isSuperAdminRole(user);
+    const canViewLeaveApproval = canViewModule(user, "leave_approval");
+    const canEditLeaveApproval = canEditInModule(user, "leave_approval");
+    const canDeleteLeaveApproval = canDeleteInModule(user, "leave_approval");
 
     const [selectedCompanyId, setSelectedCompanyId] = React.useState("");
     const [leaves, setLeaves] = React.useState<LeaveRequest[]>([]);
@@ -185,7 +189,10 @@ const LeaveApproval = () => {
                 return "bg-yellow-100 text-yellow-700";
         }
     };
-
+    
+    if (!canViewLeaveApproval) {
+        return null;
+    }
     return (
         <div className="flex flex-col gap-4">
             <div className="flex items-center gap-3 flex-wrap">
@@ -300,7 +307,9 @@ const LeaveApproval = () => {
                                 <TableHead>Days</TableHead>
                                 <TableHead>Reason</TableHead>
                                 <TableHead>Status</TableHead>
-                                {!isEmployee && <TableHead>Actions</TableHead>}
+                                {(canEditLeaveApproval || canDeleteLeaveApproval) && (
+                                    <TableHead>Actions</TableHead>
+                                )}
                             </TableRow>
                         </TableHeader>
 
@@ -363,7 +372,7 @@ const LeaveApproval = () => {
 
                                         {!isEmployee && (
                                             <TableCell>
-                                                {leave.status === "Pending" && (
+                                                {canEditLeaveApproval && leave.status === "Pending" && (
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
                                                             <Button variant="ghost" size="icon">
@@ -396,7 +405,7 @@ const LeaveApproval = () => {
                                                     </DropdownMenu>
                                                 )}
 
-                                                {leave.status === "Approved" && (
+                                                {canDeleteLeaveApproval && leave.status === "Approved" && (
                                                     <Button
                                                         size="sm"
                                                         variant="outline"

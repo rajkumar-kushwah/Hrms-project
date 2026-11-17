@@ -1,13 +1,8 @@
 
-// pages/attendance/MonthlySheet.tsx
-
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import {
-    Loader2
-} from "lucide-react";
-
+import { Loader2 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import {
@@ -21,7 +16,10 @@ import {
 import { getMonthlyAttendanceSheet } from "@/services/attendance.service";
 import { getCompanies } from "@/services/company.service";
 import { useAuthStore } from "@/store/auth.store";
-import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
+import {
+    canViewModule,
+    isSuperAdminRole,
+} from "@/utilis/roleUtils";
 
 // --------------------------------------------------
 // Types
@@ -77,6 +75,8 @@ interface ApiError {
 // --------------------------------------------------
 // Constants
 // --------------------------------------------------
+
+const MODULE_NAME = "attendance";
 
 const CELL: Record<DayStatus, { code: string; cls: string }> = {
     Present: {
@@ -163,7 +163,6 @@ const summarize = (days: DayStatus[]) => {
     const absent = count("Absent");
     const unpaidLeave = count("Unpaid Leave");
 
-
     return {
         present: count("Present") + count("Late"),
         halfDay,
@@ -188,20 +187,24 @@ const MonthlySheet = () => {
 
     const user = useAuthStore((state) => state.user);
 
-    const userRole = getUserRole(user);
-    const isSuperAdmin = isSuperAdminRole(userRole);
+    // PBAC
+    const canViewAttendance = canViewModule(user, MODULE_NAME);
+    const isSuperAdmin = isSuperAdminRole(user);
 
     const [month, setMonth] = React.useState(
         today.getMonth() + 1
     );
+
     const [year, setYear] = React.useState(
         today.getFullYear()
     );
+
     const [search, setSearch] = React.useState("");
 
     const [companies, setCompanies] = React.useState<CompanyOption[]>(
         []
     );
+
     const [selectedCompanyId, setSelectedCompanyId] =
         React.useState("");
 
@@ -219,9 +222,10 @@ const MonthlySheet = () => {
     // ----------------------------------------------
 
     React.useEffect(() => {
-        if (!isSuperAdmin) {
+        if (!canViewAttendance || !isSuperAdmin) {
             setCompanies([]);
             setSelectedCompanyId("");
+            setCompaniesLoading(false);
             return;
         }
 
@@ -233,7 +237,6 @@ const MonthlySheet = () => {
             try {
                 const response = await getCompanies();
 
-                // Expected response: { success, data: [...] }
                 const companyList: CompanyOption[] =
                     response.data.data ?? [];
 
@@ -241,8 +244,6 @@ const MonthlySheet = () => {
 
                 setCompanies(companyList);
                 setSelectedCompanyId("");
-                // Select the first company by default.
-
             } catch (error: unknown) {
                 if (!cancelled) {
                     setCompanies([]);
@@ -267,7 +268,7 @@ const MonthlySheet = () => {
         return () => {
             cancelled = true;
         };
-    }, [isSuperAdmin]);
+    }, [canViewAttendance, isSuperAdmin]);
 
     // ----------------------------------------------
     // Fetch monthly attendance
@@ -277,6 +278,12 @@ const MonthlySheet = () => {
         let cancelled = false;
 
         const loadAttendance = async () => {
+            if (!canViewAttendance) {
+                setData(null);
+                setLoading(false);
+                return;
+            }
+
             // Super Admin must select a company first.
             if (isSuperAdmin && !selectedCompanyId) {
                 setData(null);
@@ -314,9 +321,9 @@ const MonthlySheet = () => {
             }
         };
 
-        // Wait until company loading finishes.
         if (isSuperAdmin && companiesLoading) {
             setLoading(true);
+
             return () => {
                 cancelled = true;
             };
@@ -328,6 +335,7 @@ const MonthlySheet = () => {
             cancelled = true;
         };
     }, [
+        canViewAttendance,
         month,
         year,
         isSuperAdmin,
@@ -336,10 +344,8 @@ const MonthlySheet = () => {
     ]);
 
     // ----------------------------------------------
-    // Month navigation
+    // Prepare days
     // ----------------------------------------------
-
-   
 
     const daysInMonth = new Date(year, month, 0).getDate();
 
@@ -358,7 +364,6 @@ const MonthlySheet = () => {
         let list: SheetEmployee[] = [];
 
         if (Array.isArray(data)) {
-            // Personal attendance response for employees.
             const records = data as MyAttendanceRecord[];
 
             const days: DayStatus[] = Array.from(
@@ -437,6 +442,14 @@ const MonthlySheet = () => {
     }, [data, search, daysInMonth, month, year]);
 
     // ----------------------------------------------
+    // Permission check
+    // ----------------------------------------------
+
+    if (!canViewAttendance) {
+        return null;
+    }
+
+    // ----------------------------------------------
     // Render
     // ----------------------------------------------
 
@@ -476,8 +489,6 @@ const MonthlySheet = () => {
                     </Select>
                 )}
 
-               
-
                 <Select
                     value={String(month)}
                     onValueChange={(value) =>
@@ -511,8 +522,6 @@ const MonthlySheet = () => {
                     }
                     className="w-24"
                 />
-
-               
 
                 <Input
                     type="search"
@@ -583,11 +592,11 @@ const MonthlySheet = () => {
                                         <div className="text-[10px] font-normal">
                                             {
                                                 WEEKDAY_LETTER[
-                                                new Date(
-                                                    year,
-                                                    month - 1,
-                                                    day
-                                                ).getDay()
+                                                    new Date(
+                                                        year,
+                                                        month - 1,
+                                                        day
+                                                    ).getDay()
                                                 ]
                                             }
                                         </div>
@@ -632,7 +641,7 @@ const MonthlySheet = () => {
                                 </th>
                                 <th
                                     className="px-2 text-center text-xs font-medium text-muted-foreground"
-                                    title="Absent + unpaid leave + week off + half-day x 0.5"
+                                    title="Absent + unpaid leave + half-day x 0.5"
                                 >
                                     Unpaid
                                 </th>
@@ -648,13 +657,16 @@ const MonthlySheet = () => {
                                         key={employee.userId}
                                         className="cursor-pointer hover:bg-muted/50"
                                         onClick={() =>
-                                            navigate(`/attendance/employee/${employee.userId}`, {
-                                                state: {
-                                                    companyId: isSuperAdmin
-                                                        ? selectedCompanyId
-                                                        : undefined,
-                                                },
-                                            })
+                                            navigate(
+                                                `/attendance/employee/${employee.userId}`,
+                                                {
+                                                    state: {
+                                                        companyId: isSuperAdmin
+                                                            ? selectedCompanyId
+                                                            : undefined,
+                                                    },
+                                                }
+                                            )
                                         }
                                     >
                                         <td className="sticky left-0 z-10 bg-card px-3 py-2">

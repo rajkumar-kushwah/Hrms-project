@@ -1,7 +1,7 @@
 
 import React from "react";
-// import * as XLSX from "xlsx";
 import { toast } from "sonner";
+
 import {
     FileSpreadsheet,
     RefreshCw,
@@ -10,6 +10,7 @@ import {
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+
 import {
     Select,
     SelectContent,
@@ -17,6 +18,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+
 import {
     Table,
     TableBody,
@@ -28,10 +30,17 @@ import {
 
 import { getOvertimeReport } from "@/services/overtimeReport.service";
 import { getCompanies } from "@/services/company.service";
-import { useAuthStore } from "@/store/auth.store";
-import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
 
-// Types
+import { useAuthStore } from "@/store/auth.store";
+
+import {
+    isSuperAdminRole,
+    canViewModule,
+} from "@/utilis/roleUtils";
+
+// ─────────────────────────────────────────────
+// TYPES
+// ─────────────────────────────────────────────
 
 interface Company {
     id: string;
@@ -70,7 +79,23 @@ interface Report {
     pagination: Pagination;
 }
 
+interface SummaryCard {
+    label: string;
+    value: string | number;
+}
+
+interface TableColumn {
+    label: string;
+    className?: string;
+    render: (record: OvertimeRecord) => React.ReactNode;
+}
+
+// ─────────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────────
+
 const PAGE_LIMIT = 10;
+const MODULE_NAME = "overtime_report";
 
 const EMPTY_SUMMARY: Summary = {
     totalOvertimeHours: 0,
@@ -85,6 +110,10 @@ const EMPTY_PAGINATION: Pagination = {
     totalPages: 0,
 };
 
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+
 // Current month in YYYY-MM format
 
 const getCurrentMonth = (): string => {
@@ -95,8 +124,7 @@ const getCurrentMonth = (): string => {
     ).padStart(2, "0")}`;
 };
 
-// Get selected month's start and end dates.
-// Local date formatting avoids UTC timezone date shifts.
+// Get selected month's date range
 
 const getMonthDateRange = (monthValue: string) => {
     const [year, month] = monthValue.split("-").map(Number);
@@ -113,19 +141,17 @@ const getMonthDateRange = (monthValue: string) => {
 
 // Format hours
 
-const formatHours = (hours: number) => {
-    return `${Number(hours || 0).toFixed(2)} hrs`;
-};
+const formatHours = (hours: number) =>
+    `${Number(hours || 0).toFixed(2)} hrs`;
 
 // Format date
 
-const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString("en-IN", {
+const formatDate = (date: string) =>
+    new Date(date).toLocaleDateString("en-IN", {
         day: "2-digit",
         month: "short",
         year: "numeric",
     });
-};
 
 // Error message
 
@@ -162,15 +188,131 @@ const getErrorMessage = (error: unknown): string => {
     return "Failed to load overtime report.";
 };
 
+// Excel column widths
+
+const getColumnWidths = (
+    rows: Record<string, string | number>[]
+) => {
+    if (!rows.length) return [];
+
+    return Object.keys(rows[0]).map((key) => ({
+        wch:
+            Math.max(
+                key.length,
+                ...rows.map((row) =>
+                    String(row[key] ?? "").length
+                )
+            ) + 2,
+    }));
+};
+
+// ─────────────────────────────────────────────
+// TABLE CONFIGURATION
+// ─────────────────────────────────────────────
+
+const TABLE_COLUMNS: TableColumn[] = [
+    {
+        label: "Date",
+        render: (record) => formatDate(record.date),
+    },
+    {
+        label: "Employee",
+        render: (record) => (
+            <div>
+                <p className="font-medium">
+                    {record.employeeName}
+                </p>
+
+                <p className="text-xs text-muted-foreground">
+                    {record.email}
+                </p>
+            </div>
+        ),
+    },
+    {
+        label: "Employee Code",
+        render: (record) => record.employeeCode ?? "—",
+    },
+    {
+        label: "Branch",
+        render: (record) => record.branch || "—",
+    },
+    {
+        label: "Category",
+        render: (record) => record.category || "—",
+    },
+    {
+        label: "Working Hours",
+        className: "text-right",
+        render: (record) => formatHours(record.workingHours),
+    },
+    {
+        label: "Overtime Hours",
+        className: "text-right font-semibold text-primary",
+        render: (record) => formatHours(record.overtimeHours),
+    },
+];
+
+// ─────────────────────────────────────────────
+// EXCEL CONFIGURATION
+// ─────────────────────────────────────────────
+
+const EXPORT_COLUMNS = [
+    {
+        label: "Date",
+        getValue: (record: OvertimeRecord) => formatDate(record.date),
+    },
+    {
+        label: "Employee Code",
+        getValue: (record: OvertimeRecord) => record.employeeCode ?? "",
+    },
+    {
+        label: "Employee Name",
+        getValue: (record: OvertimeRecord) => record.employeeName,
+    },
+    {
+        label: "Email",
+        getValue: (record: OvertimeRecord) => record.email,
+    },
+    {
+        label: "Branch",
+        getValue: (record: OvertimeRecord) => record.branch,
+    },
+    {
+        label: "Category",
+        getValue: (record: OvertimeRecord) => record.category,
+    },
+    {
+        label: "Working Hours",
+        getValue: (record: OvertimeRecord) => record.workingHours,
+    },
+    {
+        label: "Overtime Hours",
+        getValue: (record: OvertimeRecord) => record.overtimeHours,
+    },
+];
+
+// ─────────────────────────────────────────────
+// PAGE
+// ─────────────────────────────────────────────
+
 const OvertimeReport = () => {
     const user = useAuthStore((state) => state.user);
-    const userRole = getUserRole(user);
-    const isSuperAdmin = isSuperAdminRole(userRole);
+
+    // Permissions
+
+    const canViewOvertimeReport = canViewModule(
+        user,
+        MODULE_NAME
+    );
+
+    const isSuperAdmin = isSuperAdminRole(user);
 
     // Report states
 
     const [records, setRecords] = React.useState<OvertimeRecord[]>([]);
     const [summary, setSummary] = React.useState<Summary>(EMPTY_SUMMARY);
+
     const [pagination, setPagination] =
         React.useState<Pagination>(EMPTY_PAGINATION);
 
@@ -184,6 +326,7 @@ const OvertimeReport = () => {
     const [selectedMonth, setSelectedMonth] = React.useState(
         getCurrentMonth
     );
+
     const [search, setSearch] = React.useState("");
 
     // Loading states
@@ -193,10 +336,36 @@ const OvertimeReport = () => {
     const [loading, setLoading] = React.useState(false);
     const [isSpinning, setIsSpinning] = React.useState(false);
 
-    // Load companies for Super Admin
+    // ─────────────────────────────────────────
+    // SUMMARY CARDS
+    // ─────────────────────────────────────────
+
+    const summaryCards: SummaryCard[] = [
+        {
+            label: "Total Overtime Hours",
+            value: formatHours(summary.totalOvertimeHours),
+        },
+        {
+            label: "Employees with Overtime",
+            value: summary.employeesWithOvertime,
+        },
+        {
+            label: "Total Overtime Days",
+            value: summary.totalOvertimeDays,
+        },
+    ];
+
+    // ─────────────────────────────────────────
+    // LOAD COMPANIES
+    // ─────────────────────────────────────────
 
     React.useEffect(() => {
-        if (!isSuperAdmin) return;
+        if (!canViewOvertimeReport || !isSuperAdmin) {
+            setCompanies([]);
+            setSelectedCompanyId("");
+            setCompaniesLoading(false);
+            return;
+        }
 
         let cancelled = false;
 
@@ -217,12 +386,21 @@ const OvertimeReport = () => {
 
                 setCompanies(list);
 
-                if (list.length === 1) {
-                    setSelectedCompanyId(list[0].id);
-                }
+                setSelectedCompanyId((current) => {
+                    if (
+                        current &&
+                        list.some((company) => company.id === current)
+                    ) {
+                        return current;
+                    }
+
+                    return list.length === 1 ? list[0].id : "";
+                });
             } catch (error) {
                 if (!cancelled) {
                     toast.error(getErrorMessage(error));
+                    setCompanies([]);
+                    setSelectedCompanyId("");
                 }
             } finally {
                 if (!cancelled) {
@@ -236,11 +414,21 @@ const OvertimeReport = () => {
         return () => {
             cancelled = true;
         };
-    }, [isSuperAdmin]);
+    }, [canViewOvertimeReport, isSuperAdmin]);
 
-    // Fetch overtime report
+    // ─────────────────────────────────────────
+    // LOAD OVERTIME REPORT
+    // ─────────────────────────────────────────
 
     const loadReport = React.useCallback(async () => {
+        if (!canViewOvertimeReport) {
+            setRecords([]);
+            setSummary(EMPTY_SUMMARY);
+            setPagination(EMPTY_PAGINATION);
+            setLoading(false);
+            return;
+        }
+
         if (isSuperAdmin && !selectedCompanyId) {
             setRecords([]);
             setSummary(EMPTY_SUMMARY);
@@ -249,9 +437,7 @@ const OvertimeReport = () => {
             return;
         }
 
-        if (!selectedMonth) {
-            return;
-        }
+        if (!selectedMonth) return;
 
         setLoading(true);
 
@@ -279,9 +465,6 @@ const OvertimeReport = () => {
                 );
             }
 
-            // Service returns response.data.
-            // Backend report is inside response.data.
-
             const result = response.data as Report;
 
             setRecords(
@@ -290,14 +473,11 @@ const OvertimeReport = () => {
                     : []
             );
 
-            setSummary(
-                result?.summary ?? EMPTY_SUMMARY
-            );
+            setSummary(result?.summary ?? EMPTY_SUMMARY);
 
             setPagination(
                 result?.pagination ?? EMPTY_PAGINATION
             );
-
         } catch (error: unknown) {
             setRecords([]);
             setSummary(EMPTY_SUMMARY);
@@ -308,6 +488,7 @@ const OvertimeReport = () => {
             setLoading(false);
         }
     }, [
+        canViewOvertimeReport,
         selectedMonth,
         search,
         isSuperAdmin,
@@ -315,43 +496,76 @@ const OvertimeReport = () => {
         page,
     ]);
 
-    // Automatically fetch report when filters change
+    // ─────────────────────────────────────────
+    // AUTOMATIC REPORT FETCH
+    // ─────────────────────────────────────────
 
     React.useEffect(() => {
+        if (!canViewOvertimeReport) return;
+
         const timeout = setTimeout(() => {
             void loadReport();
         }, 300);
 
         return () => clearTimeout(timeout);
-    }, [loadReport]);
+    }, [canViewOvertimeReport, loadReport]);
 
-    // Clear filters
+    // ─────────────────────────────────────────
+    // FILTER HANDLERS
+    // ─────────────────────────────────────────
 
     const handleClear = () => {
+        if (!canViewOvertimeReport) return;
+
         setSelectedMonth(getCurrentMonth());
         setSearch("");
         setPage(1);
     };
 
-    // Refresh report
+    const handleMonthChange = (value: string) => {
+        setSelectedMonth(value);
+        setPage(1);
+    };
+
+    const handleSearchChange = (value: string) => {
+        setSearch(value);
+        setPage(1);
+    };
+
+    const handleCompanyChange = (value: string) => {
+        setSelectedCompanyId(value);
+        setPage(1);
+    };
+
+    const hasActiveFilters =
+        selectedMonth !== getCurrentMonth() || search.trim() !== "";
+
+    // ─────────────────────────────────────────
+    // REFRESH
+    // ─────────────────────────────────────────
 
     const handleRefresh = async () => {
+        if (!canViewOvertimeReport) return;
+
         setIsSpinning(true);
 
         try {
             await Promise.all([
                 loadReport(),
-                new Promise((resolve) =>
-                    setTimeout(resolve, 700)
-                ),
+                new Promise((resolve) => setTimeout(resolve, 700)),
             ]);
         } finally {
             setIsSpinning(false);
         }
     };
 
-    // Excel export
+    // ─────────────────────────────────────────
+    // EXCEL EXPORT
+    // ─────────────────────────────────────────
+
     const handleExport = async () => {
+        if (!canViewOvertimeReport) return;
+
         if (!records.length) {
             toast.error("No overtime records available to export.");
             return;
@@ -360,30 +574,18 @@ const OvertimeReport = () => {
         try {
             const XLSX = await import("xlsx");
 
-            const rows = records.map((record) => ({
-                Date: formatDate(record.date),
-                "Employee Code": record.employeeCode ?? "",
-                "Employee Name": record.employeeName,
-                Email: record.email,
-                Branch: record.branch,
-                Category: record.category,
-                "Working Hours": record.workingHours,
-                "Overtime Hours": record.overtimeHours,
-            }));
+            const rows = records.map((record) =>
+                Object.fromEntries(
+                    EXPORT_COLUMNS.map((column) => [
+                        column.label,
+                        column.getValue(record),
+                    ])
+                )
+            ) as Record<string, string | number>[];
 
             const worksheet = XLSX.utils.json_to_sheet(rows);
 
-            worksheet["!cols"] = Object.keys(rows[0]).map((key) => ({
-                wch:
-                    Math.max(
-                        key.length,
-                        ...rows.map((row) =>
-                            String(
-                                row[key as keyof typeof row] ?? ""
-                            ).length
-                        )
-                    ) + 2,
-            }));
+            worksheet["!cols"] = getColumnWidths(rows);
 
             const workbook = XLSX.utils.book_new();
 
@@ -403,27 +605,23 @@ const OvertimeReport = () => {
             toast.error("Failed to export overtime report.");
         }
     };
-    // Summary cards
 
-    const cards = [
-        {
-            label: "Total Overtime Hours",
-            value: formatHours(summary.totalOvertimeHours),
-        },
-        {
-            label: "Employees with Overtime",
-            value: summary.employeesWithOvertime,
-        },
-        {
-            label: "Total Overtime Days",
-            value: summary.totalOvertimeDays,
-        },
-    ];
+    // ─────────────────────────────────────────
+    // PERMISSION CHECK
+    // ─────────────────────────────────────────
+
+    if (!canViewOvertimeReport) {
+        return null;
+    }
+
+    // ─────────────────────────────────────────
+    // UI
+    // ─────────────────────────────────────────
 
     return (
         <div className="space-y-4 p-1">
 
-            {/* Header */}
+            {/* HEADER */}
 
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-muted-foreground">
@@ -442,34 +640,37 @@ const OvertimeReport = () => {
                     }
                 >
                     <RefreshCw
-                        className={`mr-2 h-4 w-4 ${isSpinning ? "animate-spin" : ""
-                            }`}
+                        className={`mr-2 h-4 w-4 ${
+                            isSpinning ? "animate-spin" : ""
+                        }`}
                     />
                     Refresh
                 </Button>
             </div>
 
-            {/* Filters */}
+            {/* FILTERS */}
 
             <div className="flex flex-wrap items-center justify-end gap-2">
 
-                {/* Company Filter */}
+                {/* COMPANY FILTER */}
 
                 {isSuperAdmin && (
                     <Select
                         value={selectedCompanyId}
-                        onValueChange={(value) => {
-                            setSelectedCompanyId(value);
-                            setPage(1);
-                        }}
-                        disabled={companiesLoading}
+                        onValueChange={handleCompanyChange}
+                        disabled={
+                            companiesLoading ||
+                            companies.length === 0
+                        }
                     >
                         <SelectTrigger className="w-full sm:w-[220px]">
                             <SelectValue
                                 placeholder={
                                     companiesLoading
                                         ? "Loading companies..."
-                                        : "Select company"
+                                        : companies.length === 0
+                                            ? "No companies available"
+                                            : "Select company"
                                 }
                             />
                         </SelectTrigger>
@@ -488,20 +689,19 @@ const OvertimeReport = () => {
                     </Select>
                 )}
 
-                {/* Month Filter */}
+                {/* MONTH FILTER */}
 
                 <input
                     type="month"
                     value={selectedMonth}
                     max={getCurrentMonth()}
-                    onChange={(event) => {
-                        setSelectedMonth(event.target.value);
-                        setPage(1);
-                    }}
+                    onChange={(event) =>
+                        handleMonthChange(event.target.value)
+                    }
                     className="h-9 rounded-md border bg-background px-3 text-sm"
                 />
 
-                {/* Employee Search */}
+                {/* EMPLOYEE SEARCH */}
 
                 <div className="relative w-full sm:w-[220px]">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -510,30 +710,26 @@ const OvertimeReport = () => {
                         type="text"
                         placeholder="Search employee..."
                         value={search}
-                        onChange={(event) => {
-                            setSearch(event.target.value);
-                            setPage(1);
-                        }}
+                        onChange={(event) =>
+                            handleSearchChange(event.target.value)
+                        }
                         className="h-9 w-full rounded-md border bg-background pl-9 pr-3 text-sm outline-none focus:ring-1 focus:ring-ring"
                     />
                 </div>
 
-                {/* Clear */}
+                {/* CLEAR */}
 
                 <Button
                     variant="outline"
                     size="sm"
                     className="cursor-pointer"
                     onClick={handleClear}
-                    disabled={
-                        selectedMonth === getCurrentMonth() &&
-                        !search
-                    }
+                    disabled={!hasActiveFilters}
                 >
                     Clear
                 </Button>
 
-                {/* Export */}
+                {/* EXPORT */}
 
                 <Button
                     variant="add"
@@ -547,7 +743,7 @@ const OvertimeReport = () => {
                 </Button>
             </div>
 
-            {/* Company Selection Message */}
+            {/* COMPANY SELECTION */}
 
             {isSuperAdmin && !selectedCompanyId ? (
                 <div className="py-12 text-center text-sm text-muted-foreground">
@@ -560,10 +756,10 @@ const OvertimeReport = () => {
                 </div>
             ) : (
                 <>
-                    {/* Summary Cards */}
+                    {/* SUMMARY CARDS */}
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        {cards.map((card) => (
+                        {summaryCards.map((card) => (
                             <Card
                                 key={card.label}
                                 className="p-3"
@@ -579,9 +775,10 @@ const OvertimeReport = () => {
                         ))}
                     </div>
 
-                    {/* Report Table */}
+                    {/* REPORT TABLE */}
 
                     <div className="relative">
+
                         {loading && (
                             <div className="absolute inset-0 z-10 flex items-start justify-center bg-background/60 pt-16 backdrop-blur-[1px]">
                                 <div className="flex items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm shadow-sm">
@@ -595,17 +792,14 @@ const OvertimeReport = () => {
                             <Table>
                                 <TableHeader className="bg-muted">
                                     <TableRow>
-                                        <TableHead>Date</TableHead>
-                                        <TableHead>Employee</TableHead>
-                                        <TableHead>Employee Code</TableHead>
-                                        <TableHead>Branch</TableHead>
-                                        <TableHead>Category</TableHead>
-                                        <TableHead className="text-right">
-                                            Working Hours
-                                        </TableHead>
-                                        <TableHead className="text-right">
-                                            Overtime Hours
-                                        </TableHead>
+                                        {TABLE_COLUMNS.map((column) => (
+                                            <TableHead
+                                                key={column.label}
+                                                className={column.className}
+                                            >
+                                                {column.label}
+                                            </TableHead>
+                                        ))}
                                     </TableRow>
                                 </TableHeader>
 
@@ -613,7 +807,7 @@ const OvertimeReport = () => {
                                     {records.length === 0 ? (
                                         <TableRow>
                                             <TableCell
-                                                colSpan={7}
+                                                colSpan={TABLE_COLUMNS.length}
                                                 className="py-8 text-center text-muted-foreground"
                                             >
                                                 No overtime records found for this month.
@@ -622,39 +816,14 @@ const OvertimeReport = () => {
                                     ) : (
                                         records.map((record) => (
                                             <TableRow key={record.id}>
-                                                <TableCell>
-                                                    {formatDate(record.date)}
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <p className="font-medium">
-                                                        {record.employeeName}
-                                                    </p>
-
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {record.email}
-                                                    </p>
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    {record.employeeCode ?? "—"}
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    {record.branch || "—"}
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    {record.category || "—"}
-                                                </TableCell>
-
-                                                <TableCell className="text-right">
-                                                    {formatHours(record.workingHours)}
-                                                </TableCell>
-
-                                                <TableCell className="text-right font-semibold text-primary">
-                                                    {formatHours(record.overtimeHours)}
-                                                </TableCell>
+                                                {TABLE_COLUMNS.map((column) => (
+                                                    <TableCell
+                                                        key={column.label}
+                                                        className={column.className}
+                                                    >
+                                                        {column.render(record)}
+                                                    </TableCell>
+                                                ))}
                                             </TableRow>
                                         ))
                                     )}
@@ -663,7 +832,7 @@ const OvertimeReport = () => {
                         </div>
                     </div>
 
-                    {/* Pagination */}
+                    {/* PAGINATION */}
 
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <p className="text-sm text-muted-foreground">
@@ -677,7 +846,7 @@ const OvertimeReport = () => {
                                 className="cursor-pointer"
                                 disabled={page <= 1 || loading}
                                 onClick={() =>
-                                    setPage((prev) => prev - 1)
+                                    setPage((previous) => previous - 1)
                                 }
                             >
                                 Previous
@@ -697,7 +866,7 @@ const OvertimeReport = () => {
                                     pagination.totalPages === 0
                                 }
                                 onClick={() =>
-                                    setPage((prev) => prev + 1)
+                                    setPage((previous) => previous + 1)
                                 }
                             >
                                 Next

@@ -1,65 +1,138 @@
 
-
 // import type { Request } from "express";
 
-// // Centralized role constants
+// // ============================================
+// // 1. Centralized Role Constants
+// // ============================================
+
 // export const ROLES = {
 //     SUPER_ADMIN: "super_admin",
 //     COMPANY_ADMIN: "company_admin",
 //     EMPLOYEE: "employee",
+//     HR: "hr",
 // } as const;
 
-// // Normalize role name
-// export const normalizeRoleName = (
-//     role?: string | null
+// // ============================================
+// // 2. Role Input Types
+// // ============================================
+
+// type RoleInput =
+//     | {
+//         name?: string | null;
+//     }
+//     | {
+//         role?: {
+//             name?: string | null;
+//         } | null;
+//     }
+//     | string
+//     | null
+//     | undefined;
+
+// // ============================================
+// // 3. Normalize Role Name
+// // ============================================
+
+// // ============================================
+// // 3. Centralized Value Normalization
+// // ============================================
+
+// export const normalizeValue = (
+//     value?: string | null
 // ): string => {
-//     return role
-//         ?.trim()
-//         .toLowerCase()
-//         .replace(/[\s-]+/g, "_") ?? "";
-// };
-
-// // Check Super Admin
-// export const isSuperAdminRole = (
-//     roleName?: string | null
-// ): boolean => {
-//     return normalizeRoleName(roleName) === ROLES.SUPER_ADMIN;
-// };
-
-// // Check Company Admin
-// export const isCompanyAdminRole = (
-//     roleName?: string | null
-// ): boolean => {
-//     return normalizeRoleName(roleName) === ROLES.COMPANY_ADMIN;
-// };
-
-// // Check Admin (Super Admin + Company Admin)
-// export const isAdminRole = (
-//     roleName?: string | null
-// ): boolean => {
-//     const role = normalizeRoleName(roleName);
-
 //     return (
-//         role === ROLES.SUPER_ADMIN ||
-//         role === ROLES.COMPANY_ADMIN
+//         value
+//             ?.trim()
+//             .toLowerCase()
+//             .replace(/[\s-]+/g, "_") ?? ""
 //     );
 // };
 
-// // Check Employee
-// export const isEmployeeRole = (
+
+// // ============================================
+// // 4. Normalize Role Name
+// // ============================================
+
+// export const normalizeRoleName = (
 //     roleName?: string | null
-// ): boolean => {
-//     return normalizeRoleName(roleName) === ROLES.EMPLOYEE;
+// ): string => {
+//     return normalizeValue(roleName);
 // };
 
-// // Get company ID according to logged-in user's role
+
+// // ============================================
+// // 5. Get Role Name Centrally
+// // ============================================
+
+// export const getRoleName = (
+//     input: RoleInput
+// ): string => {
+//     if (typeof input === "string") {
+//         return normalizeRoleName(input);
+//     }
+
+//     if (!input) return "";
+
+//     if ("role" in input) {
+//         return normalizeRoleName(input.role?.name);
+//     }
+
+//     if ("name" in input) {
+//         return normalizeRoleName(input.name);
+//     }
+
+//     return "";
+// };
+
+// export const getUserDisplayName = (
+//     user: { name?: string | null } | null | undefined
+// ): string => {
+//     return user?.name?.trim() || "User";
+// };
+
+// // ============================================
+// // 6. Centralized Role Checks
+// // ============================================
+
+// export const isSuperAdminRole = (
+//     input: RoleInput
+// ): boolean => {
+//     return getRoleName(input) === ROLES.SUPER_ADMIN;
+// };
+
+// export const isCompanyAdminRole = (
+//     input: RoleInput
+// ): boolean => {
+//     return getRoleName(input) === ROLES.COMPANY_ADMIN;
+// };
+
+// export const isEmployeeRole = (
+//     input: RoleInput
+// ): boolean => {
+//     return getRoleName(input) === ROLES.EMPLOYEE;
+// };
+
+// export const isAdminRole = (
+//     input: RoleInput
+// ): boolean => {
+//     return (
+//         isSuperAdminRole(input) ||
+//         isCompanyAdminRole(input)
+//     );
+// };
+
+// export const isHRRole = (input: RoleInput): boolean =>
+//     getRoleName(input) === ROLES.HR;
+
+// // ============================================
+// // 7. Get Company ID
+// // ============================================
+
 // export const getCompanyId = (
 //     req: Request
 // ): string | null => {
-//     const roleName = normalizeRoleName(req.user?.role?.name);
-
 //     // Super Admin can access selected company
-//     if (isSuperAdminRole(roleName)) {
+//     if (isSuperAdminRole(req.user)) {
 //         const headerCompanyId = req.headers["x-company-id"];
 
 //         if (
@@ -81,10 +154,9 @@
 //         return null;
 //     }
 
-//     // Company Admin / Employee: use their own company
+//     // Other users use their own company
 //     return req.user?.companyId ?? null;
 // };
-
 
 
 
@@ -92,86 +164,88 @@
 import type { Request } from "express";
 
 // ============================================
-// 1. Centralized Role Constants
+// 1. Centralized System Constants & Permissions
 // ============================================
-
+// ============================================
+// 1. Centralized System Constants & Permissions
+// ============================================
 export const ROLES = {
     SUPER_ADMIN: "super_admin",
     COMPANY_ADMIN: "company_admin",
-    EMPLOYEE: "employee",
     HR: "hr",
+    EMPLOYEE: "employee",
+} as const;
+
+export const SYSTEM_PERMISSIONS = {
+    ALL_ACCESS: "*",
+    SWITCH_COMPANY: "company:switch",
+    MANAGE_COMPANY: "company:manage",
+    MANAGE_HR: "hr:manage",
+} as const;
+
+export const DEFAULT_ROLES = {
+    SUPER_ADMIN: "super_admin",
+    COMPANY_ADMIN: "company_admin",
+    HR: "hr",
+    EMPLOYEE: "employee",
 } as const;
 
 // ============================================
-// 2. Role Input Types
+// 2. Dynamic Role & Permission Input Types
 // ============================================
+export interface ModulePermissionObject {
+    canView?: boolean;
+    canCreate?: boolean;
+    canEdit?: boolean;
+    canDelete?: boolean;
+    module?: {
+        name?: string | null;
+        [key: string]: any;
+    } | null;
+}
+
+export interface RoleObject {
+    name?: string | null;
+    isGlobalAdmin?: boolean;
+    // Yeh array string ya aapke relational permission object dono ko support karega
+    permissions?: string[] | ModulePermissionObject[] | null; 
+}
 
 type RoleInput =
-    | {
-        name?: string | null;
-    }
-    | {
-        role?: {
-            name?: string | null;
-        } | null;
-    }
+    | RoleObject
+    | { role?: RoleObject | null }
     | string
     | null
     | undefined;
 
 // ============================================
-// 3. Normalize Role Name
-// ============================================
-
-// ============================================
 // 3. Centralized Value Normalization
 // ============================================
-
-export const normalizeValue = (
-    value?: string | null
-): string => {
-    return (
-        value
-            ?.trim()
-            .toLowerCase()
-            .replace(/[\s-]+/g, "_") ?? ""
-    );
+export const normalizeValue = (value?: string | null): string => {
+    return value?.trim().toLowerCase().replace(/[\s-]+/g, "_") ?? "";
 };
 
-
-// ============================================
-// 4. Normalize Role Name
-// ============================================
-
-export const normalizeRoleName = (
-    roleName?: string | null
-): string => {
+export const normalizeRoleName = (roleName?: string | null): string => {
     return normalizeValue(roleName);
 };
 
-
 // ============================================
-// 5. Get Role Name Centrally
+// 4. Extract Role Object & Name Centrally
 // ============================================
-
-export const getRoleName = (
-    input: RoleInput
-): string => {
-    if (typeof input === "string") {
-        return normalizeRoleName(input);
+export const getRoleObject = (input: RoleInput): RoleObject | null => {
+    if (!input) return null;
+    if (typeof input === "string") return { name: input };
+    if ("role" in input && input.role) return input.role;
+    if ("name" in input || "permissions" in input || "isGlobalAdmin" in input) {
+        return input as RoleObject;
     }
+    return null;
+};
 
-    if (!input) return "";
-
-    if ("role" in input) {
-        return normalizeRoleName(input.role?.name);
-    }
-
-    if ("name" in input) {
-        return normalizeRoleName(input.name);
-    }
-
-    return "";
+export const getRoleName = (input: RoleInput): string => {
+    if (typeof input === "string") return normalizeRoleName(input);
+    const roleObj = getRoleObject(input);
+    return normalizeRoleName(roleObj?.name);
 };
 
 export const getUserDisplayName = (
@@ -181,147 +255,150 @@ export const getUserDisplayName = (
 };
 
 // ============================================
-// 6. Centralized Role Checks
+// 5. Dynamic Permission & Role Checks
 // ============================================
 
-export const isSuperAdminRole = (
-    input: RoleInput
+/**
+ * Relational permissions check (Support both string array & Prisma module relation format)
+ * @param input User or Role object
+ * @param requiredModule E.g. "employees", "payroll", "attendance"
+ * @param action E.g. "view", "create", "edit", "delete"
+ */
+export const hasModulePermission = (
+    input: RoleInput,
+    requiredModule: string,
+    action: "view" | "create" | "edit" | "delete" = "view"
 ): boolean => {
-    return getRoleName(input) === ROLES.SUPER_ADMIN;
+    const roleObj = getRoleObject(input);
+    if (!roleObj) return false;
+
+    // Global admin / Super admin has full access
+    if (roleObj.isGlobalAdmin || isSuperAdminRole(input)) return true;
+
+    const perms = roleObj.permissions;
+    if (!perms || !Array.isArray(perms)) return false;
+
+    // Check if permissions contain string wildcard
+    if ((perms as string[]).includes(SYSTEM_PERMISSIONS.ALL_ACCESS)) return true;
+
+    const normalizedTargetModule = normalizeValue(requiredModule);
+
+    // Check inside Prisma relational permission structure (e.g., role.permissions -> module & canView/canCreate etc.)
+    for (const perm of perms) {
+        if (typeof perm === "object" && perm !== null && "module" in perm) {
+            const modPerm = perm as ModulePermissionObject;
+            const dbModuleName = normalizeValue(modPerm.module?.name);
+
+            if (dbModuleName === normalizedTargetModule) {
+                switch (action) {
+                    case "view":
+                        return Boolean(modPerm.canView);
+                    case "create":
+                        return Boolean(modPerm.canCreate);
+                    case "edit":
+                        return Boolean(modPerm.canEdit);
+                    case "delete":
+                        return Boolean(modPerm.canDelete);
+                    default:
+                        return false;
+                }
+            }
+        }
+    }
+
+    return false;
 };
 
-export const isCompanyAdminRole = (
-    input: RoleInput
+// Legacy permission check wrapper for string-based checks
+export const hasPermission = (
+    input: RoleInput,
+    requiredPermission: string
 ): boolean => {
-    return getRoleName(input) === ROLES.COMPANY_ADMIN;
+    const roleObj = getRoleObject(input);
+    if (!roleObj) return false;
+
+    if (roleObj.isGlobalAdmin) return true;
+
+    const perms = roleObj.permissions || [];
+    if (Array.isArray(perms) && perms.includes(SYSTEM_PERMISSIONS.ALL_ACCESS)) {
+        return true;
+    }
+
+    // Agar string array hai toh direct check karo
+    if (Array.isArray(perms) && typeof perms[0] === "string") {
+        return (perms as string[]).includes(requiredPermission);
+    }
+
+    return false;
 };
 
-export const isEmployeeRole = (
-    input: RoleInput
-): boolean => {
-    return getRoleName(input) === ROLES.EMPLOYEE;
-};
+// Super Admin Check
+export const isSuperAdminRole = (input: RoleInput): boolean => {
+    const roleObj = getRoleObject(input);
+    if (roleObj?.isGlobalAdmin) return true;
 
-export const isAdminRole = (
-    input: RoleInput
-): boolean => {
+    const roleName = getRoleName(input);
     return (
-        isSuperAdminRole(input) ||
-        isCompanyAdminRole(input)
+        roleName === DEFAULT_ROLES.SUPER_ADMIN ||
+        roleName === "superadmin" ||
+        roleName === "administrator"
     );
 };
 
-export const isHRRole = (input: RoleInput): boolean =>
-    getRoleName(input) === ROLES.HR;
+// Company Admin Check
+export const isCompanyAdminRole = (input: RoleInput): boolean => {
+    if (isSuperAdminRole(input)) return true;
+
+    const roleName = getRoleName(input);
+    return (
+        roleName === DEFAULT_ROLES.COMPANY_ADMIN ||
+        roleName === "companyadmin"
+    );
+};
+
+// HR Role Check
+export const isHRRole = (input: RoleInput): boolean => {
+    if (isCompanyAdminRole(input)) return true;
+
+    const roleName = getRoleName(input);
+    return roleName === DEFAULT_ROLES.HR || roleName === "human_resources";
+};
+
+// Employee Role Check
+export const isEmployeeRole = (input: RoleInput): boolean => {
+    const roleName = getRoleName(input);
+    return roleName === DEFAULT_ROLES.EMPLOYEE || roleName === "staff";
+};
+
+// General Admin Check
+export const isAdminRole = (input: RoleInput): boolean => {
+    return isSuperAdminRole(input) || isCompanyAdminRole(input);
+};
+
+// Dynamic Role Matcher
+export const hasRole = (input: RoleInput, targetRole: string): boolean => {
+    return getRoleName(input) === normalizeRoleName(targetRole);
+};
 
 // ============================================
-// 7. Get Company ID
+// 6. Dynamic Get Company ID
 // ============================================
+export const getCompanyId = (req: Request): string | null => {
+    const canSwitchCompany = isSuperAdminRole(req.user);
 
-export const getCompanyId = (
-    req: Request
-): string | null => {
-    // Super Admin can access selected company
-    if (isSuperAdminRole(req.user)) {
+    if (canSwitchCompany) {
         const headerCompanyId = req.headers["x-company-id"];
-
-        if (
-            typeof headerCompanyId === "string" &&
-            headerCompanyId.trim()
-        ) {
+        if (typeof headerCompanyId === "string" && headerCompanyId.trim()) {
             return headerCompanyId.trim();
         }
 
         const queryCompanyId = req.query.companyId;
-
-        if (
-            typeof queryCompanyId === "string" &&
-            queryCompanyId.trim()
-        ) {
+        if (typeof queryCompanyId === "string" && queryCompanyId.trim()) {
             return queryCompanyId.trim();
         }
 
         return null;
     }
 
-    // Other users use their own company
     return req.user?.companyId ?? null;
 };
-
-
-
-// import type { Request, Response, NextFunction } from "express";
-// import { SystemRoleKey } from "@prisma/client";
-
-// export type PermissionAction =
-//     | "canView"
-//     | "canCreate"
-//     | "canEdit"
-//     | "canDelete";
-
-// type Permission = {
-//     module: {
-//         name: string;
-//     };
-//     canView: boolean;
-//     canCreate: boolean;
-//     canEdit: boolean;
-//     canDelete: boolean;
-// };
-
-// type UserLike = {
-//     companyId?: string | null;
-//     role?: {
-//         systemKey?: SystemRoleKey | null;
-//         permissions?: Permission[];
-//     } | null;
-// } | null | undefined;
-
-// const getSystemKey = (user: UserLike) =>
-//     user?.role?.systemKey ?? null;
-
-// export const isSuperAdmin = (user: UserLike): boolean =>
-//     getSystemKey(user) === SystemRoleKey.SUPER_ADMIN;
-
-// export const isCompanyAdmin = (user: UserLike): boolean =>
-//     getSystemKey(user) === SystemRoleKey.COMPANY_ADMIN;
-
-// export const isAdmin = (user: UserLike): boolean =>
-//     isSuperAdmin(user) || isCompanyAdmin(user);
-
-// export const hasPermission = (
-//     user: UserLike,
-//     moduleName: string,
-//     action: PermissionAction
-// ): boolean => {
-//     if (!user) return false;
-
-//     // Company Admin gets full access within their company.
-//     if (isCompanyAdmin(user)) return true;
-
-//     return (
-//         user.role?.permissions?.some(
-//             (permission) =>
-//                 permission.module.name === moduleName &&
-//                 permission[action]
-//         ) ?? false
-//     );
-// };
-
-// export const getTenantId = (req: Request): string | null =>
-//     req.user?.companyId ?? null;
-
-// export const requireTenant = (
-//     req: Request,
-//     res: Response,
-//     next: NextFunction
-// ) => {
-//     if (!req.user?.companyId) {
-//         return res.status(403).json({
-//             success: false,
-//             message: "Company access is not available for this account.",
-//         });
-//     }
-
-//     next();
-// };

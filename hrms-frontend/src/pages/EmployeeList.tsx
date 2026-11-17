@@ -1,3 +1,4 @@
+
 import React, { useCallback } from "react";
 import {
   Eye,
@@ -29,6 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 import { useAuthStore } from "@/store/auth.store";
+
 import type {
   Employee,
   EmployeeDetail,
@@ -64,7 +66,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { formatRole, getUserRole, isAdminRole, isSuperAdminRole } from "@/utilis/roleUtils";
+import {
+  formatRole,
+  isSuperAdminRole,
+  canViewModule,
+  canCreateInModule,
+  canEditInModule,
+  canDeleteInModule,
+} from "@/utilis/roleUtils";
+
 import { startOnboarding } from "@/services/onboarding.service";
 import { Textarea } from "@/components/ui/textarea";
 import { CompanySelector } from "@/pages/common/CompanySelector";
@@ -74,52 +84,63 @@ const EmployeeList = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
-  const userRole = getUserRole(user);
-  const isSuperAdmin = isSuperAdminRole(userRole);
+  // --------------------------------------------------
+  // Role & Permission Checks
+  // --------------------------------------------------
+
+  const isSuperAdmin = isSuperAdminRole(user);
+
+  // Employee permissions
+  const canViewEmployee = canViewModule(user, "employee");
+  const canCreateEmployee = canCreateInModule(user, "employee");
+  const canEditEmployee = canEditInModule(user, "employee");
+  const canDeleteEmployee = canDeleteInModule(user, "employee");
+
+  // Onboarding permissions
+  const canViewOnboarding = canViewModule(user, "onboarding");
+  const canCreateOnboarding = canCreateInModule(user, "onboarding");
+  const canEditOnboarding = canEditInModule(user, "onboarding");
+
+  // --------------------------------------------------
+  // States
+  // --------------------------------------------------
 
   const [selectedCompanyId, setSelectedCompanyId] =
     React.useState<string>("");
 
-  // Super Admin / Company Admin can activate/deactivate
-  const canChangeStatus = isAdminRole(userRole);
-
   const [employees, setEmployees] = React.useState<Employee[]>([]);
+
   const [open, setOpen] = React.useState(false);
 
-  const [passwordError, setPasswordError] = React.useState("");
+  const [editEmployee, setEditEmployee] =
+    React.useState<EmployeeDetail | null>(null);
 
-  // Selected employee is only used for status dialog
+  const [editOpen, setEditOpen] = React.useState(false);
+
   const [selectedEmployee, setSelectedEmployee] =
     React.useState<Employee | null>(null);
 
   const [statusDialogOpen, setStatusDialogOpen] =
     React.useState(false);
 
-  const [editEmployee, setEditEmployee] =
-    React.useState<EmployeeDetail | null>(null);
-  const [showPassword, setShowPassword] = React.useState(false);
+  const [passwordError, setPasswordError] = React.useState("");
 
-  const [editOpen, setEditOpen] = React.useState(false);
+  const [showPassword, setShowPassword] = React.useState(false);
 
   const [resetOpen, setResetOpen] = React.useState(false);
 
   const [selectedForReset, setSelectedForReset] =
     React.useState<Employee | null>(null);
 
-  const [newPassword, setNewPassword] =
-    React.useState("");
+  const [newPassword, setNewPassword] = React.useState("");
 
-  const [searchQuery, setSearchQuery] =
-    React.useState("");
+  const [searchQuery, setSearchQuery] = React.useState("");
 
-  const [statusFilter, setStatusFilter] =
-    React.useState("all");
+  const [statusFilter, setStatusFilter] = React.useState("all");
 
-  const [branchFilter, setBranchFilter] =
-    React.useState("all");
+  const [branchFilter, setBranchFilter] = React.useState("all");
 
-  const [roleFilter, setRoleFilter] =
-    React.useState("all");
+  const [roleFilter, setRoleFilter] = React.useState("all");
 
   const [startDialogOpen, setStartDialogOpen] =
     React.useState(false);
@@ -127,11 +148,9 @@ const EmployeeList = () => {
   const [selectedOnboardingEmployee, setSelectedOnboardingEmployee] =
     React.useState<Employee | null>(null);
 
-  const [targetDate, setTargetDate] =
-    React.useState("");
+  const [targetDate, setTargetDate] = React.useState("");
 
-  const [notes, setNotes] =
-    React.useState("");
+  const [notes, setNotes] = React.useState("");
 
   const [deleteDialogOpen, setDeleteDialogOpen] =
     React.useState(false);
@@ -139,33 +158,36 @@ const EmployeeList = () => {
   const [selectedForDelete, setSelectedForDelete] =
     React.useState<Employee | null>(null);
 
-  const [isDeleting, setIsDeleting] =
-    React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   const [deleteConfirmed, setDeleteConfirmed] =
     React.useState(false);
-
 
   // --------------------------------------------------
   // Load Employees
   // --------------------------------------------------
 
   const loadEmployees = useCallback(async () => {
+    if (!canViewEmployee) {
+      setEmployees([]);
+      return;
+    }
+
     if (isSuperAdmin && !selectedCompanyId) {
       setEmployees([]);
       return;
     }
+
     try {
-      const res = await getEmployees(isSuperAdmin ? selectedCompanyId : undefined);
+      const res = await getEmployees(
+        isSuperAdmin ? selectedCompanyId : undefined
+      );
 
       setEmployees(res.data.data);
     } catch (err: any) {
-      const message = err?.message ||
-        "Failed to load employees";
-
-      toast.error(message);
+      toast.error(err?.message || "Failed to load employees");
     }
-  }, [isSuperAdmin, selectedCompanyId]);
+  }, [canViewEmployee, isSuperAdmin, selectedCompanyId]);
 
   React.useEffect(() => {
     loadEmployees();
@@ -194,18 +216,17 @@ const EmployeeList = () => {
     setNewPassword("");
     setSelectedForReset(null);
     setPasswordError("");
+    setShowPassword(false);
   };
+
   const handleResetPassword = async () => {
-    if (!validatePassword(newPassword)) {
+    if (!canEditEmployee) {
+      toast.error("You don't have permission to reset employee password.");
       return;
     }
 
+    if (!validatePassword(newPassword)) return;
     if (!selectedForReset) return;
-
-    // if (!newPassword || newPassword.length < 6) {
-    //   toast.error("Password must be at least 6 characters");
-    //   return;
-    // }
 
     try {
       await resetEmployeePassword(
@@ -214,14 +235,9 @@ const EmployeeList = () => {
       );
 
       toast.success("Password reset successfully!");
-
-      setResetOpen(false);
-      setNewPassword("");
-      setSelectedForReset(null);
+      handleClose();
     } catch (err: any) {
-      const message = err?.message || "Failed to reset password";
-
-      toast.error(message);
+      toast.error(err?.message || "Failed to reset password");
     }
   };
 
@@ -230,7 +246,17 @@ const EmployeeList = () => {
   // --------------------------------------------------
 
   const handleStartOnboarding = async () => {
+    if (!canCreateOnboarding) {
+      toast.error("You don't have permission to start onboarding.");
+      return;
+    }
+
     if (!selectedOnboardingEmployee) return;
+
+    if (isSuperAdmin && !selectedCompanyId) {
+      toast.error("Please select a company first.");
+      return;
+    }
 
     try {
       await startOnboarding(
@@ -244,19 +270,18 @@ const EmployeeList = () => {
 
       toast.success("Onboarding started successfully");
 
-      // Update employee list immediately
       setEmployees((prev) =>
         prev.map((employee) =>
           employee.id === selectedOnboardingEmployee.id
             ? {
-              ...employee,
-              onboarding: {
-                status: "IN_PROGRESS",
-                currentStage: "OFFER",
-                progressPercent: 0,
-                targetDate: targetDate || null,
-              },
-            }
+                ...employee,
+                onboarding: {
+                  status: "IN_PROGRESS",
+                  currentStage: "OFFER",
+                  progressPercent: 0,
+                  targetDate: targetDate || null,
+                },
+              }
             : employee
         )
       );
@@ -266,9 +291,7 @@ const EmployeeList = () => {
       setTargetDate("");
       setNotes("");
     } catch (err: any) {
-      const message = err?.message || "Failed to start onboarding";
-
-      toast.error(message);
+      toast.error(err?.message || "Failed to start onboarding");
     }
   };
 
@@ -277,6 +300,11 @@ const EmployeeList = () => {
   // --------------------------------------------------
 
   const handleToggleStatus = async () => {
+    if (!canEditEmployee) {
+      toast.error("You don't have permission to update employee status.");
+      return;
+    }
+
     if (!selectedEmployee) return;
 
     const isActive = !selectedEmployee.isActive;
@@ -310,8 +338,16 @@ const EmployeeList = () => {
     }
   };
 
-  //  delete Employee
+  // --------------------------------------------------
+  // Delete Employee
+  // --------------------------------------------------
+
   const handleDeleteEmployee = async () => {
+    if (!canDeleteEmployee) {
+      toast.error("You don't have permission to delete employees.");
+      return;
+    }
+
     if (!selectedForDelete || isDeleting || !deleteConfirmed) {
       return;
     }
@@ -328,10 +364,10 @@ const EmployeeList = () => {
       );
 
       toast.success("Employee deleted successfully");
-      setDeleteConfirmed(false);
 
       setDeleteDialogOpen(false);
       setSelectedForDelete(null);
+      setDeleteConfirmed(false);
     } catch (err: unknown) {
       toast.error(
         err instanceof Error
@@ -343,11 +379,17 @@ const EmployeeList = () => {
       setDeleteConfirmed(false);
     }
   };
+
   // --------------------------------------------------
   // Edit Employee
   // --------------------------------------------------
 
   const handleEditClick = async (id: string) => {
+    if (!canEditEmployee) {
+      toast.error("You don't have permission to edit employees.");
+      return;
+    }
+
     if (isSuperAdmin && !selectedCompanyId) {
       toast.error("Please select a company first.");
       return;
@@ -362,12 +404,11 @@ const EmployeeList = () => {
       setEditEmployee(res.data.data);
       setEditOpen(true);
     } catch (err: unknown) {
-      const message =
+      toast.error(
         err instanceof Error
           ? err.message
-          : "Failed to load employee details";
-
-      toast.error(message);
+          : "Failed to load employee details"
+      );
     }
   };
 
@@ -376,6 +417,11 @@ const EmployeeList = () => {
   // --------------------------------------------------
 
   const handleViewDetails = (id: string) => {
+    if (!canViewEmployee) {
+      toast.error("You don't have permission to view employees.");
+      return;
+    }
+
     if (isSuperAdmin && !selectedCompanyId) {
       toast.error("Please select a company first.");
       return;
@@ -389,20 +435,38 @@ const EmployeeList = () => {
   };
 
   // --------------------------------------------------
+  // Navigate to Onboarding
+  // --------------------------------------------------
+
+  const navigateToOnboarding = (employeeId: string) => {
+    if (!canViewOnboarding) {
+      toast.error("You don't have permission to view onboarding.");
+      return;
+    }
+
+    if (isSuperAdmin && !selectedCompanyId) {
+      toast.error("Please select a company first.");
+      return;
+    }
+
+    const url = isSuperAdmin
+      ? `/onboarding/${employeeId}?companyId=${encodeURIComponent(selectedCompanyId)}`
+      : `/onboarding/${employeeId}`;
+
+    navigate(url);
+  };
+
+  // --------------------------------------------------
   // Filter Employees
   // --------------------------------------------------
 
   const filteredEmployees = employees.filter((emp) => {
     const matchSearch = searchQuery
-      ? emp.name
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase()) ||
-      (emp.employeeCode ?? "")
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase()) ||
-      emp.email
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase())
+      ? emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (emp.employeeCode ?? "")
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        emp.email.toLowerCase().includes(searchQuery.toLowerCase())
       : true;
 
     const matchStatus =
@@ -430,27 +494,11 @@ const EmployeeList = () => {
     );
   });
 
-  // superadmin company Id is required for onboarding
-  const navigateToOnboarding = (employeeId: string) => {
-    if (isSuperAdmin && !selectedCompanyId) {
-      toast.error("Please select a company first.");
-      return;
-    }
-
-    const url = isSuperAdmin
-      ? `/onboarding/${employeeId}?companyId=${encodeURIComponent(selectedCompanyId)}`
-      : `/onboarding/${employeeId}`;
-
-    navigate(url);
-  };
-
   // --------------------------------------------------
   // Employee Created
   // --------------------------------------------------
 
-  const handleEmployeeCreated = (
-    newEmployee: Employee
-  ) => {
+  const handleEmployeeCreated = (newEmployee: Employee) => {
     setEmployees((prev) => [
       newEmployee,
       ...prev,
@@ -460,15 +508,23 @@ const EmployeeList = () => {
   };
 
   // --------------------------------------------------
+  // Permission Guard
+  // --------------------------------------------------
+
+  if (!canViewEmployee) {
+    return null;
+  }
+
+  // --------------------------------------------------
   // LIST VIEW
   // --------------------------------------------------
 
   return (
     <div className="flex flex-col gap-4">
 
-      {/* Filters + Add Employee */}
       {/* Header + Filters */}
       <div className="flex flex-col gap-3">
+
         {/* Company Selector + Add Employee */}
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -489,7 +545,7 @@ const EmployeeList = () => {
             )}
           </div>
 
-          {canChangeStatus && (
+          {canCreateEmployee && (
             <Button
               size="sm"
               variant="add"
@@ -514,11 +570,16 @@ const EmployeeList = () => {
             autoComplete="off"
             className="h-9 w-full sm:w-60"
           />
+
           <div className="flex flex-wrap gap-2">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="h-9  sm:w-32">
+            <Select
+              value={statusFilter}
+              onValueChange={setStatusFilter}
+            >
+              <SelectTrigger className="h-9 sm:w-32">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
+
               <SelectContent position="popper">
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
@@ -526,12 +587,17 @@ const EmployeeList = () => {
               </SelectContent>
             </Select>
 
-            <Select value={branchFilter} onValueChange={setBranchFilter}>
-              <SelectTrigger className="h-9  sm:w-40">
+            <Select
+              value={branchFilter}
+              onValueChange={setBranchFilter}
+            >
+              <SelectTrigger className="h-9 sm:w-40">
                 <SelectValue placeholder="All Branches" />
               </SelectTrigger>
+
               <SelectContent position="popper">
                 <SelectItem value="all">All Branches</SelectItem>
+
                 {[
                   ...new Map(
                     employees
@@ -549,12 +615,17 @@ const EmployeeList = () => {
               </SelectContent>
             </Select>
 
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="h-9  sm:w-36">
+            <Select
+              value={roleFilter}
+              onValueChange={setRoleFilter}
+            >
+              <SelectTrigger className="h-9 sm:w-36">
                 <SelectValue placeholder="All Roles" />
               </SelectTrigger>
+
               <SelectContent position="popper">
                 <SelectItem value="all">All Roles</SelectItem>
+
                 {[
                   ...new Map(
                     employees
@@ -565,383 +636,360 @@ const EmployeeList = () => {
                       ])
                   ).values(),
                 ].map((role) => (
-                  <SelectItem key={role.id} value={String(role.id)}>
-                        {formatRole(role)}
+                  <SelectItem
+                    key={role.id}
+                    value={String(role.id)}
+                  >
+                    {formatRole(role)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
         </div>
-
-
       </div>
 
-      {/* Delete Employee Dialog */}
-
-      <Dialog
-        open={deleteDialogOpen}
-        onOpenChange={(open) => {
-          if (!isDeleting) {
-            setDeleteDialogOpen(open);
-
-            if (!open) {
-              setSelectedForDelete(null);
-              setDeleteConfirmed(false);
-            }
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Employee</DialogTitle>
-
-            <DialogDescription>
-              Are you sure you want to permanently delete{" "}
-              <strong>{selectedForDelete?.name}</strong>?
-              This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex items-start gap-2 py-2">
-            <input
-              id="confirm-delete"
-              type="checkbox"
-              checked={deleteConfirmed}
-              onChange={(e) => setDeleteConfirmed(e.target.checked)}
-              className="mt-1 h-4 w-4 cursor-pointer accent-destructive"
-            />
-
-            <Label
-              htmlFor="confirm-delete"
-              className="cursor-pointer text-sm leading-5"
-            >
-              I understand that this employee will be permanently deleted.
-            </Label>
-          </div>
-
-          <DialogFooter>
-            <Button className="cursor-pointer"
-              variant="add"
-              disabled={isDeleting}
-              onClick={() => {
-                setDeleteDialogOpen(false);
-                setSelectedForDelete(null);
-                setDeleteConfirmed(false);
-              }}
-            >
-              Cancel
-            </Button>
-
-            <Button className="cursor-pointer"
-              variant="destructive"
-              disabled={!deleteConfirmed || isDeleting}
-              onClick={handleDeleteEmployee}
-            >
-              {isDeleting ? "Deleting..." : "Delete Employee"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Add Employee Dialog */}
-      <AddEmployeeDialog
-        open={open}
-        onOpenChange={setOpen}
-        onSuccess={handleEmployeeCreated}
-        selectedCompanyId={selectedCompanyId}
-      />
+      {canCreateEmployee && (
+        <AddEmployeeDialog
+          open={open}
+          onOpenChange={setOpen}
+          onSuccess={handleEmployeeCreated}
+          selectedCompanyId={selectedCompanyId}
+        />
+      )}
 
       {/* Edit Employee Dialog */}
-      <AddEmployeeDialog
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        onSuccess={(updated) => {
-          setEmployees((prev) =>
-            prev.map((employee) =>
-              employee.id === updated.id
-                ? updated
-                : employee
-            )
-          );
+      {canEditEmployee && (
+        <AddEmployeeDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          onSuccess={(updated) => {
+            setEmployees((prev) =>
+              prev.map((employee) =>
+                employee.id === updated.id
+                  ? updated
+                  : employee
+              )
+            );
 
-          setEditOpen(false);
-          setEditEmployee(null);
-        }}
-        editEmployee={editEmployee}
-        selectedCompanyId={selectedCompanyId}
-      />
+            setEditOpen(false);
+            setEditEmployee(null);
+          }}
+          editEmployee={editEmployee}
+          selectedCompanyId={selectedCompanyId}
+        />
+      )}
+
+      {/* Delete Employee Dialog */}
+      {canDeleteEmployee && (
+        <Dialog
+          open={deleteDialogOpen}
+          onOpenChange={(value) => {
+            if (!isDeleting) {
+              setDeleteDialogOpen(value);
+
+              if (!value) {
+                setSelectedForDelete(null);
+                setDeleteConfirmed(false);
+              }
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Employee</DialogTitle>
+
+              <DialogDescription>
+                Are you sure you want to permanently delete{" "}
+                <strong>{selectedForDelete?.name}</strong>?
+                This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex items-start gap-2 py-2">
+              <input
+                id="confirm-delete"
+                type="checkbox"
+                checked={deleteConfirmed}
+                onChange={(e) =>
+                  setDeleteConfirmed(e.target.checked)
+                }
+                className="mt-1 h-4 w-4 cursor-pointer accent-destructive"
+              />
+
+              <Label
+                htmlFor="confirm-delete"
+                className="cursor-pointer text-sm leading-5"
+              >
+                I understand that this employee will be permanently deleted.
+              </Label>
+            </div>
+
+            <DialogFooter>
+              <Button
+                className="cursor-pointer"
+                variant="add"
+                disabled={isDeleting}
+                onClick={() => {
+                  setDeleteDialogOpen(false);
+                  setSelectedForDelete(null);
+                  setDeleteConfirmed(false);
+                }}
+              >
+                Cancel
+              </Button>
+
+              <Button
+                className="cursor-pointer"
+                variant="destructive"
+                disabled={!deleteConfirmed || isDeleting}
+                onClick={handleDeleteEmployee}
+              >
+                {isDeleting ? "Deleting..." : "Delete Employee"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Activate / Deactivate Dialog */}
-      <Dialog
-        open={statusDialogOpen}
-        onOpenChange={setStatusDialogOpen}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Update Employee
-            </DialogTitle>
+      {canEditEmployee && (
+        <Dialog
+          open={statusDialogOpen}
+          onOpenChange={setStatusDialogOpen}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Update Employee</DialogTitle>
 
-            <DialogDescription>
-              You are about to{" "}
-              <strong className="font-semibold">
+              <DialogDescription>
+                You are about to{" "}
+                <strong className="font-semibold">
+                  {selectedEmployee?.isActive
+                    ? "deactivate"
+                    : "activate"}
+                </strong>{" "}
+                <strong>{selectedEmployee?.name}</strong>
                 {selectedEmployee?.isActive
-                  ? "deactivate"
-                  : "activate"}
-              </strong>{" "}
-              <strong>
-                {selectedEmployee?.name}
-              </strong>
-              {selectedEmployee?.isActive
-                ? " You can activate it again later."
-                : " You can deactivate it again later."}
-            </DialogDescription>
-          </DialogHeader>
+                  ? " You can activate it again later."
+                  : " You can deactivate it again later."}
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="flex gap-2 justify-end">
-            <Button
-              variant="outline"
-              onClick={() =>
-                setStatusDialogOpen(false)
-              }
-            >
-              Cancel
-            </Button>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setStatusDialogOpen(false)}
+              >
+                Cancel
+              </Button>
 
-            <Button
-              variant="destructive"
-              onClick={handleToggleStatus}
-            >
-              {selectedEmployee?.isActive
-                ? "Deactivate"
-                : "Activate"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+              <Button
+                variant="destructive"
+                onClick={handleToggleStatus}
+              >
+                {selectedEmployee?.isActive
+                  ? "Deactivate"
+                  : "Activate"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Start Onboarding Dialog */}
-      <Dialog
-        open={startDialogOpen}
-        onOpenChange={setStartDialogOpen}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Start Onboarding
-            </DialogTitle>
+      {canCreateOnboarding && (
+        <Dialog
+          open={startDialogOpen}
+          onOpenChange={setStartDialogOpen}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Start Onboarding</DialogTitle>
 
-            <DialogDescription>
-              Set the expected completion date and add
-              onboarding notes.
-            </DialogDescription>
-          </DialogHeader>
+              <DialogDescription>
+                Set the expected completion date and add onboarding notes.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="space-y-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Target Date</Label>
 
-            {/* Target Date */}
-            <div className="space-y-2">
-              <Label>
-                Target Date
-              </Label>
+                <Input
+                  type="date"
+                  value={targetDate}
+                  onChange={(e) => setTargetDate(e.target.value)}
+                />
+              </div>
 
-              <Input
-                type="date"
-                value={targetDate}
-                onChange={(e) =>
-                  setTargetDate(e.target.value)
-                }
-              />
+              <div className="space-y-2">
+                <Label>Notes</Label>
+
+                <Textarea
+                  placeholder="Enter onboarding notes..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </div>
             </div>
 
-            {/* Notes */}
-            <div className="space-y-2">
-              <Label>
-                Notes
-              </Label>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setStartDialogOpen(false)}
+              >
+                Cancel
+              </Button>
 
-              <Textarea
-                placeholder="Enter onboarding notes..."
-                value={notes}
-                onChange={(e) =>
-                  setNotes(e.target.value)
-                }
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() =>
-                setStartDialogOpen(false)
-              }
-            >
-              Cancel
-            </Button>
-
-            <Button
-              onClick={handleStartOnboarding}
-            >
-              Start Onboarding
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              <Button onClick={handleStartOnboarding}>
+                Start Onboarding
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Reset Password Dialog */}
-      <Dialog
-        open={resetOpen}
-        onOpenChange={(value) => {
-          if (value) {
-            setResetOpen(true);
-            setPasswordError("");
-          } else {
-            handleClose();
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Reset Password —{" "}
-              {selectedForReset?.name}
-            </DialogTitle>
-          </DialogHeader>
+      {canEditEmployee && (
+        <Dialog
+          open={resetOpen}
+          onOpenChange={(value) => {
+            if (value) {
+              setResetOpen(true);
+              setPasswordError("");
+            } else {
+              handleClose();
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                Reset Password — {selectedForReset?.name}
+              </DialogTitle>
+            </DialogHeader>
 
-          <div className="flex flex-col gap-3">
-            <Label>
-              New Password
-            </Label>
-            <div className="relative mt-2">
-              <Input
-                type={showPassword ? "text" : "password"}
-                placeholder="Min 6 characters"
-                value={newPassword}
-                autoComplete="new-password"
-                aria-invalid={!!passwordError}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setNewPassword(value);
-                  validatePassword(value);
-                }
-                }
-              />
+            <div className="flex flex-col gap-3">
+              <Label>New Password</Label>
 
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
-                aria-label={showPassword ? "Hide password" : "Show password"}
+              <div className="relative mt-2">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Min 6 characters"
+                  value={newPassword}
+                  autoComplete="new-password"
+                  aria-invalid={!!passwordError}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewPassword(value);
+                    validatePassword(value);
+                  }}
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowPassword((prev) => !prev)
+                  }
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                  aria-label={
+                    showPassword ? "Hide password" : "Show password"
+                  }
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+
+              {passwordError && (
+                <p className="text-xs text-red-500">
+                  {passwordError}
+                </p>
+              )}
+
+              <Button
+                variant="add"
+                onClick={handleResetPassword}
+                disabled={!newPassword.trim() || !!passwordError}
               >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
+                Reset Password
+              </Button>
             </div>
-            {passwordError && (
-              <p className="text-xs text-red-500">
-                {passwordError}
-              </p>
-            )}
-            <Button
-              variant="add"
-              onClick={() => {
-                if (!validatePassword(newPassword)) return;
-                handleResetPassword();
-              }}
-              disabled={!newPassword.trim() || !!passwordError}
-            >
-              Reset Password
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Employee Table */}
-      <div className="bg-card grid grid-cols-1 rounded border w-full overflow-hidden">
+      <div className="grid w-full grid-cols-1 overflow-hidden rounded border bg-card">
         <div className="h-full overflow-auto">
           <Table>
-
-            <TableHeader className="bg-muted sticky top-0 z-10">
+            <TableHeader className="sticky top-0 z-10 bg-muted">
               <TableRow>
+                <TableHead>#</TableHead>
+                <TableHead className="min-w-25">Code</TableHead>
+                <TableHead className="min-w-37.5">Name</TableHead>
+                <TableHead className="min-w-45">Email</TableHead>
+                <TableHead className="min-w-30">Designation</TableHead>
+                <TableHead className="min-w-30">Branch</TableHead>
+                <TableHead className="min-w-30">Category</TableHead>
+                <TableHead className="min-w-25">Role</TableHead>
 
-                <TableHead>
-                  #
-                </TableHead>
-
-                <TableHead className="min-w-25">
-                  Code
-                </TableHead>
-
-                <TableHead className="min-w-37.5">
-                  Name
-                </TableHead>
-
-                <TableHead className="min-w-45">
-                  Email
-                </TableHead>
-
-                <TableHead className="min-w-30">
-                  Designation
-                </TableHead>
-
-                <TableHead className="min-w-30">
-                  Branch
-                </TableHead>
-
-                <TableHead className="min-w-30">
-                  Category
-                </TableHead>
-
-                <TableHead className="min-w-25">
-                  Role
-                </TableHead>
-
-                {canChangeStatus && (
+                {isSuperAdmin && (
                   <TableHead className="min-w-37.5">
                     Company
                   </TableHead>
                 )}
 
-                <TableHead className="min-w-20">
-                  Status
-                </TableHead>
-
-                <TableHead>
-                  Onboarding
-                </TableHead>
+                <TableHead className="min-w-20">Status</TableHead>
+                <TableHead>Onboarding</TableHead>
 
                 <TableHead className="sticky right-0 bg-muted">
                   Actions
                 </TableHead>
-
               </TableRow>
             </TableHeader>
 
             <TableBody>
-              {filteredEmployees.map(
-                (emp, index) => (
-                  <TableRow key={emp.id}>
+              {filteredEmployees.map((emp, index) => {
+                const hasOnboarding =
+                  Boolean(emp.onboarding);
 
-                    <TableCell>
-                      {index + 1}
-                    </TableCell>
+                const canStartThisOnboarding =
+                  canCreateOnboarding && !hasOnboarding;
+
+                const canViewThisOnboarding =
+                  canViewOnboarding &&
+                  (emp.onboarding?.status === "IN_PROGRESS" ||
+                    emp.onboarding?.status === "COMPLETED");
+
+                const canResumeOnboarding =
+                  canEditOnboarding &&
+                  emp.onboarding?.status === "ON_HOLD";
+
+                const hasActions =
+                  canViewEmployee ||
+                  canEditEmployee ||
+                  canDeleteEmployee ||
+                  canStartThisOnboarding ||
+                  canViewThisOnboarding ||
+                  canResumeOnboarding;
+
+                return (
+                  <TableRow key={emp.id}>
+                    <TableCell>{index + 1}</TableCell>
 
                     <TableCell>
                       {emp.employeeCode ?? "—"}
                     </TableCell>
 
-                    <TableCell>
-                      {emp.name}
-                    </TableCell>
+                    <TableCell>{emp.name}</TableCell>
 
-                    <TableCell>
-                      {emp.email}
-                    </TableCell>
+                    <TableCell>{emp.email}</TableCell>
 
                     <TableCell>
                       {emp.designation ?? "—"}
@@ -961,13 +1009,12 @@ const EmployeeList = () => {
                       </Badge>
                     </TableCell>
 
-                    {canChangeStatus && (
+                    {isSuperAdmin && (
                       <TableCell>
                         {emp.company?.name ?? "—"}
                       </TableCell>
                     )}
 
-                    {/* Status */}
                     <TableCell>
                       <Badge
                         className={
@@ -976,13 +1023,10 @@ const EmployeeList = () => {
                             : "bg-red-100 text-red-700"
                         }
                       >
-                        {emp.isActive
-                          ? "Active"
-                          : "Inactive"}
+                        {emp.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </TableCell>
 
-                    {/* Onboarding */}
                     <TableCell>
                       {!emp.onboarding ? (
                         <Badge variant="outline">
@@ -991,191 +1035,152 @@ const EmployeeList = () => {
                       ) : (
                         <Badge
                           variant={
-                            emp.onboarding.status ===
-                              "COMPLETED"
+                            emp.onboarding.status === "COMPLETED"
                               ? "green"
-                              : emp.onboarding.status ===
-                                "ON_HOLD"
+                              : emp.onboarding.status === "ON_HOLD"
                                 ? "destructive"
                                 : "blue"
                           }
                         >
-                          {emp.onboarding.status ===
-                            "IN_PROGRESS"
+                          {emp.onboarding.status === "IN_PROGRESS"
                             ? "In Progress"
-                            : emp.onboarding.status ===
-                              "ON_HOLD"
+                            : emp.onboarding.status === "ON_HOLD"
                               ? "On Hold"
                               : "Completed"}
                         </Badge>
                       )}
                     </TableCell>
 
-                    {/* Actions */}
                     <TableCell className="sticky right-0 bg-card">
-                      <DropdownMenu>
-
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuGroup>
-
-                            {/* View Details */}
-                            <DropdownMenuItem
-                              onClick={() =>
-                                handleViewDetails(
-                                  emp.id
-                                )
-                              }
+                      {hasActions && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                             >
-                              View Details
-                            </DropdownMenuItem>
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
 
-                            {/* Edit */}
-                            <DropdownMenuItem
-                              onClick={() =>
-                                handleEditClick(
-                                  emp.id
-                                )
-                              }
-                            >
-                              Edit
-                            </DropdownMenuItem>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuGroup>
+                              {/* View Details */}
+                              {canViewEmployee && (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleViewDetails(emp.id)
+                                  }
+                                >
+                                  View Details
+                                </DropdownMenuItem>
+                              )}
 
-                            {/* Start Onboarding */}
-                            {!emp.onboarding && (
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setSelectedOnboardingEmployee(
-                                    emp
-                                  );
-                                  setTargetDate("");
-                                  setNotes("");
-                                  setStartDialogOpen(
-                                    true
-                                  );
-                                }}
-                              >
-                                Start Onboarding
-                              </DropdownMenuItem>
-                            )}
+                              {/* Edit */}
+                              {canEditEmployee && (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    handleEditClick(emp.id)
+                                  }
+                                >
+                                  Edit
+                                </DropdownMenuItem>
+                              )}
 
-                            {/* View Onboarding - In Progress */}
-                            {emp.onboarding?.status ===
-                              "IN_PROGRESS" && (
+                              {/* Start Onboarding */}
+                              {canStartThisOnboarding && (
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    navigateToOnboarding(emp.id);
+                                    setSelectedOnboardingEmployee(emp);
+                                    setTargetDate("");
+                                    setNotes("");
+                                    setStartDialogOpen(true);
                                   }}
+                                >
+                                  Start Onboarding
+                                </DropdownMenuItem>
+                              )}
+
+                              {/* View Onboarding */}
+                              {canViewThisOnboarding && (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    navigateToOnboarding(emp.id)
+                                  }
                                 >
                                   View Onboarding
                                 </DropdownMenuItem>
                               )}
 
-                            {/* On Hold */}
-                            {emp.onboarding?.status ===
-                              "ON_HOLD" && (
-                                <>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      navigateToOnboarding(emp.id);
-                                    }}
-                                  >
-                                    Resume Onboarding
-                                  </DropdownMenuItem>
-
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      navigateToOnboarding(emp.id);
-                                    }}
-                                  >
-                                    View Onboarding
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-
-                            {/* Completed */}
-                            {emp.onboarding?.status ===
-                              "COMPLETED" && (
+                              {/* Resume Onboarding */}
+                              {canResumeOnboarding && (
                                 <DropdownMenuItem
-                                  onClick={() => {
-                                    navigateToOnboarding(emp.id);
-                                  }}
+                                  onClick={() =>
+                                    navigateToOnboarding(emp.id)
+                                  }
                                 >
-                                  View Onboarding
+                                  Resume Onboarding
                                 </DropdownMenuItem>
                               )}
 
-                            {/* Activate / Deactivate */}
-                            <DropdownMenuItem
-                              variant="destructive"
-                              onClick={() => {
-                                setSelectedEmployee(
-                                  emp
-                                );
+                              {/* Activate / Deactivate */}
+                              {canEditEmployee && (
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onClick={() => {
+                                    setSelectedEmployee(emp);
+                                    setStatusDialogOpen(true);
+                                  }}
+                                >
+                                  {emp.isActive
+                                    ? "Deactivate"
+                                    : "Activate"}
+                                </DropdownMenuItem>
+                              )}
 
-                                setStatusDialogOpen(
-                                  true
-                                );
-                              }}
-                              disabled={!canChangeStatus}
-                            >
-                              {emp.isActive
-                                ? "Deactivate"
-                                : "Activate"}
-                            </DropdownMenuItem>
+                              {/* Reset Password */}
+                              {canEditEmployee && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedForReset(emp);
+                                    setNewPassword("");
+                                    setPasswordError("");
+                                    setShowPassword(false);
+                                    setResetOpen(true);
+                                  }}
+                                >
+                                  Reset Password
+                                </DropdownMenuItem>
+                              )}
 
-                            {/* Reset Password */}
-                            {canChangeStatus && (
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setSelectedForReset(
-                                    emp
-                                  );
-
-                                  setResetOpen(true);
-                                }}
-                              >
-                                Reset Password
-                              </DropdownMenuItem>
-                            )}
-
-                            {canChangeStatus && (
-                              <DropdownMenuItem
-                                variant="destructive"
-                                onClick={() => {
-                                  setSelectedForDelete(emp);
-                                  setDeleteDialogOpen(true);
-                                }}
-                              >
-
-                                Delete
-                              </DropdownMenuItem>
-                            )}
-
-                          </DropdownMenuGroup>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                              {/* Delete */}
+                              {canDeleteEmployee && (
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onClick={() => {
+                                    setSelectedForDelete(emp);
+                                    setDeleteConfirmed(false);
+                                    setDeleteDialogOpen(true);
+                                  }}
+                                >
+                                  Delete
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </TableCell>
-
                   </TableRow>
-                )
-              )}
+                );
+              })}
 
-              {/* No Employees */}
-              {/* Empty States */}
+              {/* Empty State */}
               {filteredEmployees.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={canChangeStatus ? 12 : 11}
-                    className="text-center text-muted-foreground py-8"
+                    colSpan={isSuperAdmin ? 12 : 11}
+                    className="py-8 text-center text-muted-foreground"
                   >
                     {isSuperAdmin && !selectedCompanyId ? (
                       <p className="text-sm">
@@ -1194,12 +1199,10 @@ const EmployeeList = () => {
                 </TableRow>
               )}
             </TableBody>
-
           </Table>
         </div>
       </div>
-
-    </div >
+    </div>
   );
 };
 

@@ -1,6 +1,5 @@
 
 import React from "react";
-// import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { FileSpreadsheet, RefreshCw } from "lucide-react";
 
@@ -25,7 +24,7 @@ import {
 import { getAttendanceReport } from "@/services/attendanceReport.service";
 import { getCompanies } from "@/services/company.service";
 import { useAuthStore } from "@/store/auth.store";
-import { getUserRole, isSuperAdminRole } from "@/utilis/roleUtils";
+import { canViewModule, isSuperAdminRole } from "@/utilis/roleUtils";
 
 // ─────────────────────────────────────────────
 // Types
@@ -79,43 +78,16 @@ interface Report {
   employees: EmployeeRow[];
 }
 
+interface ReportColumn<T> {
+  label: string;
+  get: (row: T) => number;
+}
+
 // ─────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────
 
-const BRANCH_COLUMNS: {
-  label: string;
-  get: (row: BranchRow) => number;
-}[] = [
-    { label: "Employees", get: (row) => row.employeeCount },
-    { label: "Present", get: (row) => row.present },
-    { label: "Late", get: (row) => row.late },
-    { label: "Half-day", get: (row) => row.halfDay },
-    { label: "Absent", get: (row) => row.absent },
-    { label: "Leave", get: (row) => row.leave },
-    {
-      label: "Avg attendance %",
-      get: (row) => row.avgAttendancePercent,
-    },
-  ];
-
-const EMPLOYEE_COLUMNS: {
-  label: string;
-  get: (row: EmployeeRow) => number;
-}[] = [
-    { label: "Present", get: (row) => row.present },
-    { label: "Late", get: (row) => row.late },
-    { label: "Half-day", get: (row) => row.halfDay },
-    { label: "Absent", get: (row) => row.absent },
-    {
-      label: "Leave",
-      get: (row) => row.paidLeave + row.unpaidLeave,
-    },
-    { label: "Week off", get: (row) => row.weekOff },
-    { label: "Hours", get: (row) => row.totalHours },
-    { label: "Avg hrs/day", get: (row) => row.avgHours },
-    { label: "Unpaid days", get: (row) => row.unpaidDays },
-  ];
+const MODULE_NAME = "attendance_report";
 
 const MONTHS = [
   "January",
@@ -141,12 +113,87 @@ const getYearOptions = () => {
   );
 };
 
+const BRANCH_COLUMNS: ReportColumn<BranchRow>[] = [
+  { label: "Employees", get: (row) => row.employeeCount },
+  { label: "Present", get: (row) => row.present },
+  { label: "Late", get: (row) => row.late },
+  { label: "Half-day", get: (row) => row.halfDay },
+  { label: "Absent", get: (row) => row.absent },
+  { label: "Leave", get: (row) => row.leave },
+  {
+    label: "Avg attendance %",
+    get: (row) => row.avgAttendancePercent,
+  },
+];
+
+const EMPLOYEE_COLUMNS: ReportColumn<EmployeeRow>[] = [
+  { label: "Present", get: (row) => row.present },
+  { label: "Late", get: (row) => row.late },
+  { label: "Half-day", get: (row) => row.halfDay },
+  { label: "Absent", get: (row) => row.absent },
+  {
+    label: "Leave",
+    get: (row) => row.paidLeave + row.unpaidLeave,
+  },
+  { label: "Week off", get: (row) => row.weekOff },
+  { label: "Hours", get: (row) => row.totalHours },
+  { label: "Avg hrs/day", get: (row) => row.avgHours },
+  { label: "Unpaid days", get: (row) => row.unpaidDays },
+];
+
+const SUMMARY_CARD_CONFIG = [
+  {
+    label: "Employees",
+    getValue: (summary: Summary) => summary.employeeCount,
+  },
+  {
+    label: "Avg attendance",
+    getValue: (summary: Summary) =>
+      `${summary.avgAttendancePercent}%`,
+  },
+  {
+    label: "Present days",
+    getValue: (summary: Summary) => summary.present,
+  },
+  {
+    label: "Late marks",
+    getValue: (summary: Summary) => summary.late,
+  },
+  {
+    label: "Absent days",
+    getValue: (summary: Summary) => summary.absent,
+  },
+  {
+    label: "Total hours",
+    getValue: (summary: Summary) => `${summary.totalHours}h`,
+  },
+];
+
 const percentClass = (percent: number) =>
   percent >= 90
     ? "bg-green-100 text-green-700"
     : percent >= 75
       ? "bg-yellow-100 text-yellow-700"
       : "bg-red-100 text-red-700";
+
+const getErrorMessage = (error: unknown): string => {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof error.response === "object" &&
+    error.response !== null &&
+    "data" in error.response &&
+    typeof error.response.data === "object" &&
+    error.response.data !== null &&
+    "message" in error.response.data &&
+    typeof error.response.data.message === "string"
+  ) {
+    return error.response.data.message;
+  }
+
+  return "Failed to load attendance report.";
+};
 
 // ─────────────────────────────────────────────
 // Component
@@ -156,30 +203,21 @@ const AttendanceReport = () => {
   const today = new Date();
 
   const user = useAuthStore((state) => state.user);
-  const userRole = getUserRole(user);
-  const isSuperAdmin = isSuperAdminRole(userRole);
+  const canViewAttendanceReport = canViewModule(user, MODULE_NAME);
+  const isSuperAdmin = isSuperAdminRole(user);
 
-  const [month, setMonth] = React.useState(
-    today.getMonth() + 1
-  );
-
-  const [year, setYear] = React.useState(
-    today.getFullYear()
-  );
+  const [month, setMonth] = React.useState(today.getMonth() + 1);
+  const [year, setYear] = React.useState(today.getFullYear());
 
   const [report, setReport] = React.useState<Report | null>(null);
 
   const [companies, setCompanies] = React.useState<Company[]>([]);
-  const [selectedCompanyId, setSelectedCompanyId] =
-    React.useState("");
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState("");
 
-  const [companiesLoading, setCompaniesLoading] =
-    React.useState(false);
-
+  const [companiesLoading, setCompaniesLoading] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [isSpinning, setIsSpinning] = React.useState(false);
 
-  // Prevent older API responses from replacing newer reports.
   const requestIdRef = React.useRef(0);
 
   // ─────────────────────────────────────────
@@ -187,7 +225,7 @@ const AttendanceReport = () => {
   // ─────────────────────────────────────────
 
   React.useEffect(() => {
-    if (!isSuperAdmin) {
+    if (!canViewAttendanceReport || !isSuperAdmin) {
       setCompanies([]);
       setSelectedCompanyId("");
       return;
@@ -217,9 +255,7 @@ const AttendanceReport = () => {
             (company) => company.id === current
           );
 
-          if (current && currentExists) {
-            return current;
-          }
+          if (current && currentExists) return current;
 
           return list.length === 1 ? list[0].id : "";
         });
@@ -241,7 +277,7 @@ const AttendanceReport = () => {
     return () => {
       cancelled = true;
     };
-  }, [isSuperAdmin]);
+  }, [canViewAttendanceReport, isSuperAdmin]);
 
   // ─────────────────────────────────────────
   // Load Attendance Report
@@ -249,6 +285,12 @@ const AttendanceReport = () => {
 
   const loadReport = React.useCallback(async () => {
     const requestId = ++requestIdRef.current;
+
+    if (!canViewAttendanceReport) {
+      setReport(null);
+      setLoading(false);
+      return;
+    }
 
     if (isSuperAdmin && !selectedCompanyId) {
       setReport(null);
@@ -262,47 +304,30 @@ const AttendanceReport = () => {
       const response = await getAttendanceReport({
         month,
         year,
-        ...(isSuperAdmin
-          ? { companyId: selectedCompanyId }
-          : {}),
+        ...(isSuperAdmin ? { companyId: selectedCompanyId } : {}),
       });
 
-      // Ignore stale responses.
-      if (requestId !== requestIdRef.current) {
-        return;
-      }
+      if (requestId !== requestIdRef.current) return;
 
       const reportData = response.data?.data ?? null;
-
       setReport(reportData);
     } catch (error: unknown) {
-      if (requestId !== requestIdRef.current) {
-        return;
-      }
+      if (requestId !== requestIdRef.current) return;
 
       setReport(null);
-
-      const message =
-        typeof error === "object" &&
-          error !== null &&
-          "response" in error &&
-          typeof error.response === "object" &&
-          error.response !== null &&
-          "data" in error.response &&
-          typeof error.response.data === "object" &&
-          error.response.data !== null &&
-          "message" in error.response.data &&
-          typeof error.response.data.message === "string"
-          ? error.response.data.message
-          : "Failed to load attendance report.";
-
-      toast.error(message);
+      toast.error(getErrorMessage(error));
     } finally {
       if (requestId === requestIdRef.current) {
         setLoading(false);
       }
     }
-  }, [month, year, isSuperAdmin, selectedCompanyId]);
+  }, [
+    month,
+    year,
+    isSuperAdmin,
+    selectedCompanyId,
+    canViewAttendanceReport,
+  ]);
 
   // ─────────────────────────────────────────
   // Report Effect
@@ -312,7 +337,6 @@ const AttendanceReport = () => {
     void loadReport();
 
     return () => {
-      // Invalidate the previous request on dependency change/unmount.
       requestIdRef.current += 1;
     };
   }, [loadReport]);
@@ -322,9 +346,7 @@ const AttendanceReport = () => {
   // ─────────────────────────────────────────
 
   const handleCompanyChange = (value: string) => {
-    // Immediately invalidate previous company request.
     requestIdRef.current += 1;
-
     setReport(null);
     setLoading(true);
     setSelectedCompanyId(value);
@@ -332,7 +354,6 @@ const AttendanceReport = () => {
 
   const handleMonthChange = (value: string) => {
     requestIdRef.current += 1;
-
     setReport(null);
     setLoading(true);
     setMonth(Number(value));
@@ -340,7 +361,6 @@ const AttendanceReport = () => {
 
   const handleYearChange = (value: string) => {
     requestIdRef.current += 1;
-
     setReport(null);
     setLoading(true);
     setYear(Number(value));
@@ -364,93 +384,93 @@ const AttendanceReport = () => {
       return;
     }
 
-    // XLSX only loads when export is clicked
-    const XLSX = await import("xlsx");
+    try {
+      const XLSX = await import("xlsx");
 
-    const toSheet = (
-      rows: Record<string, string | number>[],
-      headers: string[]
-    ) => {
-      const sheet = XLSX.utils.json_to_sheet(rows, {
-        header: headers,
-      });
+      const toSheet = (
+        rows: Record<string, string | number>[],
+        headers: string[]
+      ) => {
+        const sheet = XLSX.utils.json_to_sheet(rows, {
+          header: headers,
+        });
 
-      sheet["!cols"] = headers.map((key) => ({
-        wch:
-          Math.max(
-            key.length,
-            ...rows.map((row) =>
-              String(row[key] ?? "").length
-            )
-          ) + 2,
+        sheet["!cols"] = headers.map((key) => ({
+          wch:
+            Math.max(
+              key.length,
+              ...rows.map((row) => String(row[key] ?? "").length)
+            ) + 2,
+        }));
+
+        return sheet;
+      };
+
+      const employeeRows = report.employees.map((employee) => ({
+        Code: employee.employeeCode ?? "",
+        Name: employee.name,
+        Branch: employee.branchName,
+        ...Object.fromEntries(
+          EMPLOYEE_COLUMNS.map((column) => [
+            column.label,
+            column.get(employee),
+          ])
+        ),
+        "Attendance %": employee.attendancePercent,
+        Holiday: employee.holiday,
       }));
 
-      return sheet;
-    };
+      const branchRows = report.byBranch.map((branch) => ({
+        Branch: branch.name,
+        ...Object.fromEntries(
+          BRANCH_COLUMNS.map((column) => [
+            column.label,
+            column.get(branch),
+          ])
+        ),
+        "Total Hours": branch.totalHours,
+        "Unpaid Days": branch.unpaidDays,
+      }));
 
-    // Export the exact employee data currently displayed.
-    const employeeRows = report.employees.map((employee) => ({
-      Code: employee.employeeCode ?? "",
-      Name: employee.name,
-      Branch: employee.branchName,
-      ...Object.fromEntries(
-        EMPLOYEE_COLUMNS.map((column) => [
-          column.label,
-          column.get(employee),
-        ])
-      ),
-      "Attendance %": employee.attendancePercent,
-      Holiday: employee.holiday,
-    }));
+      const workbook = XLSX.utils.book_new();
 
-    // Export the exact branch summary currently displayed.
-    const branchRows = report.byBranch.map((branch) => ({
-      Branch: branch.name,
-      ...Object.fromEntries(
-        BRANCH_COLUMNS.map((column) => [
-          column.label,
-          column.get(branch),
-        ])
-      ),
-      "Total Hours": branch.totalHours,
-      "Unpaid Days": branch.unpaidDays,
-    }));
+      const employeeHeaders = [
+        "Code",
+        "Name",
+        "Branch",
+        ...EMPLOYEE_COLUMNS.map((column) => column.label),
+        "Attendance %",
+        "Holiday",
+      ];
 
-    const workbook = XLSX.utils.book_new();
+      const branchHeaders = [
+        "Branch",
+        ...BRANCH_COLUMNS.map((column) => column.label),
+        "Total Hours",
+        "Unpaid Days",
+      ];
 
-    const employeeHeaders = [
-      "Code",
-      "Name",
-      "Branch",
-      ...EMPLOYEE_COLUMNS.map((column) => column.label),
-      "Attendance %",
-      "Holiday",
-    ];
+      XLSX.utils.book_append_sheet(
+        workbook,
+        toSheet(employeeRows, employeeHeaders),
+        "Employees"
+      );
 
-    const branchHeaders = [
-      "Branch",
-      ...BRANCH_COLUMNS.map((column) => column.label),
-      "Total Hours",
-      "Unpaid Days",
-    ];
+      XLSX.utils.book_append_sheet(
+        workbook,
+        toSheet(branchRows, branchHeaders),
+        "By Branch"
+      );
 
-    XLSX.utils.book_append_sheet(
-      workbook,
-      toSheet(employeeRows, employeeHeaders),
-      "Employees"
-    );
+      XLSX.writeFile(
+        workbook,
+        `attendance-report-${month}-${year}.xlsx`
+      );
 
-    XLSX.utils.book_append_sheet(
-      workbook,
-      toSheet(branchRows, branchHeaders),
-      "By Branch"
-    );
-
-    const fileName = `attendance-report-${month}-${year}.xlsx`;
-
-    XLSX.writeFile(workbook, fileName);
-
-    toast.success("Attendance report exported successfully.");
+      toast.success("Attendance report exported successfully.");
+    } catch {
+      toast.error("Failed to export attendance report.");
+    }
   };
 
   // ─────────────────────────────────────────
@@ -480,41 +500,20 @@ const AttendanceReport = () => {
   // ─────────────────────────────────────────
 
   const cards = report
-    ? [
-      {
-        label: "Employees",
-        value: report.totals.employeeCount,
-      },
-      {
-        label: "Avg attendance",
-        value: `${report.totals.avgAttendancePercent}%`,
-      },
-      {
-        label: "Present days",
-        value: report.totals.present,
-      },
-      {
-        label: "Late marks",
-        value: report.totals.late,
-      },
-      {
-        label: "Absent days",
-        value: report.totals.absent,
-      },
-      {
-        label: "Total hours",
-        value: `${report.totals.totalHours}h`,
-      },
-    ]
+    ? SUMMARY_CARD_CONFIG.map((card) => ({
+        label: card.label,
+        value: card.getValue(report.totals),
+      }))
     : [];
 
   // ─────────────────────────────────────────
   // UI
   // ─────────────────────────────────────────
 
+  if (!canViewAttendanceReport) return null;
+
   return (
     <div className="space-y-4 p-1">
-
       {/* HEADER */}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -534,8 +533,9 @@ const AttendanceReport = () => {
           }
         >
           <RefreshCw
-            className={`mr-2 h-4 w-4 ${isSpinning ? "animate-spin" : ""
-              }`}
+            className={`mr-2 h-4 w-4 ${
+              isSpinning ? "animate-spin" : ""
+            }`}
           />
           Refresh
         </Button>
@@ -544,7 +544,6 @@ const AttendanceReport = () => {
       {/* FILTERS */}
 
       <div className="flex flex-wrap items-center justify-end gap-2">
-
         {isSuperAdmin && (
           <Select
             value={selectedCompanyId}
@@ -653,10 +652,7 @@ const AttendanceReport = () => {
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
             {cards.map((card) => (
-              <Card
-                key={card.label}
-                className="p-3"
-              >
+              <Card key={card.label} className="p-3">
                 <p className="text-xs text-muted-foreground">
                   {card.label}
                 </p>
@@ -669,7 +665,6 @@ const AttendanceReport = () => {
           </div>
 
           <div className="relative">
-
             {/* REFRESH OVERLAY */}
 
             {loading && (
@@ -692,9 +687,7 @@ const AttendanceReport = () => {
                 <Table>
                   <TableHeader className="bg-muted">
                     <TableRow>
-                      <TableHead>
-                        Branch
-                      </TableHead>
+                      <TableHead>Branch</TableHead>
 
                       {BRANCH_COLUMNS.map((column) => (
                         <TableHead
@@ -751,13 +744,8 @@ const AttendanceReport = () => {
                 <Table>
                   <TableHeader className="bg-muted">
                     <TableRow>
-                      <TableHead>
-                        Employee
-                      </TableHead>
-
-                      <TableHead>
-                        Branch
-                      </TableHead>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Branch</TableHead>
 
                       {EMPLOYEE_COLUMNS.map((column) => (
                         <TableHead

@@ -17,6 +17,7 @@ import { ChevronRightIcon } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
 import { useAuthStore } from "@/store/auth.store";
 import { iconMap } from "@/lib/icon-map";
+import { canViewModule } from "@/utilis/roleUtils";
 
 // export function NavMain({
 //   items,
@@ -87,7 +88,8 @@ export function NavMain() {
 
   const visibleModules = uniquePermissions(
     permissions.filter(
-      (p) => p.canView && p.module.parentId === null
+      (p) => p.canView && p.module.parentId === null &&
+        canViewModule(user, p.module.name)
     )
   ).sort((a, b) => a.module.order - b.module.order);
 
@@ -100,7 +102,8 @@ export function NavMain() {
 
           const children = uniquePermissions(
             permissions.filter(
-              (cp) => cp.canView && cp.module.parentId === mod.id
+              (cp) => cp.canView && cp.module.parentId === mod.id &&
+                canViewModule(user, cp.module.name)
             )
           ).sort((a, b) => a.module.order - b.module.order);
 

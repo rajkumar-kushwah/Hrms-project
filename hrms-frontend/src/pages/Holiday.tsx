@@ -26,9 +26,11 @@ import {
 } from "@/validation/holiday.validation";
 import { useAuthStore } from "@/store/auth.store";
 import {
-    getUserRole,
-    isEmployeeRole,
     isSuperAdminRole,
+    canViewModule,
+    canCreateInModule,
+    canEditInModule,
+    canDeleteInModule,
 } from "@/utilis/roleUtils";
 
 import { Button } from "@/components/ui/button";
@@ -78,6 +80,8 @@ type CompanyOption = {
     id: string;
     name: string;
 };
+
+const MODULE_NAME = "holiday";
 
 const EMPTY_FORM: HolidayForm = {
     name: "",
@@ -140,6 +144,7 @@ const validateField = (
 ): string | undefined => {
     if (field === "name") {
         const result = holidayNameSchema.safeParse(value);
+
         return result.success
             ? undefined
             : result.error.issues[0]?.message;
@@ -166,10 +171,16 @@ const validateField = (
 
 export default function HolidayPage() {
     const user = useAuthStore((state) => state.user);
-    const userRole = getUserRole(user);
 
-    const isSuperAdmin = isSuperAdminRole(userRole);
-    const employeeView = isEmployeeRole(userRole);
+    // Centralized role and module permissions
+    const isSuperAdmin = isSuperAdminRole(user);
+
+    const canViewHoliday = canViewModule(user, MODULE_NAME);
+    const canCreateHoliday = canCreateInModule(user, MODULE_NAME);
+    const canEditHoliday = canEditInModule(user, MODULE_NAME);
+    const canDeleteHoliday = canDeleteInModule(user, MODULE_NAME);
+
+    const hasActions = canEditHoliday || canDeleteHoliday;
 
     const [companies, setCompanies] = useState<CompanyOption[]>([]);
     const [selectedCompanyId, setSelectedCompanyId] = useState("");
@@ -192,15 +203,18 @@ export default function HolidayPage() {
 
     const [deleting, setDeleting] = useState(false);
 
-    // Super Admin ke liye company list load karein.
+    // Load companies only for Super Admin with view permission.
     useEffect(() => {
-        if (!isSuperAdmin) return;
+        if (!canViewHoliday || !isSuperAdmin) return;
+
+        let cancelled = false;
 
         const loadCompanies = async () => {
             try {
-                // Apne backend ke actual company-list endpoint ke
-                // mutabik "/company" ko adjust karein, agar zaroori ho.
                 const response = await api.get("/company");
+
+                if (cancelled) return;
+
                 const result = response?.data?.data;
 
                 if (!Array.isArray(result)) {
@@ -220,11 +234,11 @@ export default function HolidayPage() {
                     .map((company) => ({
                         id: company.id as string,
                         name:
-                            (typeof company.name === "string"
+                            typeof company.name === "string"
                                 ? company.name
                                 : typeof company.companyName === "string"
                                     ? company.companyName
-                                    : "Unnamed Company"),
+                                    : "Unnamed Company",
                     }));
 
                 setCompanies(options);
@@ -233,12 +247,18 @@ export default function HolidayPage() {
                     toast.error("Koi company nahi mili");
                 }
             } catch (error: unknown) {
-                toast.error(getErrorMessage(error));
+                if (!cancelled) {
+                    toast.error(getErrorMessage(error));
+                }
             }
         };
 
         void loadCompanies();
-    }, [isSuperAdmin]);
+
+        return () => {
+            cancelled = true;
+        };
+    }, [canViewHoliday, isSuperAdmin]);
 
     const requestConfig = useCallback(() => {
         if (isSuperAdmin) {
@@ -257,6 +277,13 @@ export default function HolidayPage() {
     }, [isSuperAdmin, selectedCompanyId]);
 
     const loadHolidays = useCallback(async (isRefresh = false) => {
+        if (!canViewHoliday) {
+            setHolidays([]);
+            setLoading(false);
+            setRefreshing(false);
+            return;
+        }
+
         try {
             if (isRefresh) {
                 setRefreshing(true);
@@ -283,7 +310,12 @@ export default function HolidayPage() {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [isSuperAdmin, selectedCompanyId, requestConfig]);
+    }, [
+        canViewHoliday,
+        isSuperAdmin,
+        selectedCompanyId,
+        requestConfig,
+    ]);
 
     useEffect(() => {
         void loadHolidays();
@@ -296,6 +328,11 @@ export default function HolidayPage() {
     };
 
     const handleDelete = async () => {
+        if (!canDeleteHoliday) {
+            toast.error("You don't have permission to delete holidays.");
+            return;
+        }
+
         if (!deleteHolidayItem) return;
 
         if (isSuperAdmin && !selectedCompanyId) {
@@ -326,6 +363,11 @@ export default function HolidayPage() {
     };
 
     const openAddDialog = () => {
+        if (!canCreateHoliday) {
+            toast.error("You don't have permission to create holidays.");
+            return;
+        }
+
         if (isSuperAdmin && !selectedCompanyId) {
             toast.error("Please select a company first");
             return;
@@ -336,12 +378,19 @@ export default function HolidayPage() {
     };
 
     const openEditDialog = (holiday: HolidayType) => {
+        if (!canEditHoliday) {
+            toast.error("You don't have permission to edit holidays.");
+            return;
+        }
+
         setEditHoliday(holiday);
+
         setForm({
             name: holiday.name,
             startDate: toDateInputValue(holiday.startDate),
             endDate: toDateInputValue(holiday.endDate),
         });
+
         setErrors({});
         setOpen(true);
     };
@@ -377,6 +426,7 @@ export default function HolidayPage() {
                     nextForm.startDate,
                     nextForm,
                 );
+
                 nextErrors.endDate = validateField(
                     "endDate",
                     nextForm.endDate,
@@ -392,6 +442,11 @@ export default function HolidayPage() {
         event: FormEvent<HTMLFormElement>,
     ) => {
         event.preventDefault();
+
+        if (editHoliday ? !canEditHoliday : !canCreateHoliday) {
+            toast.error("You don't have permission to perform this action.");
+            return;
+        }
 
         if (isSuperAdmin && !selectedCompanyId) {
             toast.error("Please select a company first");
@@ -449,6 +504,7 @@ export default function HolidayPage() {
 
             setOpen(false);
             resetForm();
+
             await loadHolidays(true);
         } catch (error: unknown) {
             toast.error(getErrorMessage(error));
@@ -458,8 +514,14 @@ export default function HolidayPage() {
     };
 
     const handleToggleStatus = async (holiday: HolidayType) => {
+        if (!canEditHoliday) {
+            toast.error("You don't have permission to change holiday status.");
+            return;
+        }
+
         try {
             setActionId(holiday.id);
+
             const config = requestConfig();
 
             if (holiday.isActive) {
@@ -468,6 +530,7 @@ export default function HolidayPage() {
                     {},
                     config,
                 );
+
                 toast.success("Holiday deactivated successfully");
             } else {
                 await api.patch(
@@ -475,6 +538,7 @@ export default function HolidayPage() {
                     {},
                     config,
                 );
+
                 toast.success("Holiday activated successfully");
             }
 
@@ -485,6 +549,9 @@ export default function HolidayPage() {
             setActionId(null);
         }
     };
+
+    // Hide entire page without view permission.
+    if (!canViewHoliday) return null;
 
     return (
         <div className="space-y-5">
@@ -508,7 +575,10 @@ export default function HolidayPage() {
                                     <SelectValue placeholder="Choose a company" />
                                 </SelectTrigger>
 
-                                <SelectContent position="popper" avoidCollisions={true}>
+                                <SelectContent
+                                    position="popper"
+                                    avoidCollisions={true}
+                                >
                                     {companies.map((company) => (
                                         <SelectItem
                                             key={company.id}
@@ -543,7 +613,7 @@ export default function HolidayPage() {
                         Refresh
                     </Button>
 
-                    {!employeeView && (
+                    {canCreateHoliday && (
                         <Button
                             type="button"
                             variant="add"
@@ -558,48 +628,50 @@ export default function HolidayPage() {
             </div>
 
             {/* Delete holiday modal */}
-            <Dialog
-                open={Boolean(deleteHolidayItem)}
-                onOpenChange={(nextOpen) => {
-                    if (!nextOpen && !deleting) {
-                        setDeleteHolidayItem(null);
-                    }
-                }}
-            >
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Delete Holiday</DialogTitle>
+            {canDeleteHoliday && (
+                <Dialog
+                    open={Boolean(deleteHolidayItem)}
+                    onOpenChange={(nextOpen) => {
+                        if (!nextOpen && !deleting) {
+                            setDeleteHolidayItem(null);
+                        }
+                    }}
+                >
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Delete Holiday</DialogTitle>
 
-                        <DialogDescription>
-                            Are you sure you want to delete{" "}
-                            <span className="font-medium text-foreground">
-                                {deleteHolidayItem?.name}
-                            </span>
-                            ? This action cannot be undone.
-                        </DialogDescription>
-                    </DialogHeader>
+                            <DialogDescription>
+                                Are you sure you want to delete{" "}
+                                <span className="font-medium text-foreground">
+                                    {deleteHolidayItem?.name}
+                                </span>
+                                ? This action cannot be undone.
+                            </DialogDescription>
+                        </DialogHeader>
 
-                    <DialogFooter className="gap-2 sm:gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setDeleteHolidayItem(null)}
-                            disabled={deleting}
-                        >
-                            Cancel
-                        </Button>
+                        <DialogFooter className="gap-2 sm:gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setDeleteHolidayItem(null)}
+                                disabled={deleting}
+                            >
+                                Cancel
+                            </Button>
 
-                        <Button
-                            type="button"
-                            variant="destructive"
-                            onClick={() => void handleDelete()}
-                            disabled={deleting}
-                        >
-                            {deleting ? "Deleting..." : "Delete Holiday"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                onClick={() => void handleDelete()}
+                                disabled={deleting}
+                            >
+                                {deleting ? "Deleting..." : "Delete Holiday"}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
 
             <div className="rounded-md border">
                 <Table>
@@ -609,7 +681,8 @@ export default function HolidayPage() {
                             <TableHead>Start Date</TableHead>
                             <TableHead>End Date</TableHead>
                             <TableHead>Status</TableHead>
-                            {!employeeView && (
+
+                            {hasActions && (
                                 <TableHead className="text-right">
                                     Actions
                                 </TableHead>
@@ -621,7 +694,7 @@ export default function HolidayPage() {
                         {loading ? (
                             <TableRow>
                                 <TableCell
-                                    colSpan={employeeView ? 4 : 5}
+                                    colSpan={hasActions ? 5 : 4}
                                     className="h-24 text-center text-muted-foreground"
                                 >
                                     Loading holidays...
@@ -630,7 +703,7 @@ export default function HolidayPage() {
                         ) : isSuperAdmin && !selectedCompanyId ? (
                             <TableRow>
                                 <TableCell
-                                    colSpan={employeeView ? 4 : 5}
+                                    colSpan={hasActions ? 5 : 4}
                                     className="h-24 text-center text-muted-foreground"
                                 >
                                     Select a company to view its holidays.
@@ -639,7 +712,7 @@ export default function HolidayPage() {
                         ) : holidays.length === 0 ? (
                             <TableRow>
                                 <TableCell
-                                    colSpan={employeeView ? 4 : 5}
+                                    colSpan={hasActions ? 5 : 4}
                                     className="h-24 text-center text-muted-foreground"
                                 >
                                     <CalendarDays className="mx-auto mb-2 h-5 w-5" />
@@ -675,7 +748,7 @@ export default function HolidayPage() {
                                         </Badge>
                                     </TableCell>
 
-                                    {!employeeView && (
+                                    {hasActions && (
                                         <TableCell className="text-right">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
@@ -692,39 +765,48 @@ export default function HolidayPage() {
                                                 </DropdownMenuTrigger>
 
                                                 <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem
-                                                        onClick={() =>
-                                                            openEditDialog(holiday)
-                                                        }
-                                                    >
-                                                        <Pencil className="mr-2 h-4 w-4" />
-                                                        Edit
-                                                    </DropdownMenuItem>
+                                                    {canEditHoliday && (
+                                                        <>
+                                                            <DropdownMenuItem
+                                                                onClick={() =>
+                                                                    openEditDialog(holiday)
+                                                                }
+                                                            >
+                                                                <Pencil className="mr-2 h-4 w-4" />
+                                                                Edit
+                                                            </DropdownMenuItem>
 
-                                                    <DropdownMenuItem
-                                                        onClick={() =>
-                                                            void handleToggleStatus(
-                                                                holiday,
-                                                            )
-                                                        }
-                                                    >
-                                                        {holiday.isActive ? (
-                                                            <ToggleLeft className="mr-2 h-4 w-4" />
-                                                        ) : (
-                                                            <ToggleRight className="mr-2 h-4 w-4" />
-                                                        )}
+                                                            <DropdownMenuItem
+                                                                onClick={() =>
+                                                                    void handleToggleStatus(
+                                                                        holiday,
+                                                                    )
+                                                                }
+                                                            >
+                                                                {holiday.isActive ? (
+                                                                    <ToggleLeft className="mr-2 h-4 w-4" />
+                                                                ) : (
+                                                                    <ToggleRight className="mr-2 h-4 w-4" />
+                                                                )}
 
-                                                        {holiday.isActive
-                                                            ? "Deactivate"
-                                                            : "Activate"}
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem
-                                                        className="text-destructive focus:text-destructive"
-                                                        onSelect={() => setDeleteHolidayItem(holiday)}
-                                                    >
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        Delete
-                                                    </DropdownMenuItem>
+                                                                {holiday.isActive
+                                                                    ? "Deactivate"
+                                                                    : "Activate"}
+                                                            </DropdownMenuItem>
+                                                        </>
+                                                    )}
+
+                                                    {canDeleteHoliday && (
+                                                        <DropdownMenuItem
+                                                            className="text-destructive focus:text-destructive"
+                                                            onSelect={() =>
+                                                                setDeleteHolidayItem(holiday)
+                                                            }
+                                                        >
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Delete
+                                                        </DropdownMenuItem>
+                                                    )}
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>
@@ -736,7 +818,8 @@ export default function HolidayPage() {
                 </Table>
             </div>
 
-            {!employeeView && (
+            {/* Add / Edit Holiday Dialog */}
+            {(canCreateHoliday || canEditHoliday) && (
                 <Dialog
                     open={open}
                     onOpenChange={handleOpenChange}
@@ -760,6 +843,7 @@ export default function HolidayPage() {
                                     <Label htmlFor="holiday-name">
                                         Holiday Name
                                     </Label>
+
                                     <Input
                                         id="holiday-name"
                                         value={form.name}
@@ -772,6 +856,7 @@ export default function HolidayPage() {
                                         placeholder="Enter holiday name"
                                         aria-invalid={Boolean(errors.name)}
                                     />
+
                                     {errors.name && (
                                         <p className="text-sm text-destructive">
                                             {errors.name}
@@ -783,6 +868,7 @@ export default function HolidayPage() {
                                     <Label htmlFor="holiday-start-date">
                                         Start Date
                                     </Label>
+
                                     <Input
                                         id="holiday-start-date"
                                         type="date"
@@ -798,6 +884,7 @@ export default function HolidayPage() {
                                             errors.startDate,
                                         )}
                                     />
+
                                     {errors.startDate && (
                                         <p className="text-sm text-destructive">
                                             {errors.startDate}
@@ -809,6 +896,7 @@ export default function HolidayPage() {
                                     <Label htmlFor="holiday-end-date">
                                         End Date
                                     </Label>
+
                                     <Input
                                         id="holiday-end-date"
                                         type="date"
@@ -824,6 +912,7 @@ export default function HolidayPage() {
                                             errors.endDate,
                                         )}
                                     />
+
                                     {errors.endDate && (
                                         <p className="text-sm text-destructive">
                                             {errors.endDate}
@@ -833,18 +922,18 @@ export default function HolidayPage() {
                             </div>
 
                             <DialogFooter className="gap-2 sm:gap-2">
-                                <Button className="cursor-pointer"
+                                <Button
+                                    className="cursor-pointer"
                                     type="button"
                                     variant="add"
-                                    onClick={() =>
-                                        handleOpenChange(false)
-                                    }
+                                    onClick={() => handleOpenChange(false)}
                                     disabled={saving}
                                 >
                                     Cancel
                                 </Button>
 
-                                <Button className="cursor-pointer"
+                                <Button
+                                    className="cursor-pointer"
                                     type="submit"
                                     variant="add"
                                     disabled={saving}

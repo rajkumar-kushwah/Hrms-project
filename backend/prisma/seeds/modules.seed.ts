@@ -41,6 +41,7 @@ export const seedModules = async () => {
   const attendance = await prisma.module.findUnique({ where: { name: "attendance" } });
   const leave = await prisma.module.findUnique({ where: { name: "leave" } });
   const reports = await prisma.module.findUnique({ where: { name: "reports" } });
+  const settings = await prisma.module.findUnique({ where: { name: "settings" } })
 
   const subModules = [
     // Attendance
@@ -59,6 +60,11 @@ export const seedModules = async () => {
     { name: "leave_report", displayName: "Leave Report", icon: "FileBarChart2", url: "/reports/leave", order: 2, parentId: reports!.id },
     { name: "payroll_report", displayName: "Payroll Report", icon: "FileSpreadsheet", url: "/reports/payroll", order: 3, parentId: reports!.id },
     { name: "overtime_report", displayName: "Overtime Report", icon: "FileClock", url: "/reports/overtime", order: 4, parentId: reports!.id },
+
+    // Settings
+    { name: "settings_general", displayName: "General", icon: "Settings", url: "/settings/general", order: 1, parentId: settings!.id },
+    { name: "settings_attendance", displayName: "Attendance", icon: "CalendarCheck", url: "/settings/attendance", order: 2, parentId: settings!.id },
+    { name: "onboarding_checklist", displayName: "Onboarding Checklist", icon: "ClipboardList", url: "/settings/onboarding-checklist", order: 3, parentId: settings!.id },
   ];
 
   for (const sub of subModules) {

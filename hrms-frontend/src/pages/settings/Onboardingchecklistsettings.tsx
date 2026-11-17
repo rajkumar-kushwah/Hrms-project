@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { FormEvent } from "react";
 import { toast } from "sonner";
 import {
@@ -72,7 +78,19 @@ import {
   deleteChecklistItem,
   reorderChecklistItems,
 } from "@/services/Onboardingtemplate.service";
-import { getUserRole, isCompanyAdminRole, isSuperAdminRole } from "@/utilis/roleUtils";
+
+import {
+  canViewModule,
+  canCreateInModule,
+  canEditInModule,
+  canDeleteInModule,
+  isCompanyAdminRole,
+  isSuperAdminRole,
+} from "@/utilis/roleUtils";
+
+// ─────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────
 
 type Stage =
   | "OFFER"
@@ -96,15 +114,42 @@ interface ChecklistItem {
   documentInputType?: DocumentInputType | null;
   order: number;
 }
+
 interface CompanyOption {
   id: string;
   name: string;
 }
+
 type GroupedTemplates = Record<Stage, ChecklistItem[]>;
 type ItemForm = OnboardingChecklistFormValues;
 type FormErrors = Partial<Record<keyof ItemForm, string>>;
 
-const STAGES: { value: Stage; label: string }[] = [
+interface StageOption {
+  value: Stage;
+  label: string;
+}
+
+interface DocumentTypeOption {
+  value: DocumentInputType;
+  label: string;
+  description: string;
+  icon: typeof Upload;
+}
+
+interface SummaryCard {
+  label: string;
+  value: number;
+  description: string;
+  icon: typeof Layers3;
+}
+
+// ─────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────
+
+const MODULE_NAME = "onboarding_checklist";
+
+const STAGES: StageOption[] = [
   { value: "OFFER", label: "Offer" },
   { value: "JOINING", label: "Joining" },
   { value: "DOCUMENTS", label: "Documents" },
@@ -120,23 +165,48 @@ const EMPTY_FORM: ItemForm = {
   documentInputType: "FILE_UPLOAD",
 };
 
-const DOCUMENT_TYPES: {
-  value: DocumentInputType;
-  label: string;
-}[] = [
-    {
-      value: "FILE_UPLOAD",
-      label: "File Upload",
-    },
-    {
-      value: "DOCUMENT_NUMBER",
-      label: "Document Number",
-    },
-    {
-      value: "EITHER",
-      label: "File or Number",
-    },
-  ];
+const DOCUMENT_TYPES: DocumentTypeOption[] = [
+  {
+    value: "FILE_UPLOAD",
+    label: "File Upload",
+    description: "Employee will upload a document file.",
+    icon: Upload,
+  },
+  {
+    value: "DOCUMENT_NUMBER",
+    label: "Document Number",
+    description: "Employee will enter the document number.",
+    icon: Hash,
+  },
+  {
+    value: "EITHER",
+    label: "File or Number",
+    description: "Employee can upload a file or enter a document number.",
+    icon: FileText,
+  },
+];
+
+const SUMMARY_CONFIG = [
+  {
+    label: "Total checklist items",
+    description: "Across all onboarding stages",
+    icon: Layers3,
+    getValue: (total: number, ) => total,
+  },
+  {
+    label: "Required items",
+    description: "Must be completed by employees",
+    icon: CheckCircle2,
+    getValue: (_total: number, required: number) => required,
+  },
+  {
+    label: "Document requirements",
+    description: "Items requiring document input",
+    icon: FileText,
+    getValue: (_total: number, _required: number, documents: number) =>
+      documents,
+  },
+] as const;
 
 const createEmptyGrouped = (): GroupedTemplates => ({
   OFFER: [],
@@ -145,6 +215,10 @@ const createEmptyGrouped = (): GroupedTemplates => ({
   TRAINING: [],
   ACTIVE: [],
 });
+
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
 
 function getErrorMessage(error: unknown): string {
   if (
@@ -179,6 +253,10 @@ function getErrorMessage(error: unknown): string {
 
 function isStage(value: string): value is Stage {
   return STAGES.some((stage) => stage.value === value);
+}
+
+function getStageLabel(stage: Stage): string {
+  return STAGES.find((item) => item.value === stage)?.label ?? stage;
 }
 
 function getFormErrors(
@@ -233,46 +311,100 @@ function normalizeGroupedTemplates(data: unknown): GroupedTemplates {
   return grouped;
 }
 
+function getDocumentType(type?: DocumentInputType | null) {
+  return DOCUMENT_TYPES.find((option) => option.value === type);
+}
+
+// ─────────────────────────────────────────────
+// Component
+// ─────────────────────────────────────────────
+
 export default function OnboardingChecklistSettings() {
   const { user } = useAuthStore();
-  
-  const userRole = getUserRole(user);
 
-  const isSuperAdmin = isSuperAdminRole(userRole);
-  const isCompanyAdmin = isCompanyAdminRole(userRole);
+  // Permissions
+  const isSuperAdmin = isSuperAdminRole(user);
+  const isCompanyAdmin = isCompanyAdminRole(user);
 
-  // Only Super Admin selects a company. Company Admin uses getMyCompany().
+  const canViewChecklist = canViewModule(user, MODULE_NAME);
+  const canCreateChecklist = canCreateInModule(user, MODULE_NAME);
+  const canEditChecklist = canEditInModule(user, MODULE_NAME);
+  const canDeleteChecklist = canDeleteInModule(user, MODULE_NAME);
+
+  const canManageChecklist =
+    canCreateChecklist || canEditChecklist || canDeleteChecklist;
+
+  // Company
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [companyId, setCompanyId] = useState("");
 
+  // Checklist
   const [activeStage, setActiveStage] = useState<Stage>("OFFER");
 
   const [grouped, setGrouped] =
     useState<GroupedTemplates>(createEmptyGrouped);
 
+  // Loading states
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [movingId, setMovingId] = useState<string | null>(null);
 
+  // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] =
     useState<ChecklistItem | null>(null);
 
-  const [form, setForm] = useState<ItemForm>({ ...EMPTY_FORM });
-  const [errors, setErrors] = useState<FormErrors>({});
-  const [hasValidated, setHasValidated] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const [movingId, setMovingId] = useState<string | null>(null);
-
   const [deleteItem, setDeleteItem] =
     useState<ChecklistItem | null>(null);
 
-  const [deleting, setDeleting] = useState(false);
+  // Form
+  const [form, setForm] = useState<ItemForm>({ ...EMPTY_FORM });
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [hasValidated, setHasValidated] = useState(false);
 
+  // Request tracking
   const requestIdRef = useRef(0);
   const selectedCompanyIdRef = useRef(selectedCompanyId);
-  // Keep the latest company selection available to async handlers.
+
   selectedCompanyIdRef.current = selectedCompanyId;
+
+  // ─────────────────────────────────────────
+  // Derived Data
+  // ─────────────────────────────────────────
+
+  const allItems = useMemo(
+    () => STAGES.flatMap((stage) => grouped[stage.value]),
+    [grouped]
+  );
+
+  const totalItems = allItems.length;
+
+  const requiredItems = allItems.filter(
+    (item) => item.isRequired
+  ).length;
+
+  const documentItems = allItems.filter(
+    (item) => item.requiresDocument
+  ).length;
+
+  const currentItems = grouped[activeStage] ?? [];
+
+  const summaryCards: SummaryCard[] = SUMMARY_CONFIG.map((config) => ({
+    label: config.label,
+    description: config.description,
+    icon: config.icon,
+    value: config.getValue(
+      totalItems,
+      requiredItems,
+      documentItems
+    ),
+  }));
+
+  // ─────────────────────────────────────────
+  // Form Helpers
+  // ─────────────────────────────────────────
 
   const resetForm = useCallback(() => {
     setForm({ ...EMPTY_FORM });
@@ -280,11 +412,22 @@ export default function OnboardingChecklistSettings() {
     setHasValidated(false);
   }, []);
 
-  const handleCompanyChange = (nextCompanyId: string) => {
-    if (!isSuperAdmin) return;
+  const updateForm = <K extends keyof ItemForm>(
+    key: K,
+    value: ItemForm[K]
+  ) => {
+    const nextForm: ItemForm = {
+      ...form,
+      [key]: value,
+    };
 
-    selectedCompanyIdRef.current = nextCompanyId;
-    setSelectedCompanyId(nextCompanyId);
+    setForm(nextForm);
+
+    if (hasValidated) {
+      setErrors(
+        getFormErrors(onboardingChecklistSchema.safeParse(nextForm))
+      );
+    }
   };
 
   const closeDialog = useCallback(() => {
@@ -295,13 +438,26 @@ export default function OnboardingChecklistSettings() {
     resetForm();
   }, [saving, resetForm]);
 
-  // Resolve the company using the same pattern as GeneralSettings:
-  // Super Admin selects from all companies; Company Admin loads their own company.
+  // ─────────────────────────────────────────
+  // Company Selection
+  // ─────────────────────────────────────────
+
+  const handleCompanyChange = (nextCompanyId: string) => {
+    if (!isSuperAdmin) return;
+
+    selectedCompanyIdRef.current = nextCompanyId;
+    setSelectedCompanyId(nextCompanyId);
+  };
+
+  // ─────────────────────────────────────────
+  // Load Checklist Templates
+  // ─────────────────────────────────────────
+
   const loadTemplates = useCallback(
     async (showRefresh = false) => {
       const requestId = ++requestIdRef.current;
 
-      if (!user) {
+      if (!canViewChecklist || !user) {
         setCompanyId("");
         setGrouped(createEmptyGrouped());
         setLoading(false);
@@ -339,7 +495,9 @@ export default function OnboardingChecklistSettings() {
 
           if (requestId !== requestIdRef.current) return;
 
-          const companies: CompanyOption[] = Array.isArray(response.data?.data)
+          const companies: CompanyOption[] = Array.isArray(
+            response.data?.data
+          )
             ? response.data.data
             : [];
 
@@ -367,6 +525,7 @@ export default function OnboardingChecklistSettings() {
         if (requestId !== requestIdRef.current) return;
 
         setCompanyId(targetCompanyId);
+
         const response = await getChecklistTemplates(targetCompanyId);
 
         if (requestId !== requestIdRef.current) return;
@@ -385,10 +544,19 @@ export default function OnboardingChecklistSettings() {
         }
       }
     },
-    [user, isSuperAdmin, isCompanyAdmin, selectedCompanyId]
+    [
+      user,
+      canViewChecklist,
+      isSuperAdmin,
+      isCompanyAdmin,
+      selectedCompanyId,
+    ]
   );
 
-  // Reload when the user or selected company changes.
+  // ─────────────────────────────────────────
+  // Effects
+  // ─────────────────────────────────────────
+
   useEffect(() => {
     setCompanyId("");
     setGrouped(createEmptyGrouped());
@@ -397,56 +565,45 @@ export default function OnboardingChecklistSettings() {
     setEditingItem(null);
     resetForm();
 
-    void loadTemplates();
+    if (canViewChecklist) {
+      void loadTemplates();
+    } else {
+      setLoading(false);
+      setRefreshing(false);
+    }
 
     return () => {
       requestIdRef.current += 1;
     };
-  }, [user, selectedCompanyId, loadTemplates, resetForm]);
+  }, [
+    user,
+    selectedCompanyId,
+    canViewChecklist,
+    loadTemplates,
+    resetForm,
+  ]);
 
-  const allItems = useMemo(
-    () => STAGES.flatMap((stage) => grouped[stage.value]),
-    [grouped]
-  );
-
-  const totalItems = allItems.length;
-
-  const requiredItems = allItems.filter(
-    (item) => item.isRequired
-  ).length;
-
-  const documentItems = allItems.filter(
-    (item) => item.requiresDocument
-  ).length;
-
-  const currentItems = grouped[activeStage] ?? [];
-
-  // Live form validation.
-  const updateForm = <K extends keyof ItemForm>(
-    key: K,
-    value: ItemForm[K]
-  ) => {
-    const nextForm: ItemForm = {
-      ...form,
-      [key]: value,
-    };
-
-    setForm(nextForm);
-
-    if (hasValidated) {
-      setErrors(
-        getFormErrors(onboardingChecklistSchema.safeParse(nextForm))
-      );
-    }
-  };
+  // ─────────────────────────────────────────
+  // Dialog Handlers
+  // ─────────────────────────────────────────
 
   const openAddDialog = () => {
+    if (!canCreateChecklist) {
+      toast.error("You do not have permission to create checklist items.");
+      return;
+    }
+
     setEditingItem(null);
     resetForm();
     setDialogOpen(true);
   };
 
   const openEditDialog = (item: ChecklistItem) => {
+    if (!canEditChecklist) {
+      toast.error("You do not have permission to edit checklist items.");
+      return;
+    }
+
     setEditingItem(item);
 
     setForm({
@@ -462,11 +619,19 @@ export default function OnboardingChecklistSettings() {
     setDialogOpen(true);
   };
 
-  // Create / update checklist item.
+  // ─────────────────────────────────────────
+  // Create / Update
+  // ─────────────────────────────────────────
+
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (saving) return;
+
+    if (editingItem ? !canEditChecklist : !canCreateChecklist) {
+      toast.error("You do not have permission to perform this action.");
+      return;
+    }
 
     if (!companyId) {
       toast.error(
@@ -527,7 +692,6 @@ export default function OnboardingChecklistSettings() {
           : "Checklist item created successfully"
       );
 
-      // Reload only if the same company is still selected.
       if (
         !isSuperAdmin ||
         selectedCompanyIdRef.current === selectedCompanyAtSubmit
@@ -541,8 +705,16 @@ export default function OnboardingChecklistSettings() {
     }
   };
 
-  // Permanently delete checklist item.
+  // ─────────────────────────────────────────
+  // Delete
+  // ─────────────────────────────────────────
+
   const handleDelete = async () => {
+    if (!canDeleteChecklist) {
+      toast.error("You do not have permission to delete checklist items.");
+      return;
+    }
+
     if (!deleteItem || deleting || !companyId) return;
 
     const item = deleteItem;
@@ -554,7 +726,6 @@ export default function OnboardingChecklistSettings() {
     try {
       await deleteChecklistItem(item.id, companyIdAtSubmit);
 
-      // Remove item immediately from the UI.
       if (
         !isSuperAdmin ||
         selectedCompanyIdRef.current === selectedCompanyAtSubmit
@@ -567,12 +738,10 @@ export default function OnboardingChecklistSettings() {
         }));
       }
 
-      // Close confirmation dialog.
       setDeleteItem(null);
 
       toast.success("Checklist item deleted successfully");
 
-      // Sync latest data from backend.
       if (
         !isSuperAdmin ||
         selectedCompanyIdRef.current === selectedCompanyAtSubmit
@@ -586,11 +755,19 @@ export default function OnboardingChecklistSettings() {
     }
   };
 
-  // Reorder checklist items.
+  // ─────────────────────────────────────────
+  // Reorder
+  // ─────────────────────────────────────────
+
   const handleMove = async (
     index: number,
     direction: "up" | "down"
   ) => {
+    if (!canEditChecklist) {
+      toast.error("You do not have permission to reorder checklist items.");
+      return;
+    }
+
     if (!companyId || movingId || saving || deleting) return;
 
     const items = [...currentItems];
@@ -621,7 +798,7 @@ export default function OnboardingChecklistSettings() {
     try {
       await reorderChecklistItems(
         stageAtSubmit,
-        items.map((item: ChecklistItem) => item.id),
+        items.map((item) => item.id),
         companyIdAtSubmit
       );
 
@@ -648,15 +825,21 @@ export default function OnboardingChecklistSettings() {
     }
   };
 
-  const getDocumentLabel = (
-    type?: DocumentInputType | null
-  ) =>
-    DOCUMENT_TYPES.find((option) => option.value === type)?.label ??
-    "Not configured";
+  // ─────────────────────────────────────────
+  // Permission Guard
+  // ─────────────────────────────────────────
+
+  if (!canViewChecklist) return null;
+
+  // ─────────────────────────────────────────
+  // UI
+  // ─────────────────────────────────────────
 
   return (
     <div className="space-y-6 p-1">
+
       {/* Header */}
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -682,26 +865,30 @@ export default function OnboardingChecklistSettings() {
             disabled={!companyId || loading || refreshing}
           >
             <RefreshCw
-              className={`mr-2 h-4 w-4 ${loading || refreshing ? "animate-spin" : ""
-                }`}
+              className={`mr-2 h-4 w-4 ${
+                loading || refreshing ? "animate-spin" : ""
+              }`}
             />
             Refresh
           </Button>
 
-          <Button
-            type="button"
-            variant="add"
-            className="cursor-pointer"
-            onClick={openAddDialog}
-            disabled={!companyId || loading || saving}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Item
-          </Button>
+          {canCreateChecklist && (
+            <Button
+              type="button"
+              variant="add"
+              className="cursor-pointer"
+              onClick={openAddDialog}
+              disabled={!companyId || loading || saving}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Item
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Only Super Admin can select a company. */}
+      {/* Company Selector */}
+
       {isSuperAdmin && (
         <CompanySelector
           selectedCompanyId={selectedCompanyId}
@@ -709,55 +896,39 @@ export default function OnboardingChecklistSettings() {
         />
       )}
 
-      {/* Summary */}
+      {/* Summary Cards */}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-xl border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              Total checklist items
-            </p>
-            <Layers3 className="h-5 w-5 text-muted-foreground" />
-          </div>
+        {summaryCards.map((card) => {
+          const Icon = card.icon;
 
-          <p className="mt-2 text-2xl font-semibold">{totalItems}</p>
+          return (
+            <div
+              key={card.label}
+              className="rounded-xl border bg-card p-4"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  {card.label}
+                </p>
 
-          <p className="mt-1 text-xs text-muted-foreground">
-            Across all onboarding stages
-          </p>
-        </div>
+                <Icon className="h-5 w-5 text-muted-foreground" />
+              </div>
 
-        <div className="rounded-xl border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              Required items
-            </p>
-            <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
-          </div>
+              <p className="mt-2 text-2xl font-semibold">
+                {card.value}
+              </p>
 
-          <p className="mt-2 text-2xl font-semibold">{requiredItems}</p>
-
-          <p className="mt-1 text-xs text-muted-foreground">
-            Must be completed by employees
-          </p>
-        </div>
-
-        <div className="rounded-xl border bg-card p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              Document requirements
-            </p>
-            <FileText className="h-5 w-5 text-muted-foreground" />
-          </div>
-
-          <p className="mt-2 text-2xl font-semibold">{documentItems}</p>
-
-          <p className="mt-1 text-xs text-muted-foreground">
-            Items requiring document input
-          </p>
-        </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {card.description}
+              </p>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Stage tabs */}
+      {/* Checklist Content */}
+
       {loading ? (
         <div className="flex min-h-48 items-center justify-center gap-2 text-sm text-muted-foreground">
           <RefreshCw className="h-4 w-4 animate-spin" />
@@ -777,6 +948,8 @@ export default function OnboardingChecklistSettings() {
           }}
           className="space-y-5"
         >
+          {/* Stage Tabs */}
+
           <div className="overflow-x-auto pb-1">
             <TabsList className="inline-flex min-w-max">
               {STAGES.map((stage) => (
@@ -794,6 +967,8 @@ export default function OnboardingChecklistSettings() {
               ))}
             </TabsList>
           </div>
+
+          {/* Stage Content */}
 
           {STAGES.map((stage) => {
             const items = grouped[stage.value];
@@ -817,17 +992,21 @@ export default function OnboardingChecklistSettings() {
                     </p>
                   </div>
 
-                  <Button
-                    type="button"
-                    variant="add"
-                    className="cursor-pointer"
-                    onClick={openAddDialog}
-                    disabled={saving || deleting}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Checklist Item
-                  </Button>
+                  {canCreateChecklist && (
+                    <Button
+                      type="button"
+                      variant="add"
+                      className="cursor-pointer"
+                      onClick={openAddDialog}
+                      disabled={saving || deleting}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Checklist Item
+                    </Button>
+                  )}
                 </div>
+
+                {/* Empty State */}
 
                 {items.length === 0 ? (
                   <div className="flex flex-col items-center justify-center rounded-xl border border-dashed px-5 py-12 text-center">
@@ -844,140 +1023,179 @@ export default function OnboardingChecklistSettings() {
                       {stage.label.toLowerCase()} stage.
                     </p>
 
-                    <Button
-                      type="button"
-                      variant="add"
-                      className="mt-4 cursor-pointer"
-                      onClick={openAddDialog}
-                      disabled={saving || deleting}
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create Item
-                    </Button>
+                    {canCreateChecklist && (
+                      <Button
+                        type="button"
+                        variant="add"
+                        className="mt-4 cursor-pointer"
+                        onClick={openAddDialog}
+                        disabled={saving || deleting}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Item
+                      </Button>
+                    )}
                   </div>
                 ) : (
+                  /* Checklist Items */
+
                   <div className="space-y-3">
-                    {items.map((item, index) => (
-                      <div
-                        key={item.id}
-                        className="group rounded-xl border bg-card p-4 transition-colors hover:border-primary/30"
-                      >
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                          <div className="flex min-w-0 flex-1 gap-3">
-                            <div className="mt-0.5 rounded-lg bg-muted p-2">
-                              {item.requiresDocument ? (
-                                <FileText className="h-5 w-5 text-primary" />
-                              ) : (
-                                <ClipboardList className="h-5 w-5 text-muted-foreground" />
-                              )}
-                            </div>
+                    {items.map((item, index) => {
+                      const DocumentIcon = item.requiresDocument
+                        ? FileText
+                        : ClipboardList;
 
-                            <div className="min-w-0 flex-1 space-y-2">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <h3 className="font-medium">
-                                  {item.title}
-                                </h3>
+                      const documentType = getDocumentType(
+                        item.documentInputType
+                      );
 
-                                {item.isRequired ? (
-                                  <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
-                                    Required
-                                  </span>
-                                ) : (
-                                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                                    Optional
-                                  </span>
-                                )}
+                      return (
+                        <div
+                          key={item.id}
+                          className="group rounded-xl border bg-card p-4 transition-colors hover:border-primary/30"
+                        >
+                          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+
+                            {/* Item Details */}
+
+                            <div className="flex min-w-0 flex-1 gap-3">
+                              <div className="mt-0.5 rounded-lg bg-muted p-2">
+                                <DocumentIcon
+                                  className={`h-5 w-5 ${
+                                    item.requiresDocument
+                                      ? "text-primary"
+                                      : "text-muted-foreground"
+                                  }`}
+                                />
                               </div>
 
-                              {item.description && (
-                                <p className="break-words text-sm text-muted-foreground">
-                                  {item.description}
-                                </p>
-                              )}
+                              <div className="min-w-0 flex-1 space-y-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="font-medium">
+                                    {item.title}
+                                  </h3>
 
-                              <div className="flex flex-wrap items-center gap-2 pt-1">
-                                {item.requiresDocument ? (
-                                  <span className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs">
-                                    <FileText className="h-3.5 w-3.5" />
-                                    {getDocumentLabel(item.documentInputType)}
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                                      item.isRequired
+                                        ? "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
+                                        : "bg-muted text-muted-foreground"
+                                    }`}
+                                  >
+                                    {item.isRequired
+                                      ? "Required"
+                                      : "Optional"}
                                   </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs text-muted-foreground">
-                                    <CircleAlert className="h-3.5 w-3.5" />
-                                    No document required
-                                  </span>
+                                </div>
+
+                                {item.description && (
+                                  <p className="break-words text-sm text-muted-foreground">
+                                    {item.description}
+                                  </p>
                                 )}
+
+                                <div className="flex flex-wrap items-center gap-2 pt-1">
+                                  {item.requiresDocument ? (
+                                    <span className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs">
+                                      <FileText className="h-3.5 w-3.5" />
+                                      {documentType?.label ?? "Not configured"}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs text-muted-foreground">
+                                      <CircleAlert className="h-3.5 w-3.5" />
+                                      No document required
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
 
-                          <div className="flex flex-wrap items-center gap-1 sm:justify-end">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="cursor-pointer"
-                              onClick={() => openEditDialog(item)}
-                              disabled={!!movingId || deleting || saving}
-                            >
-                              <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                              Edit
-                            </Button>
+                            {/* Item Actions */}
 
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              title="Move up"
-                              aria-label="Move item up"
-                              disabled={
-                                index === 0 ||
-                                !!movingId ||
-                                deleting ||
-                                saving
-                              }
-                              onClick={() => void handleMove(index, "up")}
-                            >
-                              <ArrowUp className="h-4 w-4" />
-                            </Button>
+                            {canManageChecklist && (
+                              <div className="flex flex-wrap items-center gap-1 sm:justify-end">
+                                {canEditChecklist && (
+                                  <>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="cursor-pointer"
+                                      onClick={() => openEditDialog(item)}
+                                      disabled={
+                                        !!movingId || deleting || saving
+                                      }
+                                    >
+                                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                                      Edit
+                                    </Button>
 
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              title="Move down"
-                              aria-label="Move item down"
-                              disabled={
-                                index === items.length - 1 ||
-                                !!movingId ||
-                                deleting ||
-                                saving
-                              }
-                              onClick={() => void handleMove(index, "down")}
-                            >
-                              <ArrowDown className="h-4 w-4" />
-                            </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      title="Move up"
+                                      aria-label="Move item up"
+                                      disabled={
+                                        index === 0 ||
+                                        !!movingId ||
+                                        deleting ||
+                                        saving
+                                      }
+                                      onClick={() =>
+                                        void handleMove(index, "up")
+                                      }
+                                    >
+                                      <ArrowUp className="h-4 w-4" />
+                                    </Button>
 
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              title="Delete item"
-                              aria-label="Delete checklist item"
-                              className="cursor-pointer text-destructive hover:bg-destructive/10 hover:text-destructive"
-                              disabled={!!movingId || deleting || saving}
-                              onClick={() => setDeleteItem(item)}
-                            >
-                              {deleting && deleteItem?.id === item.id ? (
-                                <RefreshCw className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      title="Move down"
+                                      aria-label="Move item down"
+                                      disabled={
+                                        index === items.length - 1 ||
+                                        !!movingId ||
+                                        deleting ||
+                                        saving
+                                      }
+                                      onClick={() =>
+                                        void handleMove(index, "down")
+                                      }
+                                    >
+                                      <ArrowDown className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                )}
+
+                                {canDeleteChecklist && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    title="Delete item"
+                                    aria-label="Delete checklist item"
+                                    className="cursor-pointer text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                    disabled={
+                                      !!movingId || deleting || saving
+                                    }
+                                    onClick={() => setDeleteItem(item)}
+                                  >
+                                    {deleting && deleteItem?.id === item.id ? (
+                                      <RefreshCw className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </TabsContent>
@@ -986,339 +1204,355 @@ export default function OnboardingChecklistSettings() {
         </Tabs>
       )}
 
-      {/* Delete confirmation */}
-      <AlertDialog
-        open={!!deleteItem}
-        onOpenChange={(open) => {
-          if (!open && !deleting) {
-            setDeleteItem(null);
-          }
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Delete Checklist Item?
-            </AlertDialogTitle>
+      {/* Delete Confirmation */}
 
-            <AlertDialogDescription>
-              Are you sure you want to delete{" "}
-              <strong>{deleteItem?.title}</strong> from the{" "}
-              {STAGES.find((stage) => stage.value === deleteItem?.stage)
-                ?.label ?? "selected"}{" "}
-              template? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
+      {canDeleteChecklist && (
+        <AlertDialog
+          open={!!deleteItem}
+          onOpenChange={(open) => {
+            if (!open && !deleting) {
+              setDeleteItem(null);
+            }
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Delete Checklist Item?
+              </AlertDialogTitle>
 
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>
-              Cancel
-            </AlertDialogCancel>
+              <AlertDialogDescription>
+                Are you sure you want to delete{" "}
+                <strong>{deleteItem?.title}</strong> from the{" "}
+                {deleteItem
+                  ? getStageLabel(deleteItem.stage)
+                  : "selected"}{" "}
+                template? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
 
-            <AlertDialogAction
-              disabled={deleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(event) => {
-                event.preventDefault();
-                void handleDelete();
-              }}
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>
+                Cancel
+              </AlertDialogCancel>
+
+              <AlertDialogAction
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={(event) => {
+                  event.preventDefault();
+                  void handleDelete();
+                }}
+              >
+                {deleting ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </>
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Add / Edit Dialog */}
+
+      {(canCreateChecklist || canEditChecklist) && (
+        <Dialog
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            if (open) {
+              setDialogOpen(true);
+            } else {
+              closeDialog();
+            }
+          }}
+        >
+          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+            <form
+              onSubmit={handleSave}
+              className="space-y-5"
+              noValidate
             >
-              {deleting ? (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
-                </>
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              <DialogHeader>
+                <DialogTitle>
+                  {editingItem
+                    ? "Edit Checklist Item"
+                    : "Add Checklist Item"}
+                </DialogTitle>
 
-      {/* Add / Edit dialog */}
-      <Dialog
-        open={dialogOpen}
-        onOpenChange={(open) => {
-          if (open) {
-            setDialogOpen(true);
-          } else {
-            closeDialog();
-          }
-        }}
-      >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-          <form
-            onSubmit={handleSave}
-            className="space-y-5"
-            noValidate
-          >
-            <DialogHeader>
-              <DialogTitle>
-                {editingItem
-                  ? "Edit Checklist Item"
-                  : "Add Checklist Item"}
-              </DialogTitle>
+                <DialogDescription>
+                  {editingItem
+                    ? "Update the checklist requirement and document settings."
+                    : `Create a default checklist item for the ${getStageLabel(activeStage)} stage.`}
+                </DialogDescription>
+              </DialogHeader>
 
-              <DialogDescription>
-                {editingItem
-                  ? "Update the checklist requirement and document settings."
-                  : `Create a default checklist item for the ${STAGES.find((stage) => stage.value === activeStage)
-                    ?.label
-                  } stage.`}
-              </DialogDescription>
-            </DialogHeader>
+              {/* Stage */}
 
-            {!editingItem && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Onboarding Stage
-                </label>
-
-                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
-                  {STAGES.find((stage) => stage.value === activeStage)?.label}
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label
-                htmlFor="checklist-title"
-                className="text-sm font-medium"
-              >
-                Checklist Title{" "}
-                <span className="text-destructive">*</span>
-              </label>
-
-              <Input
-                id="checklist-title"
-                value={form.title}
-                onChange={(event) =>
-                  updateForm("title", event.target.value)
-                }
-                placeholder="e.g. Aadhaar Card"
-                maxLength={150}
-                aria-invalid={!!errors.title}
-                aria-describedby={
-                  errors.title ? "checklist-title-error" : undefined
-                }
-                autoFocus
-              />
-
-              {errors.title && (
-                <p
-                  id="checklist-title-error"
-                  className="text-sm text-destructive"
-                >
-                  {errors.title}
-                </p>
-              )}
-
-              <p className="text-right text-xs text-muted-foreground">
-                {form.title.length}/150
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <label
-                htmlFor="checklist-description"
-                className="text-sm font-medium"
-              >
-                Description
-              </label>
-
-              <Textarea
-                id="checklist-description"
-                value={form.description}
-                onChange={(event) =>
-                  updateForm("description", event.target.value)
-                }
-                placeholder="Explain what the employee needs to do..."
-                rows={3}
-                maxLength={1000}
-                aria-invalid={!!errors.description}
-                aria-describedby={
-                  errors.description
-                    ? "checklist-description-error"
-                    : undefined
-                }
-              />
-
-              {errors.description && (
-                <p
-                  id="checklist-description-error"
-                  className="text-sm text-destructive"
-                >
-                  {errors.description}
-                </p>
-              )}
-
-              <p className="text-right text-xs text-muted-foreground">
-                {form.description.length}/1000
-              </p>
-            </div>
-
-            <div className="space-y-4 rounded-lg border p-4">
-              <label className="flex cursor-pointer items-start gap-3">
-                <Checkbox
-                  checked={form.isRequired}
-                  onCheckedChange={(checked) =>
-                    updateForm("isRequired", checked === true)
-                  }
-                />
-
-                <span className="space-y-1">
-                  <span className="block text-sm font-medium">
-                    Required item
-                  </span>
-
-                  <span className="block text-xs text-muted-foreground">
-                    This item must be completed before onboarding can be
-                    finalized.
-                  </span>
-                </span>
-              </label>
-
-              <div className="border-t" />
-
-              <label className="flex cursor-pointer items-start gap-3">
-                <Checkbox
-                  checked={form.requiresDocument}
-                  onCheckedChange={(checked) =>
-                    updateForm("requiresDocument", checked === true)
-                  }
-                />
-
-                <span className="space-y-1">
-                  <span className="block text-sm font-medium">
-                    Requires document
-                  </span>
-
-                  <span className="block text-xs text-muted-foreground">
-                    The employee must provide document information for this
-                    item.
-                  </span>
-                </span>
-              </label>
-            </div>
-
-            {form.requiresDocument && (
-              <div className="space-y-3 rounded-lg border p-4">
-                <div className="space-y-1">
+              {!editingItem && (
+                <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    Document Input Type
+                    Onboarding Stage
                   </label>
 
-                  <p className="text-xs text-muted-foreground">
-                    Select how the employee will provide the document.
-                  </p>
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                    {getStageLabel(activeStage)}
+                  </div>
                 </div>
+              )}
 
-                <Select
-                  value={form.documentInputType}
-                  onValueChange={(value) => {
-                    if (
-                      DOCUMENT_TYPES.some(
-                        (option) => option.value === value
-                      )
-                    ) {
-                      updateForm(
-                        "documentInputType",
-                        value as DocumentInputType
-                      );
-                    }
-                  }}
+              {/* Title */}
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="checklist-title"
+                  className="text-sm font-medium"
                 >
-                  <SelectTrigger
-                    aria-invalid={!!errors.documentInputType}
+                  Checklist Title{" "}
+                  <span className="text-destructive">*</span>
+                </label>
+
+                <Input
+                  id="checklist-title"
+                  value={form.title}
+                  onChange={(event) =>
+                    updateForm("title", event.target.value)
+                  }
+                  placeholder="e.g. Aadhaar Card"
+                  maxLength={150}
+                  aria-invalid={!!errors.title}
+                  aria-describedby={
+                    errors.title ? "checklist-title-error" : undefined
+                  }
+                  autoFocus
+                />
+
+                {errors.title && (
+                  <p
+                    id="checklist-title-error"
+                    className="text-sm text-destructive"
                   >
-                    <SelectValue placeholder="Select document type" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    {DOCUMENT_TYPES.map((option) => (
-                      <SelectItem
-                        key={option.value}
-                        value={option.value}
-                      >
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {errors.documentInputType && (
-                  <p className="text-sm text-destructive">
-                    {errors.documentInputType}
+                    {errors.title}
                   </p>
                 )}
 
-                <div className="rounded-md bg-muted/50 p-3">
-                  {form.documentInputType === "FILE_UPLOAD" ? (
-                    <div className="flex items-start gap-2">
-                      <Upload className="mt-0.5 h-4 w-4 shrink-0" />
-
-                      <p className="text-xs text-muted-foreground">
-                        Employee will upload a document file.
-                      </p>
-                    </div>
-                  ) : form.documentInputType === "DOCUMENT_NUMBER" ? (
-                    <div className="flex items-start gap-2">
-                      <Hash className="mt-0.5 h-4 w-4 shrink-0" />
-
-                      <p className="text-xs text-muted-foreground">
-                        Employee will enter the document number.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="flex items-start gap-2">
-                      <FileText className="mt-0.5 h-4 w-4 shrink-0" />
-
-                      <p className="text-xs text-muted-foreground">
-                        Employee can upload a file or enter a document
-                        number.
-                      </p>
-                    </div>
-                  )}
-                </div>
+                <p className="text-right text-xs text-muted-foreground">
+                  {form.title.length}/150
+                </p>
               </div>
-            )}
 
-            <DialogFooter className="gap-2 sm:gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="cursor-pointer"
-                onClick={closeDialog}
-                disabled={saving}
-              >
-                <X className="mr-2 h-4 w-4" />
-                Cancel
-              </Button>
+              {/* Description */}
 
-              <Button
-                type="submit"
-                variant="add"
-                className="cursor-pointer"
-                disabled={saving || !companyId}
-              >
-                {saving && (
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+              <div className="space-y-2">
+                <label
+                  htmlFor="checklist-description"
+                  className="text-sm font-medium"
+                >
+                  Description
+                </label>
+
+                <Textarea
+                  id="checklist-description"
+                  value={form.description}
+                  onChange={(event) =>
+                    updateForm("description", event.target.value)
+                  }
+                  placeholder="Explain what the employee needs to do..."
+                  rows={3}
+                  maxLength={1000}
+                  aria-invalid={!!errors.description}
+                  aria-describedby={
+                    errors.description
+                      ? "checklist-description-error"
+                      : undefined
+                  }
+                />
+
+                {errors.description && (
+                  <p
+                    id="checklist-description-error"
+                    className="text-sm text-destructive"
+                  >
+                    {errors.description}
+                  </p>
                 )}
 
-                {saving
-                  ? "Saving..."
-                  : editingItem
-                    ? "Save Changes"
-                    : "Create Item"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+                <p className="text-right text-xs text-muted-foreground">
+                  {form.description.length}/1000
+                </p>
+              </div>
+
+              {/* Required / Document Options */}
+
+              <div className="space-y-4 rounded-lg border p-4">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <Checkbox
+                    checked={form.isRequired}
+                    onCheckedChange={(checked) =>
+                      updateForm("isRequired", checked === true)
+                    }
+                  />
+
+                  <span className="space-y-1">
+                    <span className="block text-sm font-medium">
+                      Required item
+                    </span>
+
+                    <span className="block text-xs text-muted-foreground">
+                      This item must be completed before onboarding can be
+                      finalized.
+                    </span>
+                  </span>
+                </label>
+
+                <div className="border-t" />
+
+                <label className="flex cursor-pointer items-start gap-3">
+                  <Checkbox
+                    checked={form.requiresDocument}
+                    onCheckedChange={(checked) =>
+                      updateForm("requiresDocument", checked === true)
+                    }
+                  />
+
+                  <span className="space-y-1">
+                    <span className="block text-sm font-medium">
+                      Requires document
+                    </span>
+
+                    <span className="block text-xs text-muted-foreground">
+                      The employee must provide document information for this
+                      item.
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              {/* Document Input Type */}
+
+              {form.requiresDocument && (
+                <div className="space-y-3 rounded-lg border p-4">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">
+                      Document Input Type
+                    </label>
+
+                    <p className="text-xs text-muted-foreground">
+                      Select how the employee will provide the document.
+                    </p>
+                  </div>
+
+                  <Select
+                    value={form.documentInputType}
+                    onValueChange={(value) => {
+                      const selectedType = DOCUMENT_TYPES.find(
+                        (option) => option.value === value
+                      );
+
+                      if (selectedType) {
+                        updateForm(
+                          "documentInputType",
+                          selectedType.value
+                        );
+                      }
+                    }}
+                  >
+                    <SelectTrigger
+                      aria-invalid={!!errors.documentInputType}
+                    >
+                      <SelectValue placeholder="Select document type" />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                      {DOCUMENT_TYPES.map((option) => (
+                        <SelectItem
+                          key={option.value}
+                          value={option.value}
+                        >
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {errors.documentInputType && (
+                    <p className="text-sm text-destructive">
+                      {errors.documentInputType}
+                    </p>
+                  )}
+
+                  {/* Document Type Description */}
+
+                  {(() => {
+                    const selectedType = getDocumentType(
+                      form.documentInputType
+                    );
+
+                    if (!selectedType) return null;
+
+                    const Icon = selectedType.icon;
+
+                    return (
+                      <div className="flex items-start gap-2 rounded-md bg-muted/50 p-3">
+                        <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+
+                        <p className="text-xs text-muted-foreground">
+                          {selectedType.description}
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Dialog Actions */}
+
+              <DialogFooter className="gap-2 sm:gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="cursor-pointer"
+                  onClick={closeDialog}
+                  disabled={saving}
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Cancel
+                </Button>
+
+                <Button
+                  type="submit"
+                  variant="add"
+                  className="cursor-pointer"
+                  disabled={
+                    saving ||
+                    !companyId ||
+                    (editingItem
+                      ? !canEditChecklist
+                      : !canCreateChecklist)
+                  }
+                >
+                  {saving && (
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+
+                  {saving
+                    ? "Saving..."
+                    : editingItem
+                      ? "Save Changes"
+                      : "Create Item"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

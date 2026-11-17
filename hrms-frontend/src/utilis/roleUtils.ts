@@ -1,29 +1,40 @@
+// ─────────────────────────────────────────────────────────────
+// 1. Interfaces & Types (Single Source of Truth)
+// ─────────────────────────────────────────────────────────────
 
-// ─────────────────────────────────────────────
-// Role Constants - Single Source of Truth
-// ─────────────────────────────────────────────
+export interface ModulePermission {
+    module: {
+        name: string;
+    };
+    canView: boolean;
+    canCreate: boolean;
+    canEdit: boolean;
+    canDelete: boolean;
+}
 
-export const ROLES = {
-    SUPER_ADMIN: "super_admin",
-    COMPANY_ADMIN: "company_admin",
-    EMPLOYEE: "employee",
-} as const;
+export interface RoleObject {
+    name?: string | null;
+    isGlobalAdmin?: boolean;
+    permissions?: ModulePermission[];
+}
 
+export interface UserObject {
+    name?: string | null;
+    role?: RoleObject | null;
+    companyId?: string | null;
+    [key: string]: any;
+}
 
-// ─────────────────────────────────────────────
-// Role Input Type
-// ─────────────────────────────────────────────
-
-type RoleInput =
+export type RoleInput =
     | string
-    | { name?: string | null }
-    | { role?: { name?: string | null } | null }
+    | RoleObject
+    | UserObject
+    | { role?: RoleObject | null }
     | null
     | undefined;
 
-
 // ─────────────────────────────────────────────
-// Normalize Role Name
+// Normalize Name / String Helper
 // ─────────────────────────────────────────────
 
 export const normalizeRole = (role?: string | null): string => {
@@ -36,99 +47,105 @@ export const normalizeRole = (role?: string | null): string => {
     );
 };
 
+// ─────────────────────────────────────────────
+// Get Role Object & Name Helpers
+// ─────────────────────────────────────────────
 
-// ─────────────────────────────────────────────
-// Get Role Name - Single Source of Truth
-// ─────────────────────────────────────────────
+export const getRoleObject = (input: RoleInput): RoleObject | null => {
+    if (!input) return null;
+    if (typeof input === "string") return { name: input };
+    if ("role" in input && input.role) return input.role;
+    if ("name" in input || "permissions" in input || "isGlobalAdmin" in input) {
+        return input as RoleObject;
+    }
+    return null;
+};
 
 export const getRoleName = (input: RoleInput): string => {
     if (typeof input === "string") {
         return normalizeRole(input);
     }
-
-    if (!input) {
-        return "";
-    }
-
-    if ("role" in input) {
-        return normalizeRole(input.role?.name);
-    }
-
-    if ("name" in input) {
-        return normalizeRole(input.name);
-    }
-
-    return "";
+    const roleObj = getRoleObject(input);
+    return normalizeRole(roleObj?.name);
 };
 
-
 // ─────────────────────────────────────────────
-// Role Comparisons
+// Dynamic Role Checks (Purely Based on Flags & Scope)
 // ─────────────────────────────────────────────
 
+// Global Super Admin check: Jo system level par hai (jiska companyId null/undefined hai ya isGlobalAdmin true hai)
 export const isSuperAdminRole = (input: RoleInput): boolean => {
-    return getRoleName(input) === ROLES.SUPER_ADMIN;
-};
+    if (!input) return false;
 
-export const isCompanyAdminRole = (input: RoleInput): boolean => {
-    return getRoleName(input) === ROLES.COMPANY_ADMIN;
-};
+    // 1. Agar input seedha string hai (jaise "super_admin")
+    if (typeof input === "string") {
+        const norm = normalizeRole(input);
+        return norm === "super_admin" || norm === "superadmin" || norm === "administrator";
+    }
 
-export const isAdminRole = (input: RoleInput): boolean => {
+    const roleObj = getRoleObject(input);
+
+    // 2. Agar explicit flag true hai
+    if (roleObj?.isGlobalAdmin) return true;
+
+    // 3. Agar companyId null, undefined, ya empty string hai aur role maujood hai
+    if ("companyId" in input && (input.companyId === null || input.companyId === undefined || input.companyId === "")) {
+        if (roleObj) return true;
+    }
+
+    // 4. Role name ke base par check karein (Database se aaye hue naam ke liye)
+    const roleName = getRoleName(input);
     return (
-        isSuperAdminRole(input) ||
-        isCompanyAdminRole(input)
+        roleName === "super_admin" ||
+        roleName === "superadmin" ||
+        roleName === "administrator"
     );
 };
 
-// Existing behavior preserved:
-// Every non-empty non-admin role is treated as employee category.
+// Company Admin check: Jo kisi company ke andar admin hai (jiske paas companyId hai aur roles ya company modules ki permissions hain)
+export const isCompanyAdminRole = (input: RoleInput): boolean => {
+    if (isSuperAdminRole(input)) return true;
+
+    // Hardcoded naam check karne ke bajaye, permissions ke base par company management check kar lo
+    return (
+        getUserModulePermission(input, "roles", "canView") ||
+        getUserModulePermission(input, "company", "canView")
+    );
+};
+
+export const isAdminRole = (input: RoleInput): boolean => {
+    return isSuperAdminRole(input) || isCompanyAdminRole(input);
+};
 
 export const isEmployeeRole = (input: RoleInput): boolean => {
-    const roleName = getRoleName(input);
-
-    return !!roleName && !isAdminRole(roleName);
+    return !isAdminRole(input);
 };
+
+// ─────────────────────────────────────────────
+// Formatting & User Info Helpers (Purely Dynamic)
+// ─────────────────────────────────────────────
 
 export const formatRole = (
     input: RoleInput,
     fallback = "—"
 ): string => {
-    const roleName = getRoleName(input);
+    const roleObj = getRoleObject(input);
+    const rawName = roleObj?.name?.trim();
 
-    if (!roleName) return fallback;
+    if (!rawName) return fallback;
 
-    switch (normalizeRole(roleName)) {
-        case "superadmin":
-        case ROLES.SUPER_ADMIN:
-            return "Super Admin";
-
-        case "admin":
-        case "companyadmin":
-        case ROLES.COMPANY_ADMIN:
-            return "Admin";
-
-        case ROLES.EMPLOYEE:
-            return "Employee";
-
-        default:
-            return roleName
-                .split("_")
-                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                .join(" ");
-    }
+    // Database se jo bhi naam aaye (jaise "Admin", "HR Manager", "Custom Role"),
+    // use automatically clean karke Capitalize kar dega bina kisi switch case ke.
+    return rawName
+        .replace(/_/g, " ")
+        .split(" ")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(" ");
 };
 
 export const getRoleRawName = (input: RoleInput): string => {
-    if (typeof input === "string") return input.trim();
-
-    if (!input) return "";
-
-    if ("role" in input) return input.role?.name?.trim() ?? "";
-
-    if ("name" in input) return input.name?.trim() ?? "";
-
-    return "";
+    const roleObj = getRoleObject(input);
+    return roleObj?.name?.trim() ?? "";
 };
 
 export const getUserName = (
@@ -148,23 +165,65 @@ export const getUserRole = (
     return normalizeRole(user?.role?.name);
 };
 
+// ─────────────────────────────────────────────────────────────
+// Universal Dynamic Module Permission Check
+// ─────────────────────────────────────────────────────────────
+
 export const getUserModulePermission = (
-    user: {
-        role?: {
-            permissions?: {
-                module: {
-                    name: string;
-                };
-                canView: boolean;
-                canCreate: boolean;
-                canEdit: boolean;
-                canDelete: boolean;
-            }[];
-        } | null;
-    } | null | undefined,
-    moduleName: string
-) => {
-    return user?.role?.permissions?.find(
-        (permission) => permission.module.name === moduleName
+    user: RoleInput,
+    moduleName: string,
+    action: "canView" | "canCreate" | "canEdit" | "canDelete" = "canView"
+): boolean => {
+    // 1. Agar user Super Admin hai, toh sab kuch allow karo
+    if (isSuperAdminRole(user)) {
+        return true;
+    }
+
+    const roleObj = getRoleObject(user);
+    const permissions = roleObj?.permissions;
+
+    if (!permissions || !Array.isArray(permissions)) {
+        return false;
+    }
+
+    // 2. Database ke module name ke sath dynamic match karein (Case-insensitive)
+    const targetModule = moduleName.trim().toLowerCase();
+    const modulePermission = permissions.find(
+        (permission) => permission?.module?.name?.trim().toLowerCase() === targetModule
+    );
+
+    if (!modulePermission) {
+        return false;
+    }
+
+    // 3. Action boolean return karein
+    return Boolean(modulePermission[action]);
+};
+
+// ============================================
+// Universal Page / Module Permission Helpers
+// ============================================
+
+export const canViewModule = (user: RoleInput, moduleName: string): boolean => {
+    return getUserModulePermission(user, moduleName, "canView");
+};
+
+export const canCreateInModule = (user: RoleInput, moduleName: string): boolean => {
+    return getUserModulePermission(user, moduleName, "canCreate");
+};
+
+export const canEditInModule = (user: RoleInput, moduleName: string): boolean => {
+    return getUserModulePermission(user, moduleName, "canEdit");
+};
+
+export const canDeleteInModule = (user: RoleInput, moduleName: string): boolean => {
+    return getUserModulePermission(user, moduleName, "canDelete");
+};
+
+export const canModifyModule = (user: RoleInput, moduleName: string): boolean => {
+    return (
+        getUserModulePermission(user, moduleName, "canCreate") ||
+        getUserModulePermission(user, moduleName, "canEdit") ||
+        getUserModulePermission(user, moduleName, "canDelete")
     );
 };

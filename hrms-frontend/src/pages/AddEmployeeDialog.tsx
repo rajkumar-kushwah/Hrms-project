@@ -19,6 +19,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+
 import type {
     CreateEmployeePayload,
     Employee,
@@ -27,20 +28,62 @@ import type {
 import type { Branch } from "@/types/branch.types";
 import type { Category } from "@/types/category.types";
 import type { Role } from "@/types/role.types";
+
 import { createEmployee, updateEmployee } from "@/services/employee.service";
 import { getBranches } from "@/services/branch.service";
 import { getCategories } from "@/services/category.service";
 import { getRoles } from "@/services/role.service";
-import { useAuthStore } from "@/store/auth.store";
-import { employeeSchema, updateEmployeeSchema } from "@/validation/employee.validation";
-import { isAdminRole, isSuperAdminRole, getUserRole, formatRole } from "@/utilis/roleUtils";
-import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
-import "react-phone-number-input/style.css";
-import { CheckCircle2, XCircle } from "lucide-react";
 import { startOnboarding } from "@/services/onboarding.service";
 
+import { useAuthStore } from "@/store/auth.store";
 
-const fieldTabMap: Record<string, string> = {
+import {
+    employeeSchema,
+    updateEmployeeSchema,
+} from "@/validation/employee.validation";
+
+import {
+    isSuperAdminRole,
+    canViewModule,
+    canCreateInModule,
+    canEditInModule,
+} from "@/utilis/roleUtils";
+
+import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
+import "react-phone-number-input/style.css";
+
+import { CheckCircle2, XCircle } from "lucide-react";
+
+// --------------------------------------------------
+// Constants & Configurations
+// --------------------------------------------------
+
+const EMPLOYEE_TABS = [
+    { value: "basic", label: "Basic" },
+    { value: "personal", label: "Personal" },
+    { value: "employment", label: "Employment" },
+    { value: "bank", label: "Bank & ID" },
+];
+
+const GENDER_OPTIONS = ["Male", "Female", "Other"];
+
+const BLOOD_GROUP_OPTIONS = [
+    "A+", "A-", "B+", "B-",
+    "AB+", "AB-", "O+", "O-",
+];
+
+const MARITAL_STATUS_OPTIONS = ["Single", "Married"];
+
+const EMPLOYMENT_TYPE_OPTIONS = [
+    "Full Time",
+    "Part Time",
+    "Contract",
+    "Intern",
+];
+
+const WORK_SHIFT_OPTIONS = ["Morning", "Evening", "Night"];
+
+const FIELD_TAB_MAP: Record<string, string> = {
     name: "basic",
     email: "basic",
     password: "basic",
@@ -48,6 +91,7 @@ const fieldTabMap: Record<string, string> = {
     branchId: "basic",
     categoryId: "basic",
     phone: "basic",
+
     dateOfBirth: "personal",
     gender: "personal",
     bloodGroup: "personal",
@@ -56,11 +100,13 @@ const fieldTabMap: Record<string, string> = {
     permanentAddress: "personal",
     emergencyContactName: "personal",
     emergencyContactPhone: "personal",
+
     designation: "employment",
     joiningDate: "employment",
     employmentType: "employment",
     workShift: "employment",
     reportingManagerId: "employment",
+
     panNumber: "bank",
     aadharNumber: "bank",
     bankName: "bank",
@@ -71,15 +117,7 @@ const fieldTabMap: Record<string, string> = {
     grossSalary: "bank",
 };
 
-interface Props {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    onSuccess: (employee: Employee) => void;
-    editEmployee?: EmployeeDetail | null;
-    selectedCompanyId?: string;
-}
-
-const initialForm: CreateEmployeePayload = {
+const INITIAL_FORM: CreateEmployeePayload = {
     name: "",
     email: "",
     password: "",
@@ -110,6 +148,22 @@ const initialForm: CreateEmployeePayload = {
     emergencyContactPhone: "",
 };
 
+// --------------------------------------------------
+// Types
+// --------------------------------------------------
+
+interface Props {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSuccess: (employee: Employee) => void;
+    editEmployee?: EmployeeDetail | null;
+    selectedCompanyId?: string;
+}
+
+// --------------------------------------------------
+// Component
+// --------------------------------------------------
+
 const AddEmployeeDialog = ({
     open,
     onOpenChange,
@@ -118,47 +172,88 @@ const AddEmployeeDialog = ({
     selectedCompanyId,
 }: Props) => {
     const { user } = useAuthStore();
-    const userRole = getUserRole(user);
-    const isSuperAdmin = isSuperAdminRole(userRole);
-    const isCompanyAdmin = isAdminRole(userRole);
+
+    // Role identification
+    const isSuperAdmin = isSuperAdminRole(user);
+
+    // Employee permissions
+    const canViewEmployee = canViewModule(user, "employee");
+    const canCreateEmployee = canCreateInModule(user, "employee");
+    const canEditEmployee = canEditInModule(user, "employee");
+
+    // Onboarding permission
+    const canCreateOnboarding = canCreateInModule(user, "onboarding");
+
     const isEditMode = Boolean(editEmployee);
 
-    // Edit mode: employee ki apni company ko priority do.
-    // Add mode: parent se aayi selected company use karo.
+    const canAccessEmployeeDialog =
+        canViewEmployee &&
+        (isEditMode ? canEditEmployee : canCreateEmployee);
+
+    // Company selection
     const companyId = (
         editEmployee?.company?.id || selectedCompanyId || ""
     ).trim();
 
+    // --------------------------------------------------
+    // States
+    // --------------------------------------------------
+
     const [form, setForm] =
-        React.useState<CreateEmployeePayload>(initialForm);
+        React.useState<CreateEmployeePayload>(INITIAL_FORM);
+
     const [branches, setBranches] = React.useState<Branch[]>([]);
     const [categories, setCategories] = React.useState<Category[]>([]);
     const [roles, setRoles] = React.useState<Role[]>([]);
+
     const [activeTab, setActiveTab] = React.useState("basic");
+
     const [errors, setErrors] = React.useState<
         Partial<Record<keyof CreateEmployeePayload, string>>
     >({});
+
     const [isPhoneValid, setIsPhoneValid] = React.useState(false);
+
     const [isEmergencyPhoneValid, setIsEmergencyPhoneValid] =
         React.useState(false);
+
     const [onboardingConfirmOpen, setOnboardingConfirmOpen] =
         React.useState(false);
+
     const [startOnboardingOpen, setStartOnboardingOpen] =
         React.useState(false);
+
     const [createdEmployee, setCreatedEmployee] =
         React.useState<Employee | null>(null);
+
     const [targetDate, setTargetDate] = React.useState("");
     const [onboardingNotes, setOnboardingNotes] = React.useState("");
 
-    const filteredRoles = isCompanyAdmin
-        ? roles.filter((role) => !role.isSystemRole)
-        : roles;
+    // --------------------------------------------------
+    // Derived Data
+    // --------------------------------------------------
+
+    // System roles are only assignable by Super Admin
+    const filteredRoles = React.useMemo(
+        () =>
+            isSuperAdmin
+                ? roles
+                : roles.filter((role) => !role.isSystemRole),
+        [roles, isSuperAdmin]
+    );
+
+    // --------------------------------------------------
+    // Load Dropdown Data
+    // --------------------------------------------------
 
     const loadDropdownData = React.useCallback(async () => {
+        if (!canAccessEmployeeDialog) return;
+
         if (isSuperAdmin && !companyId) {
             setBranches([]);
             setCategories([]);
             setRoles([]);
+
             toast.error("Please select a company.");
             return;
         }
@@ -174,7 +269,6 @@ const AddEmployeeDialog = ({
             const categoryData = categoryRes.data.data as Category[];
             const roleData = roleRes.data.data as Role[];
 
-            // Active records + current employee ki existing assignment.
             const currentBranchId = editEmployee?.branch?.id;
             const currentCategoryId = editEmployee?.category?.id;
 
@@ -196,6 +290,7 @@ const AddEmployeeDialog = ({
             setRoles(roleData);
         } catch (error: unknown) {
             console.error("Failed to load employee dropdowns:", error);
+
             toast.error(
                 error instanceof Error
                     ? error.message
@@ -203,22 +298,26 @@ const AddEmployeeDialog = ({
             );
         }
     }, [
+        canAccessEmployeeDialog,
         isSuperAdmin,
         companyId,
         editEmployee?.branch?.id,
         editEmployee?.category?.id,
     ]);
 
+    // --------------------------------------------------
+    // Initialize Form
+    // --------------------------------------------------
+
     React.useEffect(() => {
-        if (!open) return;
+        if (!open || !canAccessEmployeeDialog) return;
 
         setErrors({});
         setActiveTab("basic");
 
         if (editEmployee) {
-
             setForm({
-                ...initialForm,
+                ...INITIAL_FORM,
                 ...editEmployee,
                 password: "",
                 roleId: Number(editEmployee.role?.id ?? 0),
@@ -244,8 +343,10 @@ const AddEmployeeDialog = ({
                 bankName: editEmployee.bankName ?? "",
                 pfNumber: editEmployee.pfNumber ?? "",
                 esiNumber: editEmployee.esiNumber ?? "",
-                emergencyContactName: editEmployee.emergencyContactName ?? "",
-                emergencyContactPhone: editEmployee.emergencyContactPhone ?? "",
+                emergencyContactName:
+                    editEmployee.emergencyContactName ?? "",
+                emergencyContactPhone:
+                    editEmployee.emergencyContactPhone ?? "",
             });
 
             setIsPhoneValid(
@@ -254,6 +355,7 @@ const AddEmployeeDialog = ({
                     isValidPhoneNumber(editEmployee.phone)
                 )
             );
+
             setIsEmergencyPhoneValid(
                 Boolean(
                     editEmployee.emergencyContactPhone &&
@@ -261,16 +363,47 @@ const AddEmployeeDialog = ({
                 )
             );
         } else {
-            setForm(initialForm);
+            setForm(INITIAL_FORM);
             setIsPhoneValid(false);
             setIsEmergencyPhoneValid(false);
         }
 
         void loadDropdownData();
-    }, [open, editEmployee, companyId, loadDropdownData]);
+    }, [
+        open,
+        canAccessEmployeeDialog,
+        editEmployee,
+        loadDropdownData,
+    ]);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
+    // --------------------------------------------------
+    // Form Handlers
+    // --------------------------------------------------
+
+    const validateField = (
+        name: keyof CreateEmployeePayload,
+        value: unknown
+    ) => {
+        const schema =
+            employeeSchema.shape[
+                name as keyof typeof employeeSchema.shape
+            ];
+
+        if (!schema) return;
+
+        const result = schema.safeParse(value);
+
+        setErrors((previous) => ({
+            ...previous,
+            [name]: result.success
+                ? undefined
+                : result.error.issues[0]?.message,
+        }));
+    };
+
+    const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = event.target;
+
         const parsedValue =
             name === "grossSalary"
                 ? value === ""
@@ -283,20 +416,10 @@ const AddEmployeeDialog = ({
             [name]: parsedValue,
         }));
 
-        const schema =
-            employeeSchema.shape[
-            name as keyof typeof employeeSchema.shape
-            ];
-
-        if (schema) {
-            const result = schema.safeParse(parsedValue);
-            setErrors((previous) => ({
-                ...previous,
-                [name]: result.success
-                    ? undefined
-                    : result.error.issues[0]?.message,
-            }));
-        }
+        validateField(
+            name as keyof CreateEmployeePayload,
+            parsedValue
+        );
     };
 
     const handleSelectChange = (
@@ -308,23 +431,26 @@ const AddEmployeeDialog = ({
             [name]: value,
         }));
 
-        const schema =
-            employeeSchema.shape[
-            name as keyof typeof employeeSchema.shape
-            ];
-
-        if (schema) {
-            const result = schema.safeParse(value);
-            setErrors((previous) => ({
-                ...previous,
-                [name]: result.success
-                    ? undefined
-                    : result.error.issues[0]?.message,
-            }));
-        }
+        validateField(name, value);
     };
 
+    // --------------------------------------------------
+    // Submit Employee
+    // --------------------------------------------------
+
     const handleSubmit = async () => {
+        if (isEditMode && !canEditEmployee) {
+            toast.error("You don't have permission to edit employees.");
+            return;
+        }
+
+        if (!isEditMode && !canCreateEmployee) {
+            toast.error("You don't have permission to create employees.");
+            return;
+        }
+
+        if (!canViewEmployee) return;
+
         if (isSuperAdmin && !companyId) {
             toast.error("Please select a company.");
             return;
@@ -342,7 +468,9 @@ const AddEmployeeDialog = ({
             > = {};
 
             result.error.issues.forEach((issue) => {
-                const field = issue.path[0] as keyof CreateEmployeePayload;
+                const field =
+                    issue.path[0] as keyof CreateEmployeePayload;
+
                 if (!newErrors[field]) {
                     newErrors[field] = issue.message;
                 }
@@ -351,9 +479,11 @@ const AddEmployeeDialog = ({
             setErrors(newErrors);
 
             const firstErrorField = Object.keys(newErrors)[0];
+
             if (firstErrorField) {
-                setActiveTab(fieldTabMap[firstErrorField] ?? "basic");
+                setActiveTab(FIELD_TAB_MAP[firstErrorField] ?? "basic");
             }
+
             return;
         }
 
@@ -389,7 +519,8 @@ const AddEmployeeDialog = ({
                     joiningDate: form.joiningDate,
                     employmentType: form.employmentType,
                     workShift: form.workShift,
-                    reportingManagerId: form.reportingManagerId || undefined,
+                    reportingManagerId:
+                        form.reportingManagerId || undefined,
                     panNumber: form.panNumber,
                     aadharNumber: form.aadharNumber,
                     bankAccountNumber: form.bankAccountNumber,
@@ -408,19 +539,34 @@ const AddEmployeeDialog = ({
                 );
 
                 toast.success("Employee updated successfully!");
+
                 onSuccess(response.data.data);
                 onOpenChange(false);
-                setForm(initialForm);
+
+                setForm(INITIAL_FORM);
                 setErrors({});
                 setActiveTab("basic");
             } else {
-                const response = await createEmployee(form, isSuperAdmin ? companyId : undefined);
+                const response = await createEmployee(
+                    form,
+                    isSuperAdmin ? companyId : undefined
+                );
+
                 const newEmployee = response.data.data as Employee;
 
                 toast.success("Employee created successfully!");
+
                 setCreatedEmployee(newEmployee);
                 onSuccess(newEmployee);
-                setOnboardingConfirmOpen(true);
+
+                if (canCreateOnboarding) {
+                    setOnboardingConfirmOpen(true);
+                } else {
+                    onOpenChange(false);
+                    setForm(INITIAL_FORM);
+                    setErrors({});
+                    setActiveTab("basic");
+                }
             }
         } catch (error: unknown) {
             const responseMessage = (
@@ -438,7 +584,16 @@ const AddEmployeeDialog = ({
         }
     };
 
+    // --------------------------------------------------
+    // Start Onboarding
+    // --------------------------------------------------
+
     const handleStartOnboarding = async () => {
+        if (!canCreateOnboarding) {
+            toast.error("You don't have permission to start onboarding.");
+            return;
+        }
+
         if (!createdEmployee) {
             toast.error("Employee details not found.");
             return;
@@ -460,6 +615,7 @@ const AddEmployeeDialog = ({
             );
 
             toast.success("Onboarding started successfully!");
+
             setStartOnboardingOpen(false);
             setCreatedEmployee(null);
             setTargetDate("");
@@ -480,14 +636,28 @@ const AddEmployeeDialog = ({
         }
     };
 
+    // --------------------------------------------------
+    // Permission Check
+    // --------------------------------------------------
+
+    if (!canAccessEmployeeDialog) {
+        return null;
+    }
+
+    // --------------------------------------------------
+    // Render
+    // --------------------------------------------------
+
     return (
         <div>
+            {/* Employee Dialog */}
             <Dialog open={open} onOpenChange={onOpenChange}>
                 <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>
                             {isEditMode ? "Edit Employee" : "Add Employee"}
                         </DialogTitle>
+
                         <DialogDescription>
                             Fill employee details across all tabs
                         </DialogDescription>
@@ -495,13 +665,21 @@ const AddEmployeeDialog = ({
 
                     <Tabs value={activeTab} onValueChange={setActiveTab}>
                         <TabsList className="grid grid-cols-4 w-full">
-                            <TabsTrigger value="basic">Basic</TabsTrigger>
-                            <TabsTrigger value="personal">Personal</TabsTrigger>
-                            <TabsTrigger value="employment">Employment</TabsTrigger>
-                            <TabsTrigger value="bank">Bank & ID</TabsTrigger>
+                            {EMPLOYEE_TABS.map((tab) => (
+                                <TabsTrigger
+                                    key={tab.value}
+                                    value={tab.value}
+                                >
+                                    {tab.label}
+                                </TabsTrigger>
+                            ))}
                         </TabsList>
 
-                        <TabsContent value="basic" className="flex flex-col gap-3 mt-4">
+                        {/* BASIC TAB */}
+                        <TabsContent
+                            value="basic"
+                            className="flex flex-col gap-3 mt-4"
+                        >
                             <div>
                                 <Label>Name *</Label>
                                 <Input
@@ -511,7 +689,9 @@ const AddEmployeeDialog = ({
                                     onChange={handleChange}
                                 />
                                 {errors.name && (
-                                    <p className="mt-1 text-sm text-red-500">{errors.name}</p>
+                                    <p className="mt-1 text-sm text-red-500">
+                                        {errors.name}
+                                    </p>
                                 )}
                             </div>
 
@@ -526,9 +706,12 @@ const AddEmployeeDialog = ({
                                         onChange={handleChange}
                                     />
                                     {errors.email && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.email}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.email}
+                                        </p>
                                     )}
                                 </div>
+
                                 <div className="flex-1">
                                     {!isEditMode && (
                                         <>
@@ -542,8 +725,11 @@ const AddEmployeeDialog = ({
                                             />
                                         </>
                                     )}
+
                                     {errors.password && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.password}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.password}
+                                        </p>
                                     )}
                                 </div>
                             </div>
@@ -553,22 +739,32 @@ const AddEmployeeDialog = ({
                                 <Select
                                     value={form.roleId ? String(form.roleId) : ""}
                                     onValueChange={(value) =>
-                                        handleSelectChange("roleId", Number(value))
+                                        handleSelectChange(
+                                            "roleId",
+                                            Number(value)
+                                        )
                                     }
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select Role" />
                                     </SelectTrigger>
+
                                     <SelectContent position="popper" align="start">
                                         {filteredRoles.map((role) => (
-                                            <SelectItem key={role.id} value={String(role.id)}>
-                                                   {formatRole(role)}
+                                            <SelectItem
+                                                key={role.id}
+                                                value={String(role.id)}
+                                            >
+                                                {role.name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
+
                                 {errors.roleId && (
-                                    <p className="mt-1 text-sm text-red-500">{errors.roleId}</p>
+                                    <p className="mt-1 text-sm text-red-500">
+                                        {errors.roleId}
+                                    </p>
                                 )}
                             </div>
 
@@ -584,16 +780,23 @@ const AddEmployeeDialog = ({
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select Branch" />
                                         </SelectTrigger>
+
                                         <SelectContent position="popper" align="start">
                                             {branches.map((branch) => (
-                                                <SelectItem key={branch.id} value={branch.id}>
+                                                <SelectItem
+                                                    key={branch.id}
+                                                    value={branch.id}
+                                                >
                                                     {branch.name}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
+
                                     {errors.branchId && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.branchId}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.branchId}
+                                        </p>
                                     )}
                                 </div>
 
@@ -608,16 +811,23 @@ const AddEmployeeDialog = ({
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select Category" />
                                         </SelectTrigger>
+
                                         <SelectContent position="popper" align="start">
                                             {categories.map((category) => (
-                                                <SelectItem key={category.id} value={category.id}>
+                                                <SelectItem
+                                                    key={category.id}
+                                                    value={category.id}
+                                                >
                                                     {category.name}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
+
                                     {errors.categoryId && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.categoryId}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.categoryId}
+                                        </p>
                                     )}
                                 </div>
                             </div>
@@ -628,9 +838,14 @@ const AddEmployeeDialog = ({
                                     value={form.phone}
                                     onChange={(value) => {
                                         const phone = value || "";
+
                                         handleSelectChange("phone", phone);
+
                                         setIsPhoneValid(
-                                            Boolean(phone && isValidPhoneNumber(phone))
+                                            Boolean(
+                                                phone &&
+                                                isValidPhoneNumber(phone)
+                                            )
                                         );
                                     }}
                                     placeholder="Enter phone number"
@@ -646,12 +861,14 @@ const AddEmployeeDialog = ({
                                             "h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none placeholder:text-muted-foreground",
                                     }}
                                 />
+
                                 {errors.phone && (
                                     <p className="mt-1 flex items-center gap-2 text-sm text-red-500">
                                         <XCircle className="h-4 w-4" />
                                         {errors.phone}
                                     </p>
                                 )}
+
                                 {isPhoneValid && (
                                     <p className="mt-1 flex items-center gap-2 text-sm text-green-600">
                                         <CheckCircle2 className="h-4 w-4" />
@@ -661,7 +878,11 @@ const AddEmployeeDialog = ({
                             </div>
                         </TabsContent>
 
-                        <TabsContent value="personal" className="flex flex-col gap-3 mt-4">
+                        {/* PERSONAL TAB */}
+                        <TabsContent
+                            value="personal"
+                            className="flex flex-col gap-3 mt-4"
+                        >
                             <div className="flex gap-2">
                                 <div className="flex-1">
                                     <Label>Date of Birth</Label>
@@ -672,9 +893,12 @@ const AddEmployeeDialog = ({
                                         onChange={handleChange}
                                     />
                                     {errors.dateOfBirth && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.dateOfBirth}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.dateOfBirth}
+                                        </p>
                                     )}
                                 </div>
+
                                 <div className="flex-1">
                                     <Label>Gender</Label>
                                     <Select
@@ -683,11 +907,19 @@ const AddEmployeeDialog = ({
                                             handleSelectChange("gender", value)
                                         }
                                     >
-                                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select" />
+                                        </SelectTrigger>
+
                                         <SelectContent position="popper" align="start">
-                                            <SelectItem value="Male">Male</SelectItem>
-                                            <SelectItem value="Female">Female</SelectItem>
-                                            <SelectItem value="Other">Other</SelectItem>
+                                            {GENDER_OPTIONS.map((gender) => (
+                                                <SelectItem
+                                                    key={gender}
+                                                    value={gender}
+                                                >
+                                                    {gender}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -705,18 +937,23 @@ const AddEmployeeDialog = ({
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select Blood Group" />
                                         </SelectTrigger>
+
                                         <SelectContent position="popper" align="start">
-                                            {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(
-                                                (bloodGroup) => (
-                                                    <SelectItem key={bloodGroup} value={bloodGroup}>
-                                                        {bloodGroup}
-                                                    </SelectItem>
-                                                )
-                                            )}
+                                            {BLOOD_GROUP_OPTIONS.map((group) => (
+                                                <SelectItem
+                                                    key={group}
+                                                    value={group}
+                                                >
+                                                    {group}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
+
                                     {errors.bloodGroup && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.bloodGroup}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.bloodGroup}
+                                        </p>
                                     )}
                                 </div>
 
@@ -728,10 +965,19 @@ const AddEmployeeDialog = ({
                                             handleSelectChange("maritalStatus", value)
                                         }
                                     >
-                                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select" />
+                                        </SelectTrigger>
+
                                         <SelectContent position="popper" align="start">
-                                            <SelectItem value="Single">Single</SelectItem>
-                                            <SelectItem value="Married">Married</SelectItem>
+                                            {MARITAL_STATUS_OPTIONS.map((status) => (
+                                                <SelectItem
+                                                    key={status}
+                                                    value={status}
+                                                >
+                                                    {status}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -739,16 +985,29 @@ const AddEmployeeDialog = ({
 
                             <div>
                                 <Label>Current Address</Label>
-                                <Input name="currentAddress" value={form.currentAddress} onChange={handleChange} />
+                                <Input
+                                    name="currentAddress"
+                                    value={form.currentAddress}
+                                    onChange={handleChange}
+                                />
                                 {errors.currentAddress && (
-                                    <p className="mt-1 text-sm text-red-500">{errors.currentAddress}</p>
+                                    <p className="mt-1 text-sm text-red-500">
+                                        {errors.currentAddress}
+                                    </p>
                                 )}
                             </div>
+
                             <div>
                                 <Label>Permanent Address</Label>
-                                <Input name="permanentAddress" value={form.permanentAddress} onChange={handleChange} />
+                                <Input
+                                    name="permanentAddress"
+                                    value={form.permanentAddress}
+                                    onChange={handleChange}
+                                />
                                 {errors.permanentAddress && (
-                                    <p className="mt-1 text-sm text-red-500">{errors.permanentAddress}</p>
+                                    <p className="mt-1 text-sm text-red-500">
+                                        {errors.permanentAddress}
+                                    </p>
                                 )}
                             </div>
 
@@ -761,18 +1020,29 @@ const AddEmployeeDialog = ({
                                         onChange={handleChange}
                                     />
                                     {errors.emergencyContactName && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.emergencyContactName}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.emergencyContactName}
+                                        </p>
                                     )}
                                 </div>
+
                                 <div className="flex-1">
                                     <Label>Emergency Contact Phone</Label>
                                     <PhoneInput
                                         value={form.emergencyContactPhone}
                                         onChange={(value) => {
                                             const phone = value || "";
-                                            handleSelectChange("emergencyContactPhone", phone);
+
+                                            handleSelectChange(
+                                                "emergencyContactPhone",
+                                                phone
+                                            );
+
                                             setIsEmergencyPhoneValid(
-                                                Boolean(phone && isValidPhoneNumber(phone))
+                                                Boolean(
+                                                    phone &&
+                                                    isValidPhoneNumber(phone)
+                                                )
                                             );
                                         }}
                                         placeholder="Enter emergency phone number"
@@ -784,31 +1054,45 @@ const AddEmployeeDialog = ({
                                                 "h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none placeholder:text-muted-foreground",
                                         }}
                                     />
+
                                     {errors.emergencyContactPhone && (
                                         <p className="mt-1 flex items-center gap-2 text-sm text-red-500">
                                             <XCircle className="h-4 w-4" />
                                             {errors.emergencyContactPhone}
                                         </p>
                                     )}
-                                    {isEmergencyPhoneValid && !errors.emergencyContactPhone && (
-                                        <p className="mt-1 flex items-center gap-2 text-sm text-green-600">
-                                            <CheckCircle2 className="h-4 w-4" />
-                                            Valid phone number
-                                        </p>
-                                    )}
+
+                                    {isEmergencyPhoneValid &&
+                                        !errors.emergencyContactPhone && (
+                                            <p className="mt-1 flex items-center gap-2 text-sm text-green-600">
+                                                <CheckCircle2 className="h-4 w-4" />
+                                                Valid phone number
+                                            </p>
+                                        )}
                                 </div>
                             </div>
                         </TabsContent>
 
-                        <TabsContent value="employment" className="flex flex-col gap-3 mt-4">
+                        {/* EMPLOYMENT TAB */}
+                        <TabsContent
+                            value="employment"
+                            className="flex flex-col gap-3 mt-4"
+                        >
                             <div className="flex gap-2">
                                 <div className="flex-1">
                                     <Label>Designation</Label>
-                                    <Input name="designation" value={form.designation} onChange={handleChange} />
+                                    <Input
+                                        name="designation"
+                                        value={form.designation}
+                                        onChange={handleChange}
+                                    />
                                     {errors.designation && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.designation}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.designation}
+                                        </p>
                                     )}
                                 </div>
+
                                 <div className="flex-1">
                                     <Label>Gross Monthly Salary</Label>
                                     <Input
@@ -819,14 +1103,24 @@ const AddEmployeeDialog = ({
                                         placeholder="e.g. 25000"
                                     />
                                     {errors.grossSalary && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.grossSalary}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.grossSalary}
+                                        </p>
                                     )}
                                 </div>
+
                                 <div className="flex-1">
                                     <Label>Joining Date</Label>
-                                    <Input name="joiningDate" type="date" value={form.joiningDate} onChange={handleChange} />
+                                    <Input
+                                        name="joiningDate"
+                                        type="date"
+                                        value={form.joiningDate}
+                                        onChange={handleChange}
+                                    />
                                     {errors.joiningDate && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.joiningDate}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.joiningDate}
+                                        </p>
                                     )}
                                 </div>
                             </div>
@@ -840,14 +1134,23 @@ const AddEmployeeDialog = ({
                                             handleSelectChange("employmentType", value)
                                         }
                                     >
-                                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select" />
+                                        </SelectTrigger>
+
                                         <SelectContent position="popper" align="start">
-                                            {["Full Time", "Part Time", "Contract", "Intern"].map((type) => (
-                                                <SelectItem key={type} value={type}>{type}</SelectItem>
+                                            {EMPLOYMENT_TYPE_OPTIONS.map((type) => (
+                                                <SelectItem
+                                                    key={type}
+                                                    value={type}
+                                                >
+                                                    {type}
+                                                </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
+
                                 <div className="flex-1">
                                     <Label>Work Shift</Label>
                                     <Select
@@ -856,10 +1159,18 @@ const AddEmployeeDialog = ({
                                             handleSelectChange("workShift", value)
                                         }
                                     >
-                                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select" />
+                                        </SelectTrigger>
+
                                         <SelectContent position="popper" align="start">
-                                            {["Morning", "Evening", "Night"].map((shift) => (
-                                                <SelectItem key={shift} value={shift}>{shift}</SelectItem>
+                                            {WORK_SHIFT_OPTIONS.map((shift) => (
+                                                <SelectItem
+                                                    key={shift}
+                                                    value={shift}
+                                                >
+                                                    {shift}
+                                                </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
@@ -867,59 +1178,111 @@ const AddEmployeeDialog = ({
                             </div>
                         </TabsContent>
 
-                        <TabsContent value="bank" className="flex flex-col gap-3 mt-4">
+                        {/* BANK & ID TAB */}
+                        <TabsContent
+                            value="bank"
+                            className="flex flex-col gap-3 mt-4"
+                        >
                             <div className="flex gap-2">
                                 <div className="flex-1">
                                     <Label>PAN Number</Label>
-                                    <Input name="panNumber" value={form.panNumber} onChange={handleChange} />
+                                    <Input
+                                        name="panNumber"
+                                        value={form.panNumber}
+                                        onChange={handleChange}
+                                    />
                                     {errors.panNumber && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.panNumber}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.panNumber}
+                                        </p>
                                     )}
                                 </div>
+
                                 <div className="flex-1">
                                     <Label>Aadhar Number</Label>
-                                    <Input name="aadharNumber" value={form.aadharNumber} onChange={handleChange} />
+                                    <Input
+                                        name="aadharNumber"
+                                        value={form.aadharNumber}
+                                        onChange={handleChange}
+                                    />
                                     {errors.aadharNumber && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.aadharNumber}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.aadharNumber}
+                                        </p>
                                     )}
                                 </div>
                             </div>
+
                             <div>
                                 <Label>Bank Name</Label>
-                                <Input name="bankName" value={form.bankName} onChange={handleChange} />
+                                <Input
+                                    name="bankName"
+                                    value={form.bankName}
+                                    onChange={handleChange}
+                                />
                                 {errors.bankName && (
-                                    <p className="mt-1 text-sm text-red-500">{errors.bankName}</p>
+                                    <p className="mt-1 text-sm text-red-500">
+                                        {errors.bankName}
+                                    </p>
                                 )}
                             </div>
+
                             <div className="flex gap-2">
                                 <div className="flex-1">
                                     <Label>Bank Account Number</Label>
-                                    <Input name="bankAccountNumber" value={form.bankAccountNumber} onChange={handleChange} />
+                                    <Input
+                                        name="bankAccountNumber"
+                                        value={form.bankAccountNumber}
+                                        onChange={handleChange}
+                                    />
                                     {errors.bankAccountNumber && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.bankAccountNumber}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.bankAccountNumber}
+                                        </p>
                                     )}
                                 </div>
+
                                 <div className="flex-1">
                                     <Label>IFSC Code</Label>
-                                    <Input name="bankIFSC" value={form.bankIFSC} onChange={handleChange} />
+                                    <Input
+                                        name="bankIFSC"
+                                        value={form.bankIFSC}
+                                        onChange={handleChange}
+                                    />
                                     {errors.bankIFSC && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.bankIFSC}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.bankIFSC}
+                                        </p>
                                     )}
                                 </div>
                             </div>
+
                             <div className="flex gap-2">
                                 <div className="flex-1">
                                     <Label>PF Number</Label>
-                                    <Input name="pfNumber" value={form.pfNumber} onChange={handleChange} />
+                                    <Input
+                                        name="pfNumber"
+                                        value={form.pfNumber}
+                                        onChange={handleChange}
+                                    />
                                     {errors.pfNumber && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.pfNumber}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.pfNumber}
+                                        </p>
                                     )}
                                 </div>
+
                                 <div className="flex-1">
                                     <Label>ESI Number</Label>
-                                    <Input name="esiNumber" value={form.esiNumber} onChange={handleChange} />
+                                    <Input
+                                        name="esiNumber"
+                                        value={form.esiNumber}
+                                        onChange={handleChange}
+                                    />
                                     {errors.esiNumber && (
-                                        <p className="mt-1 text-sm text-red-500">{errors.esiNumber}</p>
+                                        <p className="mt-1 text-sm text-red-500">
+                                            {errors.esiNumber}
+                                        </p>
                                     )}
                                 </div>
                             </div>
@@ -936,95 +1299,120 @@ const AddEmployeeDialog = ({
                 </DialogContent>
             </Dialog>
 
-            <Dialog
-                open={onboardingConfirmOpen}
-                onOpenChange={setOnboardingConfirmOpen}
-            >
-                <DialogContent className="max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Start Employee Onboarding</DialogTitle>
-                        <DialogDescription>
-                            Employee has been created successfully.
-                            Do you want to start onboarding now?
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="flex justify-end gap-2 pt-4">
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                setOnboardingConfirmOpen(false);
-                                setCreatedEmployee(null);
-                            }}
-                        >
-                            No, Later
-                        </Button>
-                        <Button
-                            variant="add"
-                            onClick={() => {
-                                setOnboardingConfirmOpen(false);
-                                setStartOnboardingOpen(true);
-                            }}
-                        >
-                            Yes, Start Onboarding
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+            {/* Onboarding Confirmation */}
+            {canCreateOnboarding && (
+                <Dialog
+                    open={onboardingConfirmOpen}
+                    onOpenChange={setOnboardingConfirmOpen}
+                >
+                    <DialogContent className="max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>
+                                Start Employee Onboarding
+                            </DialogTitle>
 
-            <Dialog
-                open={startOnboardingOpen}
-                onOpenChange={setStartOnboardingOpen}
-            >
-                <DialogContent className="max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Start Onboarding</DialogTitle>
-                        <DialogDescription>
-                            Set the target date and add notes for this employee's onboarding.
-                        </DialogDescription>
-                    </DialogHeader>
+                            <DialogDescription>
+                                Employee has been created successfully.
+                                Do you want to start onboarding now?
+                            </DialogDescription>
+                        </DialogHeader>
 
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Employee</Label>
-                            <Input value={createdEmployee?.name ?? ""} disabled />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Target Date</Label>
-                            <Input
-                                type="date"
-                                value={targetDate}
-                                onChange={(event) => setTargetDate(event.target.value)}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Notes</Label>
-                            <textarea
-                                className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                placeholder="Enter onboarding notes..."
-                                value={onboardingNotes}
-                                onChange={(event) => setOnboardingNotes(event.target.value)}
-                            />
-                        </div>
-                    </div>
+                        <div className="flex justify-end gap-2 pt-4">
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setOnboardingConfirmOpen(false);
+                                    setCreatedEmployee(null);
+                                }}
+                            >
+                                No, Later
+                            </Button>
 
-                    <div className="flex justify-end gap-2 pt-4">
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                setStartOnboardingOpen(false);
-                                setCreatedEmployee(null);
-                                setTargetDate("");
-                                setOnboardingNotes("");
-                            }}
-                        >
-                            Cancel
-                        </Button>
-                        <Button variant="add" onClick={handleStartOnboarding}>
-                            Start Onboarding
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+                            <Button
+                                variant="add"
+                                onClick={() => {
+                                    setOnboardingConfirmOpen(false);
+                                    setStartOnboardingOpen(true);
+                                }}
+                            >
+                                Yes, Start Onboarding
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
+
+            {/* Start Onboarding */}
+            {canCreateOnboarding && (
+                <Dialog
+                    open={startOnboardingOpen}
+                    onOpenChange={setStartOnboardingOpen}
+                >
+                    <DialogContent className="max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Start Onboarding</DialogTitle>
+
+                            <DialogDescription>
+                                Set the target date and add notes for this employee's onboarding.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label>Employee</Label>
+                                <Input
+                                    value={createdEmployee?.name ?? ""}
+                                    disabled
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Target Date</Label>
+                                <Input
+                                    type="date"
+                                    value={targetDate}
+                                    onChange={(event) =>
+                                        setTargetDate(event.target.value)
+                                    }
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Notes</Label>
+                                <textarea
+                                    className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                    placeholder="Enter onboarding notes..."
+                                    value={onboardingNotes}
+                                    onChange={(event) =>
+                                        setOnboardingNotes(event.target.value)
+                                    }
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-4">
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setStartOnboardingOpen(false);
+                                    setCreatedEmployee(null);
+                                    setTargetDate("");
+                                    setOnboardingNotes("");
+                                }}
+                            >
+                                Cancel
+                            </Button>
+
+                            <Button
+                                variant="add"
+                                onClick={handleStartOnboarding}
+                            >
+                                Start Onboarding
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
         </div>
     );
 };

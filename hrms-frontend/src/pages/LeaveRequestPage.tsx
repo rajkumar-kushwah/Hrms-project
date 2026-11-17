@@ -1,3 +1,4 @@
+
 import React from "react";
 import {
     Table,
@@ -36,20 +37,32 @@ import {
 import { getLeaveTypes } from "@/services/leaveType.service";
 import { useAuthStore } from "@/store/auth.store";
 import {
-    getUserRole,
-    isAdminRole,
+    canViewModule,
+    canCreateInModule,
+    canDeleteInModule,
     isSuperAdminRole,
 } from "@/utilis/roleUtils";
 import { createLeaveRequestSchema } from "@/validation/leaveRequest.validation";
-import { CompanySelector } from "@/pages/common/CompanySelector.tsx";
+import { CompanySelector } from "@/pages/common/CompanySelector";
+
+const MODULE_NAME = "leave_request";
+
+const initialForm = {
+    leaveTypeId: "",
+    startDate: "",
+    endDate: "",
+    reason: "",
+};
 
 const LeaveRequestPage = () => {
     const { user } = useAuthStore();
 
-    const userRole = getUserRole(user);
+    const isSuperAdmin = isSuperAdminRole(user);
 
-    const isSuperAdmin = isSuperAdminRole(userRole);
-    const canChangeStatus = !isAdminRole(userRole);
+    // Module permissions
+    const canViewLeaveRequest = canViewModule(user, MODULE_NAME);
+    const canCreateLeaveRequest = canCreateInModule(user, MODULE_NAME);
+    const canCancelLeaveRequest = canDeleteInModule(user, MODULE_NAME);
 
     const [selectedCompanyId, setSelectedCompanyId] =
         React.useState("");
@@ -58,19 +71,22 @@ const LeaveRequestPage = () => {
     const [leaveTypes, setLeaveTypes] = React.useState<LeaveType[]>([]);
     const [open, setOpen] = React.useState(false);
     const [loading, setLoading] = React.useState(false);
+    const [submitting, setSubmitting] = React.useState(false);
+    const [cancellingId, setCancellingId] = React.useState<string | null>(null);
 
-    const [form, setForm] = React.useState({
-        leaveTypeId: "",
-        startDate: "",
-        endDate: "",
-        reason: "",
-    });
-
+    const [form, setForm] = React.useState(initialForm);
     const [errors, setErrors] = React.useState<Record<string, string>>({});
 
     const loadLeaves = React.useCallback(async () => {
+        if (!canViewLeaveRequest) {
+            setLeaves([]);
+            setLoading(false);
+            return;
+        }
+
         if (isSuperAdmin && !selectedCompanyId) {
             setLeaves([]);
+            setLoading(false);
             return;
         }
 
@@ -92,9 +108,18 @@ const LeaveRequestPage = () => {
         } finally {
             setLoading(false);
         }
-    }, [isSuperAdmin, selectedCompanyId]);
+    }, [
+        canViewLeaveRequest,
+        isSuperAdmin,
+        selectedCompanyId,
+    ]);
 
     const loadLeaveTypes = React.useCallback(async () => {
+        if (!canCreateLeaveRequest) {
+            setLeaveTypes([]);
+            return;
+        }
+
         if (isSuperAdmin && !selectedCompanyId) {
             setLeaveTypes([]);
             return;
@@ -106,7 +131,7 @@ const LeaveRequestPage = () => {
             );
 
             setLeaveTypes(
-                (res.data.data as LeaveType[]).filter(
+                ((res.data.data ?? []) as LeaveType[]).filter(
                     (leaveType) => leaveType.isActive
                 )
             );
@@ -118,12 +143,25 @@ const LeaveRequestPage = () => {
             );
             setLeaveTypes([]);
         }
-    }, [isSuperAdmin, selectedCompanyId]);
+    }, [
+        canCreateLeaveRequest,
+        isSuperAdmin,
+        selectedCompanyId,
+    ]);
 
     React.useEffect(() => {
         void loadLeaves();
         void loadLeaveTypes();
     }, [loadLeaves, loadLeaveTypes]);
+
+    const handleCompanyChange = (companyId: string | null) => {
+        setSelectedCompanyId(companyId ?? "");
+        setLeaves([]);
+        setLeaveTypes([]);
+        setOpen(false);
+        setForm(initialForm);
+        setErrors({});
+    };
 
     const handleChange = (
         field: keyof typeof form,
@@ -152,6 +190,11 @@ const LeaveRequestPage = () => {
     };
 
     const handleSubmit = async () => {
+        if (!canCreateLeaveRequest) {
+            toast.error("You don't have permission to apply for leave");
+            return;
+        }
+
         if (isSuperAdmin && !selectedCompanyId) {
             toast.error("Please select a company first.");
             return;
@@ -175,6 +218,8 @@ const LeaveRequestPage = () => {
         }
 
         try {
+            setSubmitting(true);
+
             await createLeaveRequest(
                 form,
                 isSuperAdmin ? selectedCompanyId : undefined
@@ -182,27 +227,31 @@ const LeaveRequestPage = () => {
 
             toast.success("Leave request submitted successfully!");
 
-            await loadLeaves();
-
             setOpen(false);
-            setForm({
-                leaveTypeId: "",
-                startDate: "",
-                endDate: "",
-                reason: "",
-            });
+            setForm(initialForm);
             setErrors({});
+
+            await loadLeaves();
         } catch (err: unknown) {
             toast.error(
                 err instanceof Error
                     ? err.message
                     : "Failed to submit leave request"
             );
+        } finally {
+            setSubmitting(false);
         }
     };
 
     const handleCancel = async (id: string) => {
+        if (!canCancelLeaveRequest) {
+            toast.error("You don't have permission to cancel leave requests");
+            return;
+        }
+
         try {
+            setCancellingId(id);
+
             await cancelLeaveRequest(
                 id,
                 isSuperAdmin ? selectedCompanyId : undefined
@@ -216,6 +265,8 @@ const LeaveRequestPage = () => {
                     ? err.message
                     : "Failed to cancel leave request"
             );
+        } finally {
+            setCancellingId(null);
         }
     };
 
@@ -230,6 +281,9 @@ const LeaveRequestPage = () => {
         }
     };
 
+    // Hide complete page when user has no view permission
+    if (!canViewLeaveRequest) return null;
+
     return (
         <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -237,20 +291,20 @@ const LeaveRequestPage = () => {
                     <div className="w-full max-w-60">
                         <CompanySelector
                             selectedCompanyId={selectedCompanyId}
-                            onCompanyChange={(companyId) => {
-                                setSelectedCompanyId(companyId);
-                                setLeaves([]);
-                                setLeaveTypes([]);
-                            }}
+                            onCompanyChange={handleCompanyChange}
                         />
                     </div>
                 )}
 
-                {canChangeStatus && (
+                {canCreateLeaveRequest && (
                     <Button
                         size="sm"
                         variant="add"
-                        onClick={() => setOpen(true)}
+                        onClick={() => {
+                            setForm(initialForm);
+                            setErrors({});
+                            setOpen(true);
+                        }}
                         disabled={isSuperAdmin && !selectedCompanyId}
                     >
                         <PlusIcon className="h-4 w-4 mr-2" />
@@ -265,7 +319,18 @@ const LeaveRequestPage = () => {
                 </p>
             )}
 
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog
+                open={open}
+                onOpenChange={(nextOpen) => {
+                    if (!nextOpen) {
+                        setOpen(false);
+                        setForm(initialForm);
+                        setErrors({});
+                    } else if (canCreateLeaveRequest) {
+                        setOpen(true);
+                    }
+                }}
+            >
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Apply for Leave</DialogTitle>
@@ -364,8 +429,17 @@ const LeaveRequestPage = () => {
                             )}
                         </div>
 
-                        <Button variant="add" onClick={handleSubmit}>
-                            Submit Request
+                        <Button
+                            variant="add"
+                            disabled={submitting}
+                            onClick={handleSubmit}
+                        >
+                            {submitting && (
+                                <span className="mr-2">
+                                    Submitting...
+                                </span>
+                            )}
+                            {!submitting && "Submit Request"}
                         </Button>
                     </div>
                 </DialogContent>
@@ -382,7 +456,9 @@ const LeaveRequestPage = () => {
                             <TableHead>Days</TableHead>
                             <TableHead>Reason</TableHead>
                             <TableHead>Status</TableHead>
-                            <TableHead>Actions</TableHead>
+                            {canCancelLeaveRequest && (
+                                <TableHead>Actions</TableHead>
+                            )}
                         </TableRow>
                     </TableHeader>
 
@@ -390,15 +466,23 @@ const LeaveRequestPage = () => {
                         {leaves.map((leave, index) => (
                             <TableRow key={leave.id}>
                                 <TableCell>{index + 1}</TableCell>
-                                <TableCell>{leave.leaveType?.name}</TableCell>
+
+                                <TableCell>
+                                    {leave.leaveType?.name}
+                                </TableCell>
+
                                 <TableCell>
                                     {new Date(leave.startDate).toLocaleDateString("en-IN")}
                                 </TableCell>
+
                                 <TableCell>
                                     {new Date(leave.endDate).toLocaleDateString("en-IN")}
                                 </TableCell>
+
                                 <TableCell>{leave.totalDays}</TableCell>
+
                                 <TableCell>{leave.reason ?? "—"}</TableCell>
+
                                 <TableCell>
                                     <Badge className={getStatusColor(leave.status)}>
                                         {leave.status}
@@ -411,26 +495,31 @@ const LeaveRequestPage = () => {
                                     )}
                                 </TableCell>
 
-                                <TableCell>
-                                    {leave.status === "Pending" && canChangeStatus && (
-                                        <Button
-                                            className="cursor-pointer"
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={() => handleCancel(leave.id)}
-                                        >
-                                            <X className="h-4 w-4" />
-                                            Cancel
-                                        </Button>
-                                    )}
-                                </TableCell>
+                                {canCancelLeaveRequest && (
+                                    <TableCell>
+                                        {leave.status === "Pending" && (
+                                            <Button
+                                                className="cursor-pointer"
+                                                variant="destructive"
+                                                size="sm"
+                                                disabled={cancellingId === leave.id}
+                                                onClick={() => handleCancel(leave.id)}
+                                            >
+                                                <X className="h-4 w-4" />
+                                                {cancellingId === leave.id
+                                                    ? "Cancelling..."
+                                                    : "Cancel"}
+                                            </Button>
+                                        )}
+                                    </TableCell>
+                                )}
                             </TableRow>
                         ))}
 
                         {loading && (
                             <TableRow>
                                 <TableCell
-                                    colSpan={8}
+                                    colSpan={canCancelLeaveRequest ? 8 : 7}
                                     className="text-center text-muted-foreground py-8"
                                 >
                                     Loading leave requests...
@@ -441,7 +530,7 @@ const LeaveRequestPage = () => {
                         {!loading && leaves.length === 0 && (
                             <TableRow>
                                 <TableCell
-                                    colSpan={8}
+                                    colSpan={canCancelLeaveRequest ? 8 : 7}
                                     className="text-center text-muted-foreground py-8"
                                 >
                                     {isSuperAdmin && !selectedCompanyId
