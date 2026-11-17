@@ -208,7 +208,7 @@ export interface RoleObject {
     name?: string | null;
     isGlobalAdmin?: boolean;
     // Yeh array string ya aapke relational permission object dono ko support karega
-    permissions?: string[] | ModulePermissionObject[] | null; 
+    permissions?: string[] | ModulePermissionObject[] | null;
 }
 
 type RoleInput =
@@ -350,9 +350,11 @@ export const isCompanyAdminRole = (input: RoleInput): boolean => {
     if (isSuperAdminRole(input)) return true;
 
     const roleName = getRoleName(input);
+
     return (
         roleName === DEFAULT_ROLES.COMPANY_ADMIN ||
-        roleName === "companyadmin"
+        roleName === "companyadmin" ||
+        roleName === "admin"
     );
 };
 
