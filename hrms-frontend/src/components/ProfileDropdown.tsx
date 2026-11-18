@@ -160,7 +160,7 @@ export function ProfileDropdown() {
 
                 <DropdownMenuSeparator />
 
-                <DropdownMenuItem
+                <DropdownMenuItem variant="destructive"
                     onSelect={() => void handleLogout()}
                     className="text-destructive focus:text-destructive"
                 >
