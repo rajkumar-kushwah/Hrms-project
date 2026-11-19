@@ -74,6 +74,8 @@ export const getUsers = async (req: Request, res: Response) => {
                 id: true,
                 name: true,
                 email: true,
+                profilePhoto: true,
+                profilePhotoId: true,
                 isActive: true,
                 createdAt: true,
 

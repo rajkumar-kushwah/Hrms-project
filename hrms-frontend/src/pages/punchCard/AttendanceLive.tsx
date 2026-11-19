@@ -35,6 +35,7 @@ import {
 } from "@/utilis/roleUtils";
 import { CompanySelector } from "@/pages/common/CompanySelector";
 import { socket } from "@/lib/socket";
+import UserAvatar from "../common/UserAvatar";
 
 // --------------------------------------------------
 // Constants
@@ -492,17 +493,24 @@ const AttendanceLive = () => {
 
                                         {/* Employee */}
                                         <TableCell>
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-medium">
-                                                    {getUserName(att.user, "—")}
-                                                </span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {att.user?.employeeCode ?? "—"}
-                                                    {att.user?.designation
-                                                        ? ` · ${att.user.designation}`
-                                                        : ""}
-                                                </span>
+                                            <div className="flex items-center gap-2">
+                                                <UserAvatar user={att.user} size="sm" />
+
+                                                <div>
+                                                    <span className="text-sm font-medium">
+                                                        {getUserName(att.user, "—")}
+                                                    </span>
+                                                    <div>
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {att.user?.employeeCode ?? "—"}
+                                                            {att.user?.designation
+                                                                ? ` · ${att.user.designation}`
+                                                                : ""}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </div>
+
                                         </TableCell>
 
                                         {/* Branch */}

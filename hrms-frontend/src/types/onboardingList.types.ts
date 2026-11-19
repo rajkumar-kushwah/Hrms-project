@@ -7,6 +7,8 @@ export type OnboardingEmployee = {
     user: {
         id: string;
         name: string;
+        profilePhoto?: string | null;
+        profilePhotoId?: string | null;
         employeeCode: string | null;
         designation: string | null;
     };

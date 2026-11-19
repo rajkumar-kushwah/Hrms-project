@@ -17,7 +17,7 @@ import type { EmployeeDetail } from "@/types/employee.types";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
 import {
     Tabs,
     TabsContent,
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/tabs";
 
 import { formatRole, getRoleName } from "@/utilis/roleUtils";
+import UserAvatar from "./common/UserAvatar";
 
 // --------------------------------------------------
 // Constants & Configurations
@@ -40,16 +41,16 @@ const EMPLOYEE_TABS = [
 
 const TAB_CONTENT_CLASS = "bg-card border rounded-xl p-6 mt-3";
 
-const getInitials = (name?: string | null) => {
-    if (!name) return "NA";
+// const getInitials = (name?: string | null) => {
+//     if (!name) return "NA";
 
-    return name
-        .trim()
-        .split(/\s+/)
-        .map((part) => part[0])
-        .join("")
-        .toUpperCase();
-};
+//     return name
+//         .trim()
+//         .split(/\s+/)
+//         .map((part) => part[0])
+//         .join("")
+//         .toUpperCase();
+// };
 
 const formatDate = (date?: string | null) => {
     if (!date) return "—";
@@ -343,11 +344,7 @@ const EmployeeView = () => {
             <div className="rounded-lg border">
                 <CardContent className="p-6">
                     <div className="flex items-center gap-4">
-                        <Avatar className="h-20 w-20">
-                            <AvatarFallback className="text-sm">
-                                {getInitials(employee.name)}
-                            </AvatarFallback>
-                        </Avatar>
+                        <UserAvatar user={employee} size="xl" />
 
                         <div className="flex-1">
                             <h2 className="text-xl font-semibold">

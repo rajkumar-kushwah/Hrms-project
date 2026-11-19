@@ -134,7 +134,10 @@ export const getOnboardingList = async (companyId: string | null, status?: Onboa
         },
         include: {
             user: {
-                select: { id: true, name: true, employeeCode: true, designation: true },
+                select: {
+                    id: true, name: true, profilePhoto: true,
+                    profilePhotoId: true, employeeCode: true, designation: true
+                },
             },
             items: { select: { isCompleted: true, isRequired: true } },
         },
@@ -172,7 +175,10 @@ export const getOnboardingDetail = async (userId: string, companyId: string | nu
         where: { userId },
         include: {
             user: {
-                select: { id: true, name: true, employeeCode: true, designation: true },
+                select: {
+                    id: true, name: true, profilePhoto: true,
+                    profilePhotoId: true, employeeCode: true, designation: true
+                },
             },
             items: { orderBy: [{ stage: "asc" }, { order: "asc" }] },
         },

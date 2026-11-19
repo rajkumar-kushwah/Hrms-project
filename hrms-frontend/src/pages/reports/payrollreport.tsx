@@ -27,6 +27,7 @@ import {
     FileSpreadsheet,
     Search,
     X,
+
 } from "lucide-react";
 
 import { toast } from "sonner";
@@ -40,6 +41,7 @@ import {
     isSuperAdminRole,
     canViewModule,
 } from "@/utilis/roleUtils";
+import UserAvatar from "../common/UserAvatar";
 
 
 // TYPES
@@ -59,8 +61,11 @@ interface GroupTotals {
 }
 
 interface EmployeeRow {
+    id: string;
     userId: string;
     name: string;
+    profilePhoto: string | null;
+    profilePhotoId: string | null;
     employeeCode: string | null;
     branchName: string;
     categoryName: string;
@@ -203,14 +208,24 @@ const EMPLOYEE_COLUMNS = [
         label: "Employee",
         headerClass: "font-semibold",
         cellClass: "whitespace-nowrap font-medium",
-        render: (row: EmployeeRow) => row.name,
+        render: (row: EmployeeRow) => (
+            <div className="flex items-center gap-2">
+                <UserAvatar user={row} size="sm" />
+                <div>
+                    <span>{row.name}</span>
+                    <div>
+                        <span className="text-xs">{row.employeeCode}</span>
+                    </div>
+                </div>
+            </div>
+        )
     },
-    {
-        label: "Code",
-        headerClass: "font-semibold",
-        cellClass: "text-muted-foreground",
-        render: (row: EmployeeRow) => row.employeeCode ?? "-",
-    },
+    // {
+    //     label: "Code",
+    //     headerClass: "font-semibold",
+    //     cellClass: "text-muted-foreground",
+    //     render: (row: EmployeeRow) => row.employeeCode ?? "-",
+    // },
     {
         label: "Branch",
         headerClass: "font-semibold",
@@ -328,9 +343,9 @@ const PayrollReport = () => {
 
     const [search, setSearch] = React.useState("");
 
-  
+
     // LOAD COMPANIES
-  
+
 
     React.useEffect(() => {
         if (!canViewPayrollReport || !isSuperAdmin) {
@@ -387,9 +402,9 @@ const PayrollReport = () => {
         };
     }, [canViewPayrollReport, isSuperAdmin]);
 
-  
+
     // LOAD PAYROLL REPORT
-  
+
 
     const loadReport = React.useCallback(async () => {
         if (!canViewPayrollReport) {
@@ -436,9 +451,9 @@ const PayrollReport = () => {
         void loadReport();
     }, [canViewPayrollReport, loadReport]);
 
-  
+
     // SUMMARY CARD DATA
-  
+
 
     const summaryCards: SummaryCard[] = report
         ? [
@@ -467,9 +482,9 @@ const PayrollReport = () => {
         ]
         : [];
 
-  
+
     // PAYROLL STATUS DATA
-  
+
 
     const payrollStatuses: {
         status: PayrollStatus;
@@ -491,9 +506,9 @@ const PayrollReport = () => {
             ]
             : [];
 
-  
+
     // FILTER EMPLOYEES
-  
+
 
     const filteredEmployees = React.useMemo(() => {
         if (!report) return [];
@@ -518,9 +533,9 @@ const PayrollReport = () => {
 
     const hasActiveFilters = search.trim() !== "";
 
-  
+
     // EXCEL EXPORT
-  
+
 
     const handleExport = async () => {
         if (!canViewPayrollReport || !report) return;
@@ -731,17 +746,17 @@ const PayrollReport = () => {
         }
     };
 
-  
+
     // PERMISSION CHECK
-  
+
 
     if (!canViewPayrollReport) {
         return null;
     }
 
-  
+
     // UI
-  
+
 
     return (
         <div className="w-full space-y-5">
@@ -750,9 +765,6 @@ const PayrollReport = () => {
 
             <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h2 className="text-lg font-semibold tracking-tight">
-                        Payroll Report
-                    </h2>
 
                     <p className="mt-0.5 text-xs text-muted-foreground">
                         Monthly payroll summary — view and export only

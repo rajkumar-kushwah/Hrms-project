@@ -2,6 +2,8 @@ export interface Employee {
     id: string;
     name: string;
     email: string;
+    profilePhoto?: string | null;
+    profilePhotoId?: string | null;
     phone?: string;
     employeeCode?: string;
     designation?: string;

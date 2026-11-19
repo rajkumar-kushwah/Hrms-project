@@ -20,6 +20,8 @@ export interface Attendance {
    user: {
       id: string;
       name: string;
+      profilePhoto?: string | null;
+      profilePhotoId?: string | null;
       employeeCode: string;
       designation: string;
    }
@@ -33,6 +35,8 @@ export interface EmployeeBasicInfo {
    id: string;
    name: string;
    email: string;
+   profilePhoto?: string | null;
+   profilePhotoId?: string | null;
    employeeCode?: string;
    designation?: string;
    branch?: {

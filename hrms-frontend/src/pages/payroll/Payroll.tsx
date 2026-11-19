@@ -27,6 +27,7 @@ import {
     canCreateInModule,
     canEditInModule,
 } from "@/utilis/roleUtils";
+import UserAvatar from "../common/UserAvatar";
 
 const formatCurrency = (amount: number) =>
     `₹${Math.round(amount).toLocaleString("en-IN")}`;
@@ -39,9 +40,8 @@ const STATUS_STYLES: Record<string, string> = {
 
 const StatusBadge = ({ status }: { status: string }) => (
     <span
-        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-            STATUS_STYLES[status] ?? "bg-gray-200 text-gray-700"
-        }`}
+        className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status] ?? "bg-gray-200 text-gray-700"
+            }`}
     >
         {status}
     </span>
@@ -110,7 +110,7 @@ const Payroll = () => {
                 if (
                     isSuperAdmin &&
                     useCompanyStore.getState().selectedCompanyId !==
-                        selectedCompanyId
+                    selectedCompanyId
                 ) {
                     return;
                 }
@@ -122,29 +122,29 @@ const Payroll = () => {
                 if (
                     isSuperAdmin &&
                     useCompanyStore.getState().selectedCompanyId !==
-                        selectedCompanyId
+                    selectedCompanyId
                 ) {
                     return;
                 }
 
                 const responseMessage =
                     typeof error === "object" &&
-                    error !== null &&
-                    "response" in error
+                        error !== null &&
+                        "response" in error
                         ? (
-                              error as {
-                                  response?: {
-                                      data?: { message?: string };
-                                  };
-                              }
-                          ).response?.data?.message
+                            error as {
+                                response?: {
+                                    data?: { message?: string };
+                                };
+                            }
+                        ).response?.data?.message
                         : undefined;
 
                 toast.error(
                     responseMessage ??
-                        (error instanceof Error
-                            ? error.message
-                            : "Failed to load payroll.")
+                    (error instanceof Error
+                        ? error.message
+                        : "Failed to load payroll.")
                 );
 
                 setPayrollData([]);
@@ -337,11 +337,10 @@ const Payroll = () => {
                                             loading ||
                                             filteredEmployeeIds.length === 0
                                         }
-                                        className={`flex h-4 w-4 items-center justify-center rounded-sm border transition-colors ${
-                                            allFilteredSelected
-                                                ? "border-[var(--themePrimary)] bg-[var(--themePrimary)] text-white"
-                                                : "border-input bg-background"
-                                        }`}
+                                        className={`flex h-4 w-4 items-center justify-center rounded-sm border transition-colors ${allFilteredSelected
+                                            ? "border-[var(--themePrimary)] bg-[var(--themePrimary)] text-white"
+                                            : "border-input bg-background"
+                                            }`}
                                         aria-label="Select all employees"
                                     >
                                         {allFilteredSelected && (
@@ -410,11 +409,10 @@ const Payroll = () => {
                                                     onClick={() =>
                                                         toggleEmployee(employee.userId)
                                                     }
-                                                    className={`flex h-4 w-4 items-center justify-center rounded-sm border transition-colors ${
-                                                        isSelected
-                                                            ? "border-[var(--themePrimary)] bg-[var(--themePrimary)] text-white"
-                                                            : "border-input bg-background"
-                                                    }`}
+                                                    className={`flex h-4 w-4 items-center justify-center rounded-sm border transition-colors ${isSelected
+                                                        ? "border-[var(--themePrimary)] bg-[var(--themePrimary)] text-white"
+                                                        : "border-input bg-background"
+                                                        }`}
                                                     aria-label={`Select ${getUserName(employee.user)}`}
                                                 >
                                                     {isSelected && (
@@ -425,12 +423,20 @@ const Payroll = () => {
                                         )}
 
                                         <TableCell>
-                                            <p className="font-medium">
-                                                {getUserName(employee.user)}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {employee.user.employeeCode}
-                                            </p>
+                                            <div className="flex items-center gap-2">
+                                                <UserAvatar
+                                                    user={employee.user}
+                                                    size="sm"
+                                                />
+                                                <div>
+                                                    <p className="font-medium">
+                                                        {getUserName(employee.user)}
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {employee.user.employeeCode}
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </TableCell>
 
                                         <TableCell>

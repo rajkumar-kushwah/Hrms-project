@@ -4,6 +4,8 @@ export interface PayrollSummary {
   user: {
     id: string;
     name: string;
+    profilePhoto?: string | null;
+    profilePhotoId?: string | null;
     employeeCode?: string;
     designation?: string;
   };

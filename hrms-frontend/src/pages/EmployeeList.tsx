@@ -73,12 +73,14 @@ import {
   canCreateInModule,
   canEditInModule,
   canDeleteInModule,
+  getUserName,
 } from "@/utilis/roleUtils";
 
 import { startOnboarding } from "@/services/onboarding.service";
 import { Textarea } from "@/components/ui/textarea";
 import { CompanySelector } from "@/pages/common/CompanySelector";
 import { passwordSchema } from "@/validation/employee.validation";
+import UserAvatar from "./common/UserAvatar";
 
 const EmployeeList = () => {
   const navigate = useNavigate();
@@ -274,14 +276,14 @@ const EmployeeList = () => {
         prev.map((employee) =>
           employee.id === selectedOnboardingEmployee.id
             ? {
-                ...employee,
-                onboarding: {
-                  status: "IN_PROGRESS",
-                  currentStage: "OFFER",
-                  progressPercent: 0,
-                  targetDate: targetDate || null,
-                },
-              }
+              ...employee,
+              onboarding: {
+                status: "IN_PROGRESS",
+                currentStage: "OFFER",
+                progressPercent: 0,
+                targetDate: targetDate || null,
+              },
+            }
             : employee
         )
       );
@@ -463,10 +465,10 @@ const EmployeeList = () => {
   const filteredEmployees = employees.filter((emp) => {
     const matchSearch = searchQuery
       ? emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (emp.employeeCode ?? "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
-        emp.email.toLowerCase().includes(searchQuery.toLowerCase())
+      (emp.employeeCode ?? "")
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase()) ||
+      emp.email.toLowerCase().includes(searchQuery.toLowerCase())
       : true;
 
     const matchStatus =
@@ -931,8 +933,8 @@ const EmployeeList = () => {
             <TableHeader className="sticky top-0 z-10 bg-muted">
               <TableRow>
                 <TableHead>#</TableHead>
-                <TableHead className="min-w-25">Code</TableHead>
                 <TableHead className="min-w-37.5">Name</TableHead>
+                <TableHead className="min-w-25">Code</TableHead>
                 <TableHead className="min-w-45">Email</TableHead>
                 <TableHead className="min-w-30">Designation</TableHead>
                 <TableHead className="min-w-30">Branch</TableHead>
@@ -983,11 +985,18 @@ const EmployeeList = () => {
                   <TableRow key={emp.id}>
                     <TableCell>{index + 1}</TableCell>
 
+
+                    <TableCell>
+                      <div className="flex items-center gap-3 min-w-[160px]">
+                        <UserAvatar user={emp} size="sm" />
+                        <span className="font-medium truncate">
+                          {getUserName(emp)}
+                        </span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       {emp.employeeCode ?? "—"}
                     </TableCell>
-
-                    <TableCell>{emp.name}</TableCell>
 
                     <TableCell>{emp.email}</TableCell>
 

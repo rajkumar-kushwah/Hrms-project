@@ -20,7 +20,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
 import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { getEmployeeAttendance } from "@/services/attendance.service";
@@ -28,6 +28,8 @@ import type {
     Attendance,
     EmployeeBasicInfo,
 } from "@/types/attendance.types";
+import UserAvatar from "../common/UserAvatar";
+
 
 const months = [
     { value: "1", label: "January" },
@@ -186,12 +188,12 @@ const EmployeeAttendanceDetail = () => {
         0
     );
 
-    const getInitials = (name?: string | null) =>
-        name
-            ?.split(" ")
-            .map((part) => part[0])
-            .join("")
-            .toUpperCase() ?? "?";
+    // const getInitials = (name?: string | null) =>
+    //     name
+    //         ?.split(" ")
+    //         .map((part) => part[0])
+    //         .join("")
+    //         .toUpperCase() ?? "?";
 
     return (
         <div className="flex flex-col gap-4">
@@ -207,19 +209,25 @@ const EmployeeAttendanceDetail = () => {
 
             {employee && (
                 <Card className="flex gap-4 border-border bg-card p-4 text-card-foreground transition-none duration-0 ease-none hover:scale-100 hover:opacity-100 active:scale-100">
-                    <Avatar className="h-14 w-14">
-                        <AvatarFallback>
-                            {getInitials(employee.name)}
-                        </AvatarFallback>
-                    </Avatar>
+
+
+
 
                     <div className="flex-1">
-                        <p className="font-semibold">{employee.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                            {employee.employeeCode} •{" "}
-                            {employee.designation ?? "—"} •{" "}
-                            {employee.branch?.name ?? "—"}
-                        </p>
+                        <div className="flex items-center gap-3 min-w-[160px]">
+                            <UserAvatar user={employee} size="lg" />
+                            {/* <span className="font-medium truncate">
+                                {getUserName(employee)}
+                            </span> */}
+                            <div>
+                                <p className="font-semibold">{employee.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                    {employee.employeeCode} •{" "}
+                                    {employee.designation ?? "—"} •{" "}
+                                    {employee.branch?.name ?? "—"}
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </Card>
             )}

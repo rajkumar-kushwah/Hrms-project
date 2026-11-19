@@ -25,6 +25,7 @@ import { getAttendanceReport } from "@/services/attendanceReport.service";
 import { getCompanies } from "@/services/company.service";
 import { useAuthStore } from "@/store/auth.store";
 import { canViewModule, isSuperAdminRole } from "@/utilis/roleUtils";
+import UserAvatar from "../common/UserAvatar";
 
 // ─────────────────────────────────────────────
 // Types
@@ -52,8 +53,11 @@ interface BranchRow extends Summary {
 }
 
 interface EmployeeRow {
+  id: string;
   userId: string;
   name: string;
+  profilePhoto: string | null;
+  profilePhotoId: string | null
   employeeCode: string | null;
   branchName: string;
   present: number;
@@ -501,9 +505,9 @@ const AttendanceReport = () => {
 
   const cards = report
     ? SUMMARY_CARD_CONFIG.map((card) => ({
-        label: card.label,
-        value: card.getValue(report.totals),
-      }))
+      label: card.label,
+      value: card.getValue(report.totals),
+    }))
     : [];
 
   // ─────────────────────────────────────────
@@ -533,9 +537,8 @@ const AttendanceReport = () => {
           }
         >
           <RefreshCw
-            className={`mr-2 h-4 w-4 ${
-              isSpinning ? "animate-spin" : ""
-            }`}
+            className={`mr-2 h-4 w-4 ${isSpinning ? "animate-spin" : ""
+              }`}
           />
           Refresh
         </Button>
@@ -776,13 +779,19 @@ const AttendanceReport = () => {
                       report.employees.map((employee) => (
                         <TableRow key={employee.userId}>
                           <TableCell>
-                            <p className="font-medium">
-                              {employee.name}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <UserAvatar user={employee} size="sm" />
 
-                            <p className="text-xs text-muted-foreground">
-                              {employee.employeeCode ?? "—"}
-                            </p>
+                              <div>
+                                <p className="font-medium">
+                                  {employee.name}
+                                </p>
+
+                                <p className="text-xs text-muted-foreground">
+                                  {employee.employeeCode ?? "—"}
+                                </p>
+                              </div>
+                            </div>
                           </TableCell>
 
                           <TableCell className="text-muted-foreground">

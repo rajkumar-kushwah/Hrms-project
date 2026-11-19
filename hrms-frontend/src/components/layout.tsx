@@ -21,14 +21,14 @@ import {
 } from "react-router-dom";
 
 import { useAuthStore } from "@/store/auth.store";
-import { ProfileDropdown } from "./ProfileDropdown";
+import { ProfileDropdown } from "../profile/ProfileDropdown";
 import { formatRole } from "@/utilis/roleUtils";
 
 export default function Layout() {
     const location = useLocation();
     const { user } = useAuthStore();
 
-   
+
     const getPageTitle = () => {
         switch (location.pathname) {
             case "/dashboard":
@@ -42,6 +42,12 @@ export default function Layout() {
 
             case "/reports/attendance":
                 return "Attendance Report";
+
+            case "/reports/leave":
+                return "Leave Report"
+
+            case "/reports/overtime":
+                return "Overtime Report"
 
             case "/company":
                 return "Company";
@@ -63,6 +69,9 @@ export default function Layout() {
 
             case "/profile":
                 return "Profile";
+
+            case "/change-password":
+                return "Change-Password"
 
             case "/companyusers":
                 return "companyUsers";
@@ -93,6 +102,7 @@ export default function Layout() {
 
             case "/onboarding":
                 return "OnboardingList";
+
 
             // case "/onboarding/:userId":
             //     return "OnboardingDetail";
@@ -140,86 +150,88 @@ export default function Layout() {
 
     return (
         <SidebarProvider>
-            <div className="flex min-h-screen w-full min-w-0 overflow-x-hidden p-2">
+            <div className="flex h-screen w-full min-w-0 overflow-hidden">
 
                 {/* Sidebar */}
                 <AppSidebar />
 
                 {/* Main Content */}
-                <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden px-4 py-3 space-y-4">
+                <main className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-4">
 
-                    {/* Sidebar Trigger + Breadcrumb */}
+                    {/* Fixed Header */}
+                    <div className="flex min-h-16 w-full shrink-0 items-center justify-between gap-3 border-b bg-background px-2">
+                        {/* Sidebar Trigger + Breadcrumb */}
 
-                    <div className="flex min-h-10 w-full items-center justify-between gap-3">
-                        {/* Left: Sidebar Trigger + Breadcrumb */}
-                        <div className="flex min-w-0 items-center gap-2">
-                            <SidebarTrigger className="-ml-1 shrink-0 cursor-pointer" />
+                        <div className="flex min-h-10 w-full items-center justify-between gap-3">
+                            {/* Left: Sidebar Trigger + Breadcrumb */}
+                            <div className="flex min-w-0 items-center gap-2">
+                                <SidebarTrigger className="-ml-1 shrink-0 cursor-pointer" />
 
-                            <Breadcrumb>
-                                <BreadcrumbList>
-                                    <BreadcrumbItem>
-                                        <BreadcrumbLink asChild>
-                                            <Link to="/dashboard">{formatRole(user, "User")}</Link>
-                                        </BreadcrumbLink>
-                                    </BreadcrumbItem>
-
-                                    <BreadcrumbSeparator />
-
-                                    {isEmployeeAttendance ? (
-                                        <>
-                                            <BreadcrumbItem>
-                                                <BreadcrumbLink asChild>
-                                                    <Link to="/attendance/list">
-                                                        Attendance List
-                                                    </Link>
-                                                </BreadcrumbLink>
-                                            </BreadcrumbItem>
-                                            <BreadcrumbSeparator />
-                                            <BreadcrumbItem>
-                                                <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
-                                            </BreadcrumbItem>
-                                        </>
-                                    ) : isOnboardingDetail ? (
-                                        <>
-                                            <BreadcrumbItem>
-                                                <BreadcrumbLink asChild>
-                                                    <Link to="/onboarding">Onboarding</Link>
-                                                </BreadcrumbLink>
-                                            </BreadcrumbItem>
-                                            <BreadcrumbSeparator />
-                                            <BreadcrumbItem>
-                                                <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
-                                            </BreadcrumbItem>
-                                        </>
-                                    ) : isEmployeeDetail ? (
-                                        <>
-                                            <BreadcrumbItem>
-                                                <BreadcrumbLink asChild>
-                                                    <Link to="/employee">Employee List</Link>
-                                                </BreadcrumbLink>
-                                            </BreadcrumbItem>
-                                            <BreadcrumbSeparator />
-                                            <BreadcrumbItem>
-                                                <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
-                                            </BreadcrumbItem>
-                                        </>
-                                    ) : (
+                                <Breadcrumb>
+                                    <BreadcrumbList>
                                         <BreadcrumbItem>
-                                            <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                                            <BreadcrumbLink asChild>
+                                                <Link to="/dashboard">{formatRole(user, "User")}</Link>
+                                            </BreadcrumbLink>
                                         </BreadcrumbItem>
-                                    )}
-                                </BreadcrumbList>
-                            </Breadcrumb>
-                        </div>
 
-                        {/* Right: Profile Dropdown */}
-                        <div className="shrink-0">
-                            <ProfileDropdown />
+                                        <BreadcrumbSeparator />
+
+                                        {isEmployeeAttendance ? (
+                                            <>
+                                                <BreadcrumbItem>
+                                                    <BreadcrumbLink asChild>
+                                                        <Link to="/attendance/list">
+                                                            Attendance List
+                                                        </Link>
+                                                    </BreadcrumbLink>
+                                                </BreadcrumbItem>
+                                                <BreadcrumbSeparator />
+                                                <BreadcrumbItem>
+                                                    <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                                                </BreadcrumbItem>
+                                            </>
+                                        ) : isOnboardingDetail ? (
+                                            <>
+                                                <BreadcrumbItem>
+                                                    <BreadcrumbLink asChild>
+                                                        <Link to="/onboarding">Onboarding</Link>
+                                                    </BreadcrumbLink>
+                                                </BreadcrumbItem>
+                                                <BreadcrumbSeparator />
+                                                <BreadcrumbItem>
+                                                    <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                                                </BreadcrumbItem>
+                                            </>
+                                        ) : isEmployeeDetail ? (
+                                            <>
+                                                <BreadcrumbItem>
+                                                    <BreadcrumbLink asChild>
+                                                        <Link to="/employee">Employee List</Link>
+                                                    </BreadcrumbLink>
+                                                </BreadcrumbItem>
+                                                <BreadcrumbSeparator />
+                                                <BreadcrumbItem>
+                                                    <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                                                </BreadcrumbItem>
+                                            </>
+                                        ) : (
+                                            <BreadcrumbItem>
+                                                <BreadcrumbPage>{pageTitle}</BreadcrumbPage>
+                                            </BreadcrumbItem>
+                                        )}
+                                    </BreadcrumbList>
+                                </Breadcrumb>
+                            </div>
+
+                            {/* Right: Profile Dropdown */}
+                            <div className="shrink-0">
+                                <ProfileDropdown />
+                            </div>
                         </div>
                     </div>
 
-
-                    <div className="w-full min-w-0 space-y-5 pt-4">
+                    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden space-y-5 py-4">
 
                         <h1 className="text-2xl font-medium">
                             {pageTitle}

@@ -39,27 +39,27 @@ export const getLeaveReportService = async (
 
         ...(search
             ? {
-                  OR: [
-                      {
-                          name: {
-                              contains: search,
-                              mode: "insensitive",
-                          },
-                      },
-                      {
-                          email: {
-                              contains: search,
-                              mode: "insensitive",
-                          },
-                      },
-                      {
-                          employeeCode: {
-                              contains: search,
-                              mode: "insensitive",
-                          },
-                      },
-                  ],
-              }
+                OR: [
+                    {
+                        name: {
+                            contains: search,
+                            mode: "insensitive",
+                        },
+                    },
+                    {
+                        email: {
+                            contains: search,
+                            mode: "insensitive",
+                        },
+                    },
+                    {
+                        employeeCode: {
+                            contains: search,
+                            mode: "insensitive",
+                        },
+                    },
+                ],
+            }
             : {}),
     };
 
@@ -71,24 +71,24 @@ export const getLeaveReportService = async (
 
         ...(startDate || endDate
             ? {
-                  AND: [
-                      ...(startDate
-                          ? [{ endDate: { gte: startDate } }]
-                          : []),
-                      ...(endDate
-                          ? [{ startDate: { lte: endDate } }]
-                          : []),
-                  ],
-              }
+                AND: [
+                    ...(startDate
+                        ? [{ endDate: { gte: startDate } }]
+                        : []),
+                    ...(endDate
+                        ? [{ startDate: { lte: endDate } }]
+                        : []),
+                ],
+            }
             : {}),
 
         ...(status && status.toLowerCase() !== "all"
             ? {
-                  status: {
-                      equals: status,
-                      mode: "insensitive",
-                  },
-              }
+                status: {
+                    equals: status,
+                    mode: "insensitive",
+                },
+            }
             : {}),
     };
 
@@ -129,6 +129,8 @@ export const getLeaveReportService = async (
                         id: true,
                         name: true,
                         email: true,
+                        profilePhoto: true,
+                        profilePhotoId: true,
                         employeeCode: true,
                         companyId: true,
                         isActive: true,
@@ -157,6 +159,8 @@ export const getLeaveReportService = async (
                 approvedByUser: {
                     select: {
                         name: true,
+                        profilePhoto: true,
+                        profilePhotoId: true,
                     },
                 },
             },

@@ -12,7 +12,7 @@ const LandingPage = lazy(() => import("@/pages/LandingPage"));
 const Signin = lazy(() => import("@/pages/Auth/Signin"));
 
 const Dashboard = lazy(() => import("@/pages/dashboard/Dashboard"));
-const Profile = lazy(() => import("@/pages/Profile"));
+const Profile = lazy(() => import("@/profile/Profile"));
 
 const CompanyList = lazy(() => import("@/pages/CompanyList"));
 const Users = lazy(() => import("../pages/CompanyUsers"));
@@ -25,7 +25,7 @@ const EmployeeView = lazy(() => import("@/pages/EmployeeView"));
 
 const AttendanceList = lazy(() => import("@/pages/punchCard/AttendanceList"));
 const AttendanceLive = lazy(() => import("@/pages/punchCard/AttendanceLive"));
-const EmployeeAttendanceDetail = lazy(  () => import("@/pages/punchCard/EmployeeAttendanceDetail"));
+const EmployeeAttendanceDetail = lazy(() => import("@/pages/punchCard/EmployeeAttendanceDetail"));
 const GeoFencing = lazy(() => import("@/pages/punchCard/GeoFencing"));
 
 const Settings = lazy(() => import("@/pages/Settings"));
@@ -42,9 +42,10 @@ const AttendanceReport = lazy(() => import("@/pages/reports/AttendanceReport"));
 const LeaveReport = lazy(() => import("@/pages/reports/LeaveReport"));
 const OvertimeReport = lazy(() => import("@/pages/reports/OvertimeReport"));
 
-const OnboardingChecklistSettings = lazy( () => import("@/pages/settings/Onboardingchecklistsettings"));
+const OnboardingChecklistSettings = lazy(() => import("@/pages/settings/Onboardingchecklistsettings"));
 const OnboardingDetail = lazy(() => import("@/pages/onboarding/OnboardingDetail"));
 const OnboardingList = lazy(() => import("@/pages/onboarding/OnboardingList"));
+const ChangePassword = lazy(() => import("@/profile/ChangePassword"));
 
 // Reusable lazy page fallback
 const PageLoader = ({ children }: { children: React.ReactNode }) => (
@@ -75,7 +76,7 @@ const AppRoutes = () => {
                         <Route path="/profile" element={<PageLoader><Profile /></PageLoader>} />
                         <Route path="/company" element={<PageLoader><CompanyList /></PageLoader>} />
                         <Route path="/companyusers" element={<PageLoader><Users /></PageLoader>} />
-                        <Route path="/roles" element={<PageLoader><Roles /></PageLoader>}/>
+                        <Route path="/roles" element={<PageLoader><Roles /></PageLoader>} />
                         <Route path="/branch" element={<PageLoader><BranchList /></PageLoader>} />
                         <Route path="/category" element={<PageLoader><CategoryList /></PageLoader>}
                         />
@@ -116,6 +117,8 @@ const AppRoutes = () => {
                         <Route path="/reports/leave" element={<PageLoader><LeaveReport /></PageLoader>}
                         />
                         <Route path="/reports/overtime" element={<PageLoader><OvertimeReport /></PageLoader>}
+                        />
+                        <Route path="/change-password" element={<PageLoader><ChangePassword /></PageLoader>}
                         />
                     </Route>
                 </Route>

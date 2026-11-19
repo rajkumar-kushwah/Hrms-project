@@ -20,6 +20,7 @@ import {
     canViewModule,
     isSuperAdminRole,
 } from "@/utilis/roleUtils";
+import UserAvatar from "../common/UserAvatar";
 
 // --------------------------------------------------
 // Types
@@ -37,8 +38,11 @@ type DayStatus =
     | "Future";
 
 interface SheetEmployee {
+    id: string;
     userId: string;
     name: string;
+    profilePhoto?: string | null;
+    profilePhotoId?: string | null;
     employeeCode: string | null;
     branchName: string | null;
     days: DayStatus[];
@@ -418,8 +422,11 @@ const MonthlySheet = () => {
             if (firstRecord) {
                 list = [
                     {
+                        id: firstRecord.userId,
                         userId: firstRecord.userId,
                         name: "My Attendance",
+                        profilePhoto: null,
+                        profilePhotoId: null,
                         employeeCode: null,
                         branchName: null,
                         days,
@@ -592,11 +599,11 @@ const MonthlySheet = () => {
                                         <div className="text-[10px] font-normal">
                                             {
                                                 WEEKDAY_LETTER[
-                                                    new Date(
-                                                        year,
-                                                        month - 1,
-                                                        day
-                                                    ).getDay()
+                                                new Date(
+                                                    year,
+                                                    month - 1,
+                                                    day
+                                                ).getDay()
                                                 ]
                                             }
                                         </div>
@@ -670,16 +677,22 @@ const MonthlySheet = () => {
                                         }
                                     >
                                         <td className="sticky left-0 z-10 bg-card px-3 py-2">
-                                            <p className="font-medium">
-                                                {employee.name}
-                                            </p>
+                                            <div className="flex items-center gap-2">
+                                                <UserAvatar user={employee} size="sm" />
 
-                                            <p className="text-xs text-muted-foreground">
-                                                {employee.employeeCode ?? "—"}
-                                                {employee.branchName
-                                                    ? ` · ${employee.branchName}`
-                                                    : ""}
-                                            </p>
+                                                <div>
+                                                    <p className="font-medium">
+                                                        {employee.name}
+                                                    </p>
+
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {employee.employeeCode ?? "—"}
+                                                        {employee.branchName
+                                                            ? ` · ${employee.branchName}`
+                                                            : ""}
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </td>
 
                                         {dayNumbers.map((day) => {

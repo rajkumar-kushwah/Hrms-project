@@ -37,6 +37,7 @@ import {
     isSuperAdminRole,
     canViewModule,
 } from "@/utilis/roleUtils";
+import UserAvatar from "../common/UserAvatar";
 
 // ─────────────────────────────────────────────
 // TYPES
@@ -49,8 +50,11 @@ interface Company {
 
 interface OvertimeRecord {
     id: string;
-    date: string;
     userId: string;
+    name: string;
+    date: string;
+    profilePhoto: string | null;
+    profilePhotoId: string | null;
     employeeCode: string | null;
     employeeName: string;
     email: string;
@@ -215,9 +219,12 @@ const TABLE_COLUMNS: TableColumn[] = [
         label: "Date",
         render: (record) => formatDate(record.date),
     },
-    {
-        label: "Employee",
-        render: (record) => (
+  {
+    label: "Employee",
+    render: (record) => (
+        <div className="flex items-center gap-2">
+            <UserAvatar user={record} size="sm" />
+
             <div>
                 <p className="font-medium">
                     {record.employeeName}
@@ -227,8 +234,9 @@ const TABLE_COLUMNS: TableColumn[] = [
                     {record.email}
                 </p>
             </div>
-        ),
-    },
+        </div>
+    ),
+},
     {
         label: "Employee Code",
         render: (record) => record.employeeCode ?? "—",
@@ -640,9 +648,8 @@ const OvertimeReport = () => {
                     }
                 >
                     <RefreshCw
-                        className={`mr-2 h-4 w-4 ${
-                            isSpinning ? "animate-spin" : ""
-                        }`}
+                        className={`mr-2 h-4 w-4 ${isSpinning ? "animate-spin" : ""
+                            }`}
                     />
                     Refresh
                 </Button>

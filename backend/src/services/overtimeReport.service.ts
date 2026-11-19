@@ -77,6 +77,8 @@ export const getOvertimeReportService = async (
                     id: true,
                     name: true,
                     email: true,
+                    profilePhoto: true,
+                    profilePhotoId: true,
                     employeeCode: true,
                     branch: {
                         select: {
@@ -110,6 +112,8 @@ export const getOvertimeReportService = async (
                 date: record.date,
                 userId: record.user.id,
                 employeeCode: record.user.employeeCode,
+                profilePhoto: record.user.profilePhoto,
+                profilePhotoId: record.user.profilePhotoId,
                 employeeName: getUserDisplayName(record.user),
                 email: record.user.email,
                 branch: record.user.branch?.name ?? "-",

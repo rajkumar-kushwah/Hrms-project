@@ -72,6 +72,7 @@ model User {
   permanentAddress      String?
   pfNumber              String?
   profilePhoto          String?
+  profilePhotoId        String?
   reportingManagerId    String?
   workShift             String?
   grossSalary           Float?
@@ -132,7 +133,6 @@ enum DataScope {
   COMPANY
   ALL
 }
-
 
 model Permission {
   id                 Int       @id @default(autoincrement())

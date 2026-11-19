@@ -26,6 +26,10 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
         id: true,
         name: true,
         email: true,
+
+        profilePhoto: true,
+        profilePhotoId: true,  // Profile photo
+
         isActive: true,
         companyId: true, // agar hai to
         createdAt: true,

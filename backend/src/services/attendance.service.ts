@@ -638,6 +638,8 @@ export const getAllAttendance = async (
             select: {
                 id: true,
                 name: true,
+                profilePhoto: true,
+                profilePhotoId: true,
                 employeeCode: true,
                 designation: true,
                 companyId: true,
@@ -656,6 +658,8 @@ export const getAllAttendance = async (
                     select: {
                         id: true,
                         name: true,
+                        profilePhoto: true,
+                        profilePhotoId: true,
                         employeeCode: true,
                         designation: true,
                         role: { select: { name: true } },
@@ -769,6 +773,8 @@ export const getAllAttendance = async (
             user: {
                 id: employee.id,
                 name: employee.name,
+                profilePhoto: employee.profilePhoto,
+                profilePhotoId: employee.profilePhotoId,
                 employeeCode: employee.employeeCode,
                 designation: employee.designation,
             },
@@ -794,6 +800,8 @@ export const getLiveAttendance = async (
                 select: {
                     id: true,
                     name: true,
+                    profilePhoto: true,
+                    profilePhotoId: true,
                     employeeCode: true,
                     designation: true,
                     role: {
@@ -836,6 +844,8 @@ export const getEmployeeAttendance = async (
         select: {
             id: true,
             name: true,
+            profilePhoto: true,
+            profilePhotoId: true,
             employeeCode: true,
             companyId: true,
             branch: { select: { id: true, name: true } },
@@ -867,6 +877,8 @@ export const getEmployeeBasicInfo = async (userId: string) => {
             id: true,
             name: true,
             email: true,
+            profilePhoto: true,
+            profilePhotoId: true,
             employeeCode: true,
             designation: true,
             branch: { select: { id: true, name: true } },
@@ -1046,6 +1058,8 @@ export const getMonthlySheet = async (
             select: {
                 id: true,
                 name: true,
+                profilePhoto: true,
+                profilePhotoId: true,
                 employeeCode: true,
                 role: { select: { name: true } },
                 branch: { select: { name: true } },
@@ -1208,6 +1222,8 @@ export const getMonthlySheet = async (
         employees: employees.map((employee) => ({
             userId: employee.id,
             name: employee.name ?? "",
+            profilePhoto: employee.profilePhoto,
+            profilePhotoId: employee.profilePhotoId,
             employeeCode: employee.employeeCode,
             branchName: employee.branch?.name ?? null,
             days: resolveMonthDays(

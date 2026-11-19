@@ -55,6 +55,7 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from "@/components/ui/pagination";
+import UserAvatar from "../common/UserAvatar";
 
 interface Company {
     id: string;
@@ -362,9 +363,6 @@ const LeaveReport = () => {
             {/* Header */}
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h1 className="text-xl font-semibold">
-                        Leave Report
-                    </h1>
 
                     <p className="text-sm text-muted-foreground">
                         View and manage employee leave reports.
@@ -592,15 +590,23 @@ const LeaveReport = () => {
                                 ) : (
                                     report.data.map((item) => (
                                         <TableRow key={item.id}>
-
                                             {/* Employee */}
                                             <TableCell>
-                                                <div className="font-medium">
-                                                    {getUserName(item.user, "N/A")}
-                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <UserAvatar
+                                                        user={item.user}
+                                                        size="sm"
+                                                    />
 
-                                                <div className="text-xs text-muted-foreground">
-                                                    {item.user.email}
+                                                    <div>
+                                                        <div className="font-medium">
+                                                            {getUserName(item.user, "N/A")}
+                                                        </div>
+
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {item.user.email}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </TableCell>
 
@@ -637,11 +643,7 @@ const LeaveReport = () => {
                                             </TableCell>
 
                                             <TableCell>
-                                                <Badge
-                                                    variant={getStatusVariant(
-                                                        item.status
-                                                    )}
-                                                >
+                                                <Badge variant={getStatusVariant(item.status)}>
                                                     {item.status}
                                                 </Badge>
                                             </TableCell>

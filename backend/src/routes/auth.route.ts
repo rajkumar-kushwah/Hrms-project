@@ -1,26 +1,34 @@
+
 import { signin, logout } from "../controllers/auth.controller.js";
 import express from "express";
 import { protect } from "../middleware/auth.middleware.js";
-import { changePassword, getProfile, updateProfile } from "../controllers/profile.controller.js";
+import { uploadProfilePhoto } from "../middleware/upload.middleware.js";
+
+import {
+    changePassword,
+    getProfile,
+    updateProfile,
+    uploadProfilePhoto as uploadProfilePhotoController,
+} from "../controllers/profile.controller.js";
+
 import { validate } from "../middleware/validation.middleware.js";
 import { signinSchema } from "../validations/auth.validator.js";
-import { updateProfileSchema, changePasswordSchema } from "../validations/profile.validator.js";
-
-// signup, deleteUser, logout, UpdateUser
+import {
+    updateProfileSchema,
+    changePasswordSchema,
+} from "../validations/profile.validator.js";
 
 const router = express.Router();
 
-// const authRouter = express.Router();
+router.post("/signin", validate(signinSchema), signin);
+router.post("/logout", protect, logout);
 
-// authRouter.post('/signup', signup)
-router.post('/signin', validate(signinSchema), signin)
-// authRouter.delete('/users/:id', deleteUser)
-router.post('/logout', protect, logout)
-router.get('/profile', protect, getProfile)
+router.get("/profile", protect, getProfile);
 router.put("/profile", protect, validate(updateProfileSchema), updateProfile);
+
 router.patch("/profile/change-password", protect, validate(changePasswordSchema), changePassword);
 
-// authRouter.put('/users/:id', protect, UpdateUser)
+// Upload profile photo
+router.post("/profile/photo", protect, uploadProfilePhoto.single("profilePhoto"), uploadProfilePhotoController);
 
-export default router
-
+export default router;

@@ -51,6 +51,7 @@ import {
     isSuperAdminRole,
 } from "@/utilis/roleUtils";
 import { CompanySelector } from "@/pages/common/CompanySelector";
+import UserAvatar from "./common/UserAvatar";
 
 const LeaveApproval = () => {
     const { user } = useAuthStore();
@@ -189,7 +190,7 @@ const LeaveApproval = () => {
                 return "bg-yellow-100 text-yellow-700";
         }
     };
-    
+
     if (!canViewLeaveApproval) {
         return null;
     }
@@ -341,14 +342,23 @@ const LeaveApproval = () => {
                                 leaves.map((leave, index) => (
                                     <TableRow key={leave.id}>
                                         <TableCell>{index + 1}</TableCell>
-
                                         <TableCell>
-                                            <p className="font-medium">
-                                                {getUserName(leave.user)}
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {leave.user?.employeeCode}
-                                            </p>
+                                            <div className="flex item-center gap-2 ">
+                                                {leave.user && (
+                                                    <UserAvatar user={leave.user} size="sm" />
+                                                )}
+                                                <div>
+
+                                                    <p className="font-medium">
+                                                        {getUserName(leave.user)}
+                                                    </p>
+                                                    <div>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {leave.user?.employeeCode}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </TableCell>
 
                                         <TableCell>{leave.leaveType?.name}</TableCell>

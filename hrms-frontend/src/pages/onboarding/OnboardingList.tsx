@@ -56,6 +56,7 @@ import {
     canDeleteInModule,
 } from "@/utilis/roleUtils";
 import { CompanySelector } from "../common/CompanySelector";
+import UserAvatar from "../common/UserAvatar";
 
 const MODULE_NAME = "onboarding";
 
@@ -360,12 +361,13 @@ const OnboardingList = () => {
                             <TableRow>
                                 <TableHead>#</TableHead>
 
-                                <TableHead className="min-w-25">
-                                    Code
-                                </TableHead>
 
                                 <TableHead className="min-w-37.5">
                                     Employee
+                                </TableHead>
+
+                                <TableHead className="min-w-25">
+                                    Code
                                 </TableHead>
 
                                 <TableHead className="min-w-35">
@@ -408,11 +410,16 @@ const OnboardingList = () => {
                                     </TableCell>
 
                                     <TableCell>
-                                        {item.user.employeeCode ?? "—"}
+                                        <div className="flex items-center gap-3 min-w-[160px]">
+                                            <UserAvatar user={item.user} size="sm" />
+                                            <span className="font-medium truncate">
+                                                {getUserName(item.user)}
+                                            </span>
+                                        </div>
                                     </TableCell>
 
                                     <TableCell>
-                                        {getUserName(item.user)}
+                                        {item.user.employeeCode ?? "—"}
                                     </TableCell>
 
                                     <TableCell>

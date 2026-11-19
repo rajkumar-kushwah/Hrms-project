@@ -123,6 +123,8 @@ export const getMonthlyPayrollReport = async (
             id: true,
             branchId: true,
             categoryId: true,
+            profilePhoto: true,
+            profilePhotoId: true,
             branch: { select: { name: true } },
             category: {
                 select: {
@@ -157,7 +159,9 @@ export const getMonthlyPayrollReport = async (
 
         return {
             userId: p.userId,
-            name:getUserDisplayName(p.user),
+            name: getUserDisplayName(p.user),
+            profilePhoto: u?.profilePhoto ?? null,
+            profilePhotoId: u?.profilePhotoId ?? null,
             employeeCode: p.user.employeeCode,
             perDaySalary: round2(p.perDaySalary ?? 0),
             branchId: u?.branchId ?? null,

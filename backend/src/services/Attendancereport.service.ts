@@ -24,16 +24,16 @@ export const getAttendanceReport = async (
 
     const hourRows = userIds.length
         ? await prisma.attendance.groupBy({
-              by: ["userId"],
-              where: {
-                  companyId,
-                  userId: { in: userIds },
-                  date: { gte: monthStart, lte: monthEnd },
-                  workingHours: { gt: 0 },
-              },
-              _sum: { workingHours: true },
-              _count: { workingHours: true },
-          })
+            by: ["userId"],
+            where: {
+                companyId,
+                userId: { in: userIds },
+                date: { gte: monthStart, lte: monthEnd },
+                workingHours: { gt: 0 },
+            },
+            _sum: { workingHours: true },
+            _count: { workingHours: true },
+        })
         : [];
 
     const hoursByUser = new Map(
@@ -68,6 +68,8 @@ export const getAttendanceReport = async (
         return {
             userId: employee.userId,
             name: employee.name,
+            profilePhoto: employee.profilePhoto,
+            profilePhotoId: employee.profilePhotoId,
             employeeCode: employee.employeeCode,
             branchName: employee.branchName ?? "Unassigned",
             present,
@@ -110,8 +112,8 @@ export const getAttendanceReport = async (
             totalHours: round1(total((row) => row.totalHours)),
             avgAttendancePercent: rows.length
                 ? Math.round(
-                      total((row) => row.attendancePercent) / rows.length
-                  )
+                    total((row) => row.attendancePercent) / rows.length
+                )
                 : 0,
         };
     };

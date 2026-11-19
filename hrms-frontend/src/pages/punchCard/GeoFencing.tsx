@@ -30,10 +30,13 @@ import {
 } from "@/utilis/roleUtils";
 import { CompanySelector } from "@/pages/common/CompanySelector";
 import { Button } from "@/components/ui/button";
+import UserAvatar from "../common/UserAvatar";
 
 interface GeoFenceEmployee {
     id: string;
     name: string;
+    profilePhoto?: string | null;
+    profilePhotoId?: string | null;
     employeeCode?: string;
     isWithinGeoFence: boolean;
     punchInTime: string;
@@ -396,6 +399,15 @@ const GeoFencing = () => {
                                                                             key={emp.id}
                                                                             className="flex items-center gap-2 rounded-md border bg-background px-2.5 py-1.5"
                                                                         >
+                                                                            <UserAvatar
+                                                                                user={{
+                                                                                    id: emp.id,
+                                                                                    name: emp.name,
+                                                                                    profilePhoto: emp.profilePhoto,
+                                                                                    profilePhotoId: emp.profilePhotoId,
+                                                                                }}
+                                                                                size="sm"
+                                                                            />
                                                                             <div>
                                                                                 <p className="text-xs font-medium">
                                                                                     {emp.name}

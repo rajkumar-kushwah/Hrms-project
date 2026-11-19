@@ -77,7 +77,7 @@ export const getAllLeaveRequests = async (companyId: string | null, status?: str
             ...(status && status !== "all" && { status }),
         },
         include: {
-            user: { select: { id: true, name: true, employeeCode: true, designation: true } },
+            user: { select: { id: true, name: true, profilePhoto: true, profilePhotoId: true, employeeCode: true, designation: true } },
             leaveType: { select: { id: true, name: true } },
             approvedByUser: { select: { id: true, name: true } },
         },
@@ -107,7 +107,11 @@ export const approvedRejectLeave = async (
         },
         include: {
             leaveType: { select: { id: true, name: true } },
-            user: { select: { id: true, name: true } },
+            user: {
+                select: {
+                    id: true, name: true, profilePhoto: true, profilePhotoId: true,
+                }
+            },
         }
     })
 }

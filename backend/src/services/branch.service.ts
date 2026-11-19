@@ -289,6 +289,8 @@ export const getGeoFencingOverview = async (
                 select: {
                     id: true,
                     name: true,
+                    profilePhoto: true,
+                    profilePhotoId: true,
                     employeeCode: true,
                 },
             },
@@ -323,6 +325,8 @@ export const getGeoFencingOverview = async (
             employees: branchAttendance.map((attendance) => ({
                 id: attendance.user.id,
                 name: getUserDisplayName(attendance.user),
+                profilePhoto: attendance.user.profilePhoto,
+                profilePhotoId: attendance.user.profilePhotoId,
                 employeeCode: attendance.user.employeeCode,
                 isWithinGeoFence: attendance.isWithinGeoFence,
                 punchInTime: attendance.punchInTime,

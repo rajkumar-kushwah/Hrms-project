@@ -44,6 +44,7 @@ import {
 } from "@/utilis/roleUtils";
 import { createLeaveRequestSchema } from "@/validation/leaveRequest.validation";
 import { CompanySelector } from "@/pages/common/CompanySelector";
+import UserAvatar from "./common/UserAvatar";
 
 const MODULE_NAME = "leave_request";
 
@@ -450,6 +451,7 @@ const LeaveRequestPage = () => {
                     <TableHeader className="bg-muted rounded-lg">
                         <TableRow>
                             <TableHead>#</TableHead>
+                            <TableHead>Employee</TableHead>
                             <TableHead>Leave Type</TableHead>
                             <TableHead>Start Date</TableHead>
                             <TableHead>End Date</TableHead>
@@ -466,8 +468,18 @@ const LeaveRequestPage = () => {
                         {leaves.map((leave, index) => (
                             <TableRow key={leave.id}>
                                 <TableCell>{index + 1}</TableCell>
-
                                 <TableCell>
+                                    <div className="flex items-center gap-2">
+                                        {leave.user && (
+                                            <UserAvatar user={leave.user} size="sm" />
+                                        )}
+                                        <span className="font-medium">
+                                            {leave.user?.name ?? "N/A"}
+                                        </span>
+                                    </div>
+                                </TableCell>
+                                <TableCell>
+
                                     {leave.leaveType?.name}
                                 </TableCell>
 

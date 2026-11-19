@@ -71,6 +71,8 @@ const calculateEmployeePayroll = async (
         select: {
             grossSalary: true,
             name: true,
+            profilePhoto: true,
+            profilePhotoId: true,
             employeeCode: true,
             designation: true,
             isActive: true,
@@ -203,6 +205,8 @@ const calculateEmployeePayroll = async (
             user: {
                 id: userId,
                 name: getUserDisplayName(user),
+                profilePhoto: user.profilePhoto,
+                profilePhotoId: user.profilePhotoId,
                 employeeCode: user.employeeCode,
                 designation: user.designation,
             },
@@ -600,7 +604,9 @@ const calculateEmployeePayroll = async (
         userId,
         user: {
             id: userId,
-            name:getUserDisplayName(user),
+            name: getUserDisplayName(user),
+            profilePhoto: user.profilePhoto,
+            profilePhotoId: user.profilePhotoId,
             employeeCode: user.employeeCode,
             designation: user.designation,
         },

@@ -42,6 +42,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getUserName } from "@/utilis/roleUtils";
+import UserAvatar from "../common/UserAvatar";
 
 type Stage = "OFFER" | "JOINING" | "DOCUMENTS" | "TRAINING" | "ACTIVE";
 type DocumentInputType = "FILE_UPLOAD" | "DOCUMENT_NUMBER" | "EITHER";
@@ -496,7 +497,15 @@ export default function OnboardingDetail() {
       </div>
 
       <div className="border-b pb-5">
-        <h1 className="text-2xl font-bold tracking-tight">{getUserName(data.user)}</h1>
+        <div>
+          <div className="flex items-center gap-3 min-w-[160px]">
+            <UserAvatar user={data.user} size="lg" />
+            <span className="text-2xl font-bold tracking-tightfont-medium truncate">
+              {getUserName(data.user)}
+            </span>
+          </div>
+        </div>
+        {/* <h1 className="text-2xl font-bold tracking-tight">{getUserName(data.user)}</h1> */}
         <p className="mt-1 text-sm text-muted-foreground">
           {data.user.designation || "Employee"}
           {" · "}

@@ -40,6 +40,7 @@ import {
     canViewModule,
     canEditInModule,
 } from "@/utilis/roleUtils";
+import UserAvatar from "@/pages/common/UserAvatar";
 
 const MODULE_NAME = "company-users";
 
@@ -301,7 +302,15 @@ const Users = () => {
                                         <TableCell>{index + 1}</TableCell>
 
                                         <TableCell>
-                                            {getUserName(user)}
+                                            <div className="flex items-center gap-3 min-w-[160px]">
+                                                <UserAvatar
+                                                    user={user}
+                                                    size="sm"
+                                                />
+                                                <span className="font-medium truncate">
+                                                    {getUserName(user)}
+                                                </span>
+                                            </div>
                                         </TableCell>
 
                                         <TableCell>{user.email}</TableCell>
