@@ -58,16 +58,40 @@ export const createLeaveRequest = async (
 
 }
 
+
 export const getMyLeaveRequests = async (userId: string) => {
     return await prisma.leaveRequest.findMany({
         where: { userId },
         include: {
-            leaveType: { select: { id: true, name: true } },
-            approvedByUser: { select: { id: true, name: true } },
+            user: {
+                select: {
+                    id: true,
+                    name: true,
+                    profilePhoto: true,
+                    profilePhotoId: true,
+                    employeeCode: true,
+                    designation: true,
+                },
+            },
+            leaveType: {
+                select: {
+                    id: true,
+                    name: true,
+                },
+            },
+            approvedByUser: {
+                select: {
+                    id: true,
+                    name: true,
+                },
+            },
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: {
+            createdAt: "desc",
+        },
     });
 };
+
 
 
 export const getAllLeaveRequests = async (companyId: string | null, status?: string) => {
