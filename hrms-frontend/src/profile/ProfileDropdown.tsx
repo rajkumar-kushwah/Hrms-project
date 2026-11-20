@@ -109,9 +109,9 @@ export function ProfileDropdown() {
                                 {profile.email}
                             </p>
 
-                            <p className="mt-1 text-xs font-medium text-primary">
+                            {/* <p className="mt-1 text-xs font-medium text-primary">
                                 {profile.roleLabel}
-                            </p>
+                            </p> */}
                         </div>
                     </div>
                 </DropdownMenuLabel>

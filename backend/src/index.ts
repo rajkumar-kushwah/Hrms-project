@@ -46,12 +46,15 @@ const port = Number(process.env.PORT) || 5000;
 
 
 
+const allowedOrigins = [
+    "http://localhost:5173",
+    "https://hrms-nabu.vercel.app",
+    "https://hrms-dynamic-project.vercel.app",
+];
+
 const io = new Server(server, {
     cors: {
-        origin: [
-            "http://localhost:5173",
-            "https://hrms-dynamic-project.vercel.app",
-        ],
+        origin: allowedOrigins,
         credentials: true,
     },
 });
@@ -61,7 +64,10 @@ setIO(io);
 
 // 2. CORS aur Express Middlewares (Yahan session middleware pehle aana chahiye)
 app.use(cors({
-    origin: ['http://localhost:5173', "https://hrms-dynamic-project.vercel.app", 'https://hoppscotch.io'],
+    origin: [
+        ...allowedOrigins,
+        "https://hoppscotch.io",
+    ],
     credentials: true,
 }));
 
