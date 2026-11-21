@@ -5,6 +5,7 @@ import {
   updateProfileService,
   changePasswordService,
   uploadProfilePhotoService,
+  removeProfilePhotoService,
 } from "../services/profile.service.js";
 
 // Get profile
@@ -113,6 +114,40 @@ export const changePassword = async (req: Request, res: Response) => {
     return res.status(400).json({
       success: false,
       message: error.message,
+    });
+  }
+};
+
+
+
+// Remove profile photo
+export const removeProfilePhoto = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const updatedUser = await removeProfilePhotoService(userId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile photo removed successfully",
+      data: updatedUser,
+    });
+  } catch (error: any) {
+    const message = error.message || "Profile photo removal failed";
+
+    return res.status(message === "Profile photo not found" ? 404 : 500).json({
+      success: false,
+      message,
     });
   }
 };

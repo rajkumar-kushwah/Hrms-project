@@ -15,3 +15,7 @@ export const uploadProfilePhoto = (file: File) => {
 
     return api.post("/auth/profile/photo", formData);
 };
+
+// Remove profile photo
+export const removeProfilePhoto = () =>
+    api.delete("/auth/profile/photo");

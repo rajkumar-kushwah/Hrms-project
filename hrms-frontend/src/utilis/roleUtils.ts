@@ -21,7 +21,13 @@ export interface RoleObject {
 export interface UserObject {
     name?: string | null;
     role?: RoleObject | null;
-    companyId?: string | null;
+    companyId?: string | number | null;
+
+    createdByUser?: {
+        name?: string | null;
+        role?: RoleObject | null;
+    } | null;
+
     [key: string]: any;
 }
 
@@ -119,6 +125,13 @@ export const isAdminRole = (input: RoleInput): boolean => {
 
 export const isEmployeeRole = (input: RoleInput): boolean => {
     return !isAdminRole(input);
+};
+
+// get company name profile me 
+export const getCreatedByRole = (
+    user: UserObject | null | undefined
+): string => {
+    return formatRole(user?.createdByUser?.role);
 };
 
 // ─────────────────────────────────────────────

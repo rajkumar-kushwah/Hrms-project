@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useState } from "react";
 import { toast } from "sonner";
-import { signinUser } from "@/services/auth.service";
+import { getprofile, signinUser } from "@/services/auth.service";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/auth.store";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
@@ -59,17 +59,15 @@ const Signin = () => {
             setSpinner(true);
             setLoading(true);
 
-            const res = await signinUser({
-                email,
-                password,
-            });
+            await signinUser({ email, password });
+            const profileRes = await getprofile();
 
-            setUser(res.data);
-
-            toast.success("Login successful");
+            setUser(profileRes.data);
 
             navigate("/dashboard");
-        } catch (error:any) {
+
+            toast.success("Login successful");
+        } catch (error: any) {
             console.error(error);
             toast.error(error.message || "Invalid email or password");
         } finally {

@@ -7,6 +7,7 @@ import { uploadProfilePhoto } from "../middleware/upload.middleware.js";
 import {
     changePassword,
     getProfile,
+    removeProfilePhoto,
     updateProfile,
     uploadProfilePhoto as uploadProfilePhotoController,
 } from "../controllers/profile.controller.js";
@@ -30,5 +31,7 @@ router.patch("/profile/change-password", protect, validate(changePasswordSchema)
 
 // Upload profile photo
 router.post("/profile/photo", protect, uploadProfilePhoto.single("profilePhoto"), uploadProfilePhotoController);
+
+router.delete("/profile/photo", protect, removeProfilePhoto);
 
 export default router;
