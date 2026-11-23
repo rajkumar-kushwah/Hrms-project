@@ -57,6 +57,11 @@ export const handleDataChange = (data: DataChangeEvent) => {
     });
 };
 
+// Listen for realtime data changes
+socket.on("data:changed", (data: DataChangeEvent) => {
+    handleDataChange(data);
+});
+
 export const subscribeToCompanyData = (
     companyId?: string | number | null
 ) => {

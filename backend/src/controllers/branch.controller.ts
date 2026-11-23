@@ -187,13 +187,6 @@ export const deleteBranch = async (req: Request, res: Response) => {
             id,
             companyId
         );
-        
-        emitDataChange({
-            module: "branch",
-            action: "deleted",
-            companyId,
-            entityId: id,
-        });
 
         return res.status(200).json({
             success: true,
@@ -231,6 +224,13 @@ export const permanentDeleteBranch = async (
             id,
             companyId
         );
+
+        emitDataChange({
+            module: "branch",
+            action: "deleted",
+            companyId,
+            entityId: id,
+        });
 
         return res.status(200).json({
             success: true,
