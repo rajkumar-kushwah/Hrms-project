@@ -408,11 +408,25 @@ const BranchList = () => {
   }, [canViewBranch, isSuperAdmin, companyScopeId]);
 
 
+  React.useEffect(() => {
+    const unregister = registerModuleRefresh("branch", () => {
+      void loadBranches();
+    });
+
+    return () => {
+      unregister();
+    };
+  }, [loadBranches]);
 
   React.useEffect(() => {
     void loadBranches();
   }, [loadBranches]);
   
+
+  React.useEffect(() => {
+    void loadBranches();
+  }, [loadBranches]);
+
   React.useEffect(() => {
     if (!isSuperAdmin) return;
 
