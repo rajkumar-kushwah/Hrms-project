@@ -57,7 +57,13 @@ import {
 import { toast } from "sonner";
 
 import { useAuthStore } from "@/store/auth.store";
-import { registerModuleRefresh } from "@/lib/realtime";
+import {
+  registerModuleRefresh,
+  subscribeToCompanyData,
+  unsubscribeFromCompanyData,
+} from "@/lib/realtime";
+
+import { socket } from "@/lib/socket";
 import type {
   Branch,
   CreateBranchPayload,
@@ -401,19 +407,36 @@ const BranchList = () => {
     }
   }, [canViewBranch, isSuperAdmin, companyScopeId]);
 
-  React.useEffect(() => {
-    const unregister = registerModuleRefresh("branch", () => {
-      void loadBranches();
-    });
 
-    return () => {
-      unregister();
-    };
-  }, [loadBranches]);
 
   React.useEffect(() => {
     void loadBranches();
   }, [loadBranches]);
+  
+  React.useEffect(() => {
+    if (!isSuperAdmin) return;
+
+    const handleConnect = () => {
+      if (selectedCompanyId) {
+        subscribeToCompanyData(selectedCompanyId);
+      }
+    };
+
+    if (selectedCompanyId) {
+      if (socket.connected) {
+        subscribeToCompanyData(selectedCompanyId);
+      }
+
+      socket.on("connect", handleConnect);
+    } else {
+      unsubscribeFromCompanyData();
+    }
+
+    return () => {
+      socket.off("connect", handleConnect);
+      unsubscribeFromCompanyData();
+    };
+  }, [isSuperAdmin, selectedCompanyId]);
   // ----------------------------------------------
   // FORM RESET
   // ----------------------------------------------
