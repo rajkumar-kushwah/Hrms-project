@@ -75,3 +75,16 @@ export const unsubscribeFromCompanyData = () => {
 
     socket.emit("data:unsubscribe");
 };
+socket.on("connect", () => {
+    console.log("🟢 SOCKET CONNECTED:", socket.id);
+});
+
+socket.on("connect_error", (error) => {
+    console.error("🔴 SOCKET ERROR:", error.message);
+});
+
+socket.on("data:changed", (data: DataChangeEvent) => {
+    console.log("📩 REALTIME EVENT RECEIVED:", data);
+
+    handleDataChange(data);
+});
