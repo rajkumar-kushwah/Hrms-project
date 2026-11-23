@@ -1,3 +1,4 @@
+
 import { z } from "zod";
 
 const categoryNameSchema = z
@@ -39,7 +40,9 @@ export const updateCategorySchema = z.object({
     isActive: z.boolean().optional(),
 }).refine(
     (data) => Object.keys(data).length > 0,
-    { message: "At least one field is required for update" }
+    {
+        message: "At least one field is required for update",
+    }
 );
 
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;

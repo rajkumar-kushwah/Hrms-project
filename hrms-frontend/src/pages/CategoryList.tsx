@@ -63,6 +63,7 @@ import {
 } from "@/utilis/roleUtils";
 
 import { CompanySelector } from "@/pages/common/CompanySelector";
+import { createCategorySchema, updateCategorySchema } from "@/validation/category.validation";
 
 type CategoryField = "name" | "description" | "branchId";
 type EditField = "name" | "description";
@@ -90,20 +91,21 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
     return err.response?.data?.message || err.message || fallback;
 };
 
-const validateName = (value: string): string => {
-    const name = value.trim();
+const validateName = (
+    value: string,
+    mode: "create" | "update" = "create",
+): string => {
+    const schema =
+        mode === "create"
+            ? createCategorySchema.shape.name
+            : updateCategorySchema.shape.name;
 
-    if (!name) {
-        return "Category name is required.";
-    }
+    const result = schema.safeParse(value);
 
-    if (name.length > NAME_MAX_LENGTH) {
-        return `Category name cannot exceed ${NAME_MAX_LENGTH} characters.`;
-    }
-
-    return "";
+    return result.success
+        ? ""
+        : result.error.issues[0]?.message ?? "Invalid category name.";
 };
-
 const validateDescription = (value: string): string => {
     if (value.length > DESCRIPTION_MAX_LENGTH) {
         return `Description cannot exceed ${DESCRIPTION_MAX_LENGTH} characters.`;
@@ -345,7 +347,7 @@ const CategoryList = () => {
             if (editTouched.name) {
                 setEditErrors((prev) => ({
                     ...prev,
-                    name: validateName(value) || undefined,
+                    name: validateName(value, "update") || undefined,
                 }));
             }
 
@@ -374,7 +376,7 @@ const CategoryList = () => {
 
         const error =
             field === "name"
-                ? validateName(value)
+                ? validateName(value, "update")
                 : validateDescription(value);
 
         setEditErrors((prev) => ({
@@ -385,7 +387,7 @@ const CategoryList = () => {
 
     const validateEditForm = (): boolean => {
         const errors: EditErrors = {
-            name: validateName(String(editForm.name ?? "")) || undefined,
+            name: validateName(String(editForm.name ?? ""), "update") || undefined,
             description:
                 validateDescription(String(editForm.description ?? "")) ||
                 undefined,
@@ -830,7 +832,7 @@ const CategoryList = () => {
                                     name="name"
                                     placeholder="e.g. Sales Team"
                                     value={form.name}
-                                    maxLength={NAME_MAX_LENGTH + 1}
+                                    maxLength={NAME_MAX_LENGTH}
                                     onChange={handleCreateChange}
                                     onBlur={() =>
                                         handleCreateBlur("name")
@@ -865,7 +867,7 @@ const CategoryList = () => {
                                     name="description"
                                     placeholder="Description (optional)"
                                     value={form.description ?? ""}
-                                    maxLength={DESCRIPTION_MAX_LENGTH + 1}
+                                    maxLength={DESCRIPTION_MAX_LENGTH}
                                     onChange={handleCreateChange}
                                     onBlur={() =>
                                         handleCreateBlur("description")
