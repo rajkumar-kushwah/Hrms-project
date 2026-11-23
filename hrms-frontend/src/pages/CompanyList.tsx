@@ -1471,7 +1471,9 @@ function CompanyList() {
                       colSpan={TABLE_COLUMNS.length}
                       className="py-8 text-center text-muted-foreground"
                     >
-                      No companies found
+                      {searchQuery.trim() || statusFilter !== "all"
+                        ? "No matching records found"
+                        : "No company records found"}
                     </TableCell>
                   </TableRow>
                 )}

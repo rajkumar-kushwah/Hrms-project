@@ -6,6 +6,7 @@ import {
     isDatabaseUnavailable,
     sendDatabaseUnavailable,
 } from "../utilis/dbErrors.js";
+import { emitDataChange } from "../config/socket.js";
 
 // Handle controller errors consistently.
 const handleBranchError = (
@@ -44,6 +45,13 @@ export const createBranch = async (req: Request, res: Response) => {
             companyId,
             req.body
         );
+
+        emitDataChange({
+            module: "branch",
+            action: "created",
+            companyId: branch.companyId,
+            entityId: branch.id,
+        });
 
         return res.status(201).json({
             success: true,
@@ -138,6 +146,13 @@ export const updateBranch = async (req: Request, res: Response) => {
             req.body
         );
 
+        emitDataChange({
+            module: "branch",
+            action: "updated",
+            companyId: branch.companyId,
+            entityId: branch.id,
+        });
+
         return res.status(200).json({
             success: true,
             message: "Branch updated successfully",
@@ -172,6 +187,13 @@ export const deleteBranch = async (req: Request, res: Response) => {
             id,
             companyId
         );
+        
+        emitDataChange({
+            module: "branch",
+            action: "deleted",
+            companyId,
+            entityId: id,
+        });
 
         return res.status(200).json({
             success: true,

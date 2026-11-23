@@ -9,8 +9,12 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
 import {
   Dialog,
   DialogContent,
@@ -18,8 +22,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,21 +30,38 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import PhoneInput, {
+  isValidPhoneNumber,
+} from "react-phone-number-input";
+
+import "react-phone-number-input/style.css";
+
 import {
   AlertTriangle,
   CheckCircle2,
   MapPin,
   MoreVertical,
-  PlusIcon,
+  Plus,
   XCircle,
 } from "lucide-react";
 
 import { toast } from "sonner";
-import { useAuthStore } from "@/store/auth.store";
 
+import { useAuthStore } from "@/store/auth.store";
+import { registerModuleRefresh } from "@/lib/realtime";
 import type {
   Branch,
   CreateBranchPayload,
+  UpdateBranchPayload,
 } from "@/types/branch.types";
 
 import {
@@ -52,14 +72,6 @@ import {
 } from "@/services/branch.service";
 
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
-import {
   isSuperAdminRole,
   canViewModule,
   canCreateInModule,
@@ -67,39 +79,19 @@ import {
   canDeleteInModule,
 } from "@/utilis/roleUtils";
 
-import PhoneInput, {
-  isValidPhoneNumber,
-} from "react-phone-number-input";
-
-import "react-phone-number-input/style.css";
-
 import { branchSchema } from "@/validation/branch.validation";
+
 import { CompanySelector } from "@/pages/common/CompanySelector";
 
 const LocationPicker = React.lazy(
   () => import("@/pages/LocationPicker")
 );
 
-
+// --------------------------------------------------
 // TYPES
+// --------------------------------------------------
 
-
-type EditForm = {
-  name?: string;
-  address?: string;
-  phone?: string;
-  email?: string;
-  city?: string;
-  state?: string;
-  pincode?: string;
-  managerName?: string;
-  latitude?: number;
-  longitude?: number;
-  geoRadius?: number;
-  locationName?: string;
-};
-
-type BranchTextField =
+type TextFieldKey =
   | "name"
   | "email"
   | "city"
@@ -109,12 +101,29 @@ type BranchTextField =
   | "managerName";
 
 type BranchErrors = Partial<
-  Record<BranchTextField | "phone", string>
+  Record<
+    TextFieldKey | "phone" | "latitude" | "longitude",
+    string
+  >
 >;
 
+type FormFieldConfig = {
+  name: TextFieldKey;
+  label: string;
+  placeholder: string;
+  type?: string;
+  required?: boolean;
+};
 
+type PhoneFieldProps = {
+  value: string;
+  error?: string;
+  onChange: (value: string) => void;
+};
+
+// --------------------------------------------------
 // INITIAL FORM
-
+// --------------------------------------------------
 
 const initialForm: CreateBranchPayload = {
   name: "",
@@ -131,70 +140,50 @@ const initialForm: CreateBranchPayload = {
   locationName: "",
 };
 
+// --------------------------------------------------
+// FORM CONFIGURATION
+// --------------------------------------------------
 
-// FORM FIELD CONFIG
+const BASIC_FIELDS: FormFieldConfig[] = [
+  {
+    name: "name",
+    label: "Branch Name",
+    placeholder: "e.g. Delhi Branch",
+    required: true,
+  },
+];
 
+const ADDRESS_FIELDS: FormFieldConfig[] = [
+  {
+    name: "city",
+    label: "City",
+    placeholder: "City",
+  },
+  {
+    name: "state",
+    label: "State",
+    placeholder: "State",
+  },
+  {
+    name: "pincode",
+    label: "Pincode",
+    placeholder: "6 digit pincode",
+    type: "text",
+  },
+];
 
-const CREATE_BASIC_FIELDS: {
-  name: "name";
-  label: string;
-  placeholder: string;
-  type: string;
-}[] = [
-    {
-      name: "name",
-      label: "Branch Name *",
-      placeholder: "e.g. Delhi Branch",
-      type: "text",
-    },
-  ];
-
-const CREATE_ADDRESS_FIELDS: {
-  name: BranchTextField;
-  label: string;
-  placeholder: string;
-  type: string;
-}[] = [
-    {
-      name: "city",
-      label: "City",
-      placeholder: "City",
-      type: "text",
-    },
-    {
-      name: "state",
-      label: "State",
-      placeholder: "State",
-      type: "text",
-    },
-    {
-      name: "pincode",
-      label: "Pincode",
-      placeholder: "Pincode",
-      type: "number",
-    },
-  ];
-
-const EDIT_ADDRESS_FIELDS = CREATE_ADDRESS_FIELDS;
-
-const CREATE_DETAILS_FIELDS: {
-  name: "address" | "managerName";
-  label: string;
-  placeholder: string;
-}[] = [
-    {
-      name: "address",
-      label: "Address",
-      placeholder: "Full Address",
-    },
-    {
-      name: "managerName",
-      label: "Manager Name",
-      placeholder: "Manager Name",
-    },
-  ];
-
-const EDIT_DETAILS_FIELDS = CREATE_DETAILS_FIELDS;
+const DETAILS_FIELDS: FormFieldConfig[] = [
+  {
+    name: "address",
+    label: "Address",
+    placeholder: "Full Address",
+  },
+  {
+    name: "managerName",
+    label: "Manager Name",
+    placeholder: "Manager Name",
+  },
+];
 
 const STATUS_OPTIONS = [
   { label: "All Status", value: "all" },
@@ -202,9 +191,9 @@ const STATUS_OPTIONS = [
   { label: "Inactive", value: "inactive" },
 ];
 
-
-// PHONE INPUT CLASSES
-
+// --------------------------------------------------
+// PHONE INPUT CONFIGURATION
+// --------------------------------------------------
 
 const PHONE_COUNTRY_CLASS =
   "dark:[color-scheme:dark] dark:bg-background dark:text-foreground";
@@ -212,16 +201,114 @@ const PHONE_COUNTRY_CLASS =
 const PHONE_NUMBER_CLASS =
   "h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none placeholder:text-muted-foreground";
 
+// --------------------------------------------------
+// REUSABLE PHONE FIELD
+// --------------------------------------------------
 
+const PhoneField = ({
+  value,
+  error,
+  onChange,
+}: PhoneFieldProps) => {
+  const isValid = !!value && isValidPhoneNumber(value);
+
+  return (
+    <div className="min-w-0 flex-1">
+      <Label>Phone</Label>
+
+      <PhoneInput
+        value={value || undefined}
+        onChange={(phone) => onChange(phone || "")}
+        placeholder="Enter phone number"
+        defaultCountry="IN"
+        international
+        withCountryCallingCode
+        countrySelectProps={{
+          className: PHONE_COUNTRY_CLASS,
+        }}
+        numberInputProps={{
+          className: PHONE_NUMBER_CLASS,
+        }}
+      />
+
+      {error ? (
+        <p className="mt-1 flex items-center gap-2 text-sm text-red-500">
+          <XCircle className="h-4 w-4 shrink-0" />
+          {error}
+        </p>
+      ) : isValid ? (
+        <p className="mt-1 flex items-center gap-2 text-sm text-green-600">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          Valid phone number
+        </p>
+      ) : null}
+    </div>
+  );
+};
+
+// --------------------------------------------------
+// REUSABLE ERROR MESSAGE
+// --------------------------------------------------
+
+const FieldError = ({ error }: { error?: string }) => {
+  if (!error) return null;
+
+  return (
+    <p className="mt-1 text-sm text-red-500">
+      {error}
+    </p>
+  );
+};
+
+// --------------------------------------------------
+// REUSABLE TEXT FIELD
+// --------------------------------------------------
+
+type TextFieldProps = {
+  field: FormFieldConfig;
+  value: string;
+  error?: string;
+  onChange: (name: TextFieldKey, value: string) => void;
+};
+
+const TextField = ({
+  field,
+  value,
+  error,
+  onChange,
+}: TextFieldProps) => (
+  <div className="min-w-0">
+    <Label>
+      {field.label}
+      {field.required ? " *" : ""}
+    </Label>
+
+    <Input
+      type={field.type || "text"}
+      name={field.name}
+      placeholder={field.placeholder}
+      value={value}
+      onChange={(e) =>
+        onChange(field.name, e.target.value)
+      }
+      required={field.required}
+      autoComplete="off"
+    />
+
+    <FieldError error={error} />
+  </div>
+);
+
+// --------------------------------------------------
 // COMPONENT
-
+// --------------------------------------------------
 
 const BranchList = () => {
   const { user } = useAuthStore();
 
-
-  // ROLE & PERMISSIONS
-
+  // ----------------------------------------------
+  // PERMISSIONS
+  // ----------------------------------------------
 
   const isSuperAdmin = isSuperAdminRole(user);
 
@@ -230,182 +317,249 @@ const BranchList = () => {
   const canEditBranch = canEditInModule(user, "branch");
   const canDeleteBranch = canDeleteInModule(user, "branch");
 
-
-  // STATES
-
+  // ----------------------------------------------
+  // COMPANY SCOPE
+  // ----------------------------------------------
 
   const [selectedCompanyId, setSelectedCompanyId] =
     React.useState("");
+
+  const companyScopeId = isSuperAdmin
+    ? selectedCompanyId || undefined
+    : undefined;
+
+  // ----------------------------------------------
+  // STATES
+  // ----------------------------------------------
 
   const [branches, setBranches] = React.useState<Branch[]>([]);
 
   const [open, setOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
 
-  const [selectedBranch, setSelectedBranch] =
-    React.useState<Branch | null>(null);
-
   const [statusDialogOpen, setStatusDialogOpen] =
     React.useState(false);
 
   const [dangerOpen, setDangerOpen] = React.useState(false);
-  const [confirmText, setConfirmText] = React.useState("");
 
-  const [createMapOpen, setCreateMapOpen] = React.useState(false);
-  const [editMapOpen, setEditMapOpen] = React.useState(false);
+  const [createMapOpen, setCreateMapOpen] =
+    React.useState(false);
+
+  const [editMapOpen, setEditMapOpen] =
+    React.useState(false);
+
+  const [selectedBranch, setSelectedBranch] =
+    React.useState<Branch | null>(null);
+
+  const [confirmText, setConfirmText] = React.useState("");
 
   const [searchQuery, setSearchQuery] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("all");
 
-  const [isPhoneValid, setIsPhoneValid] = React.useState(false);
-  const [phoneError, setPhoneError] = React.useState("");
-
-  const [isEditPhoneValid, setIsEditPhoneValid] =
-    React.useState(false);
-  const [editPhoneError, setEditPhoneError] = React.useState("");
-
   const [errors, setErrors] = React.useState<BranchErrors>({});
-  const [editErrors, setEditErrors] = React.useState<BranchErrors>({});
+  const [editErrors, setEditErrors] =
+    React.useState<BranchErrors>({});
 
-  const [form, setForm] =
-    React.useState<CreateBranchPayload>({ ...initialForm });
+  const [form, setForm] = React.useState<CreateBranchPayload>(
+    { ...initialForm }
+  );
 
   const [editForm, setEditForm] =
-    React.useState<EditForm>({});
+    React.useState<UpdateBranchPayload>({});
 
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
+  // ----------------------------------------------
   // LOAD BRANCHES
+  // ----------------------------------------------
 
-
-  const loadBranches = async () => {
+  const loadBranches = React.useCallback(async () => {
     if (!canViewBranch) {
       setBranches([]);
       return;
     }
 
-    if (isSuperAdmin && !selectedCompanyId) {
+    if (isSuperAdmin && !companyScopeId) {
       setBranches([]);
       return;
     }
 
-    try {
-      const res = await getBranches(
-        isSuperAdmin ? selectedCompanyId : undefined
-      );
+    setIsLoading(true);
 
-      setBranches(res.data.data);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to load branches");
+    try {
+      const res = await getBranches(companyScopeId);
+      setBranches(res.data.data || []);
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to load branches"
+      );
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [canViewBranch, isSuperAdmin, companyScopeId]);
 
   React.useEffect(() => {
-    void loadBranches();
-  }, [selectedCompanyId, isSuperAdmin, canViewBranch]);
+    const unregister = registerModuleRefresh("branch", () => {
+      void loadBranches();
+    });
 
+    return () => {
+      unregister();
+    };
+  }, [loadBranches]);
+  // ----------------------------------------------
+  // FORM RESET
+  // ----------------------------------------------
 
-  // CLOSE CREATE DIALOG
-
-
-  const handleClose = () => {
-    setOpen(false);
+  const resetCreateForm = () => {
     setForm({ ...initialForm });
     setErrors({});
-    setIsPhoneValid(false);
-    setPhoneError("");
     setCreateMapOpen(false);
   };
 
-
-  // VALIDATION HELPER
-
-
-  const validateField = (name: string, value: string) => {
-    const schemaField =
-      branchSchema.shape[
-      name as keyof typeof branchSchema.shape
-      ];
-
-    if (!schemaField) return;
-
-    const result = schemaField.safeParse(value);
-
-    const error = result.success
-      ? undefined
-      : result.error.issues[0]?.message;
-
-    return error;
+  const closeCreateDialog = () => {
+    setOpen(false);
+    resetCreateForm();
   };
 
+  const closeEditDialog = () => {
+    setEditOpen(false);
+    setEditMapOpen(false);
+    setDangerOpen(false);
+    setConfirmText("");
+    setEditErrors({});
+    setSelectedBranch(null);
+    setEditForm({});
+  };
 
-  // CREATE INPUT CHANGE
+  // ----------------------------------------------
+  // VALIDATION HELPER
+  // ----------------------------------------------
 
+  const validateField = (
+    name: keyof typeof branchSchema.shape,
+    value: unknown
+  ): string | undefined => {
+    const fieldSchema = branchSchema.shape[name];
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement>
+    const result = fieldSchema.safeParse(value);
+
+    return result.success
+      ? undefined
+      : result.error.issues[0]?.message;
+  };
+
+  const getFormErrors = (
+    values: CreateBranchPayload
+  ): BranchErrors => {
+    const result = branchSchema.safeParse(values);
+
+    if (result.success) return {};
+
+    const nextErrors: BranchErrors = {};
+
+    result.error.issues.forEach((issue) => {
+      const key = issue.path[0] as keyof BranchErrors;
+
+      if (key && !nextErrors[key]) {
+        nextErrors[key] = issue.message;
+      }
+    });
+
+    return nextErrors;
+  };
+
+  // ----------------------------------------------
+  // CREATE FIELD CHANGE
+  // ----------------------------------------------
+
+  const handleCreateChange = (
+    name: TextFieldKey,
+    value: string
   ) => {
-    const { name, value } = e.target;
-
     setForm((prev) => ({
       ...prev,
       [name]: value,
     }));
 
-    const error = validateField(name, value);
-
     setErrors((prev) => ({
       ...prev,
-      [name]: error,
+      [name]: validateField(name, value),
     }));
   };
 
+  const handleCreatePhoneChange = (phone: string) => {
+    setForm((prev) => ({
+      ...prev,
+      phone,
+    }));
 
-  // EDIT INPUT CHANGE
+    setErrors((prev) => ({
+      ...prev,
+      phone: validateField("phone", phone),
+    }));
+  };
 
+  // ----------------------------------------------
+  // EDIT FIELD CHANGE
+  // ----------------------------------------------
 
   const handleEditChange = (
-    e: React.ChangeEvent<HTMLInputElement>
+    name: TextFieldKey,
+    value: string
   ) => {
-    const { name, value } = e.target;
-
     setEditForm((prev) => ({
       ...prev,
       [name]: value,
     }));
 
-    const error = validateField(name, value);
-
     setEditErrors((prev) => ({
       ...prev,
-      [name]: error,
+      [name]: validateField(name, value),
     }));
   };
 
+  const handleEditPhoneChange = (phone: string) => {
+    setEditForm((prev) => ({
+      ...prev,
+      phone,
+    }));
 
+    setEditErrors((prev) => ({
+      ...prev,
+      phone: validateField("phone", phone),
+    }));
+  };
+
+  // ----------------------------------------------
   // FILTER BRANCHES
+  // ----------------------------------------------
 
+  const filteredBranches = React.useMemo(() => {
+    const search = searchQuery.trim().toLowerCase();
 
-  const filteredBranches = branches.filter((branch) => {
-    const search = searchQuery.toLowerCase();
+    return branches.filter((branch) => {
+      const matchSearch =
+        !search ||
+        branch.name.toLowerCase().includes(search) ||
+        branch.code.toLowerCase().includes(search);
 
-    const matchSearch = searchQuery
-      ? branch.name.toLowerCase().includes(search) ||
-      branch.code.toLowerCase().includes(search)
-      : true;
-
-    const matchStatus =
-      statusFilter !== "all"
-        ? statusFilter === "active"
+      const matchStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active"
           ? branch.isActive
-          : !branch.isActive
-        : true;
+          : !branch.isActive);
 
-    return matchSearch && matchStatus;
-  });
+      return matchSearch && matchStatus;
+    });
+  }, [branches, searchQuery, statusFilter]);
 
-
+  // ----------------------------------------------
   // CREATE BRANCH
-
+  // ----------------------------------------------
 
   const handleSubmit = async () => {
     if (!canCreateBranch) {
@@ -413,55 +567,27 @@ const BranchList = () => {
       return;
     }
 
-    if (isSuperAdmin && !selectedCompanyId) {
+    if (isSuperAdmin && !companyScopeId) {
       toast.error("Please select a company first.");
       return;
     }
 
-    if (!form.name.trim()) {
-      toast.error("Branch name is required");
-      return;
-    }
-
-    const result = branchSchema.safeParse({
-      name: form.name,
-      email: form.email,
-      phone: form.phone,
-      city: form.city,
-      state: form.state,
-      pincode: form.pincode,
-      address: form.address,
-      managerName: form.managerName,
-      latitude: form.latitude,
-      longitude: form.longitude,
-      locationName: form.locationName,
-      geoRadius: form.geoRadius,
-    });
+    const result = branchSchema.safeParse(form);
 
     if (!result.success) {
-      const fieldErrors = result.error.flatten().fieldErrors;
-
-      setErrors({
-        name: fieldErrors.name?.[0],
-        email: fieldErrors.email?.[0],
-        phone: fieldErrors.phone?.[0],
-        city: fieldErrors.city?.[0],
-        state: fieldErrors.state?.[0],
-        pincode: fieldErrors.pincode?.[0],
-        address: fieldErrors.address?.[0],
-        managerName: fieldErrors.managerName?.[0],
-      });
-
+      setErrors(getFormErrors(form));
+      toast.error("Please correct the highlighted fields.");
       return;
     }
 
-    setErrors({});
+    setIsSubmitting(true);
 
     try {
-      // Super Admin ke selected company ke saath branch create hogi.
+      const payload = result.data as CreateBranchPayload;
+
       const res = await createBranch(
-        form,
-        isSuperAdmin ? selectedCompanyId : undefined
+        payload,
+        companyScopeId
       );
 
       toast.success("Branch created successfully!");
@@ -471,173 +597,21 @@ const BranchList = () => {
         ...prev,
       ]);
 
-      handleClose();
-      void loadBranches();
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to create branch");
+      closeCreateDialog();
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to create branch"
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-
-  // UPDATE PAYLOAD
-
-
-  const payload = {
-    name: editForm.name,
-    address: editForm.address,
-    phone: editForm.phone,
-    email: editForm.email,
-    city: editForm.city,
-    state: editForm.state,
-    pincode: editForm.pincode,
-    managerName: editForm.managerName,
-    latitude: editForm.latitude,
-    longitude: editForm.longitude,
-    geoRadius: editForm.geoRadius,
-    locationName: editForm.locationName,
-  };
-
-
-  // UPDATE BRANCH
-
-
-  const handleUpdate = async () => {
-    if (!canEditBranch) {
-      toast.error("You don't have permission to edit branches.");
-      return;
-    }
-
-    if (!selectedBranch) return;
-
-    const result = branchSchema.safeParse({
-      name: editForm.name,
-      email: editForm.email,
-      phone: editForm.phone,
-      address: editForm.address,
-      managerName: editForm.managerName,
-      latitude: editForm.latitude,
-      longitude: editForm.longitude,
-    });
-
-    if (!result.success) {
-      const fieldErrors = result.error.flatten().fieldErrors;
-
-      setEditErrors({
-        name: fieldErrors.name?.[0],
-        email: fieldErrors.email?.[0],
-        phone: fieldErrors.phone?.[0],
-        address: fieldErrors.address?.[0],
-        managerName: fieldErrors.managerName?.[0],
-      });
-
-      return;
-    }
-
-    setEditErrors({});
-
-    try {
-      const res = await updateBranch(
-        selectedBranch.id,
-        payload,
-        selectedCompanyId
-      );
-
-      setBranches((prev) =>
-        prev.map((branch) =>
-          branch.id === selectedBranch.id
-            ? { ...branch, ...res.data.data }
-            : branch
-        )
-      );
-
-      toast.success("Branch updated successfully!");
-
-      setEditOpen(false);
-      setSelectedBranch(null);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to update branch");
-    }
-  };
-
-
-  // ACTIVATE / DEACTIVATE
-
-
-  const handleToggleStatus = async () => {
-    if (!canEditBranch) {
-      toast.error("You don't have permission to update branches.");
-      return;
-    }
-
-    if (!selectedBranch) return;
-
-    try {
-      const res = await updateBranch(
-        selectedBranch.id,
-        {
-          isActive: !selectedBranch.isActive,
-        },
-        selectedCompanyId
-      );
-
-      toast.success(
-        `Branch ${selectedBranch.isActive ? "deactivated" : "activated"
-        } successfully!`
-      );
-
-      setBranches((prev) =>
-        prev.map((branch) =>
-          branch.id === selectedBranch.id
-            ? { ...branch, ...res.data.data }
-            : branch
-        )
-      );
-
-      setStatusDialogOpen(false);
-      setSelectedBranch(null);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to update branch");
-    }
-  };
-
-
-  // PERMANENT DELETE
-
-
-  const handlePermanentDelete = async () => {
-    if (!canDeleteBranch) {
-      toast.error("You don't have permission to delete branches.");
-      return;
-    }
-
-    if (!selectedBranch) return;
-
-    if (confirmText !== selectedBranch.name) {
-      toast.error("Branch name doesn't match");
-      return;
-    }
-
-    try {
-      await permanentDeleteBranch(selectedBranch.id);
-
-      toast.success("Branch permanently deleted!");
-
-      setBranches((prev) =>
-        prev.filter((branch) => branch.id !== selectedBranch.id)
-      );
-
-      setDangerOpen(false);
-      setEditOpen(false);
-      setSelectedBranch(null);
-      setConfirmText("");
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to delete branch");
-    }
-  };
-
-
+  // ----------------------------------------------
   // OPEN EDIT DIALOG
-
+  // ----------------------------------------------
 
   const handleOpenEdit = (branch: Branch) => {
     if (!canEditBranch) {
@@ -649,72 +623,242 @@ const BranchList = () => {
 
     setEditForm({
       name: branch.name,
-      address: branch.address,
-      phone: branch.phone,
-      email: branch.email,
-      city: branch.city,
-      state: branch.state,
-      pincode: branch.pincode,
-      managerName: branch.managerName,
+      address: branch.address ?? "",
+      phone: branch.phone ?? "",
+      email: branch.email ?? "",
+      city: branch.city ?? "",
+      state: branch.state ?? "",
+      pincode: branch.pincode ?? "",
+      managerName: branch.managerName ?? "",
       latitude: branch.latitude,
       longitude: branch.longitude,
       geoRadius: branch.geoRadius,
-      locationName: branch.locationName,
+      locationName: branch.locationName ?? "",
     });
-
-    const phone = branch.phone || "";
-
-    setIsEditPhoneValid(
-      !!phone && isValidPhoneNumber(phone)
-    );
-
-    setEditPhoneError(
-      phone && !isValidPhoneNumber(phone)
-        ? "Invalid phone number"
-        : ""
-    );
 
     setEditErrors({});
     setEditMapOpen(false);
     setEditOpen(true);
   };
 
+  // ----------------------------------------------
+  // UPDATE BRANCH
+  // ----------------------------------------------
 
-  // TABLE CONFIG
+  const handleUpdate = async () => {
+    if (!canEditBranch) {
+      toast.error("You don't have permission to edit branches.");
+      return;
+    }
 
+    if (!selectedBranch) return;
+
+    if (isSuperAdmin && !companyScopeId) {
+      toast.error("Please select a company first.");
+      return;
+    }
+
+    const result = branchSchema.safeParse(editForm);
+
+    if (!result.success) {
+      setEditErrors(
+        getFormErrors(editForm as CreateBranchPayload)
+      );
+
+      toast.error("Please correct the highlighted fields.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const payload = result.data as UpdateBranchPayload;
+
+      const res = await updateBranch(
+        selectedBranch.id,
+        payload,
+        companyScopeId
+      );
+
+      const updatedBranch: Branch = {
+        ...selectedBranch,
+        ...res.data.data,
+      };
+
+      setBranches((prev) =>
+        prev.map((branch) =>
+          branch.id === selectedBranch.id
+            ? updatedBranch
+            : branch
+        )
+      );
+
+      toast.success("Branch updated successfully!");
+
+      closeEditDialog();
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to update branch"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ----------------------------------------------
+  // ACTIVATE / DEACTIVATE BRANCH
+  // ----------------------------------------------
+
+  const handleToggleStatus = async () => {
+    if (!canEditBranch) {
+      toast.error("You don't have permission to update branches.");
+      return;
+    }
+
+    if (!selectedBranch) return;
+
+    if (isSuperAdmin && !companyScopeId) {
+      toast.error("Please select a company first.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const res = await updateBranch(
+        selectedBranch.id,
+        {
+          isActive: !selectedBranch.isActive,
+        },
+        companyScopeId
+      );
+
+      setBranches((prev) =>
+        prev.map((branch) =>
+          branch.id === selectedBranch.id
+            ? { ...branch, ...res.data.data }
+            : branch
+        )
+      );
+
+      toast.success(
+        `Branch ${selectedBranch.isActive
+          ? "deactivated"
+          : "activated"
+        } successfully!`
+      );
+
+      setStatusDialogOpen(false);
+      setSelectedBranch(null);
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to update branch"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ----------------------------------------------
+  // PERMANENT DELETE BRANCH
+  // ----------------------------------------------
+
+  const handlePermanentDelete = async () => {
+    if (!canDeleteBranch) {
+      toast.error("You don't have permission to delete branches.");
+      return;
+    }
+
+    if (!selectedBranch) return;
+
+    if (isSuperAdmin && !companyScopeId) {
+      toast.error("Please select a company first.");
+      return;
+    }
+
+    if (confirmText.trim() !== selectedBranch.name) {
+      toast.error("Branch name doesn't match");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await permanentDeleteBranch(
+        selectedBranch.id,
+        companyScopeId
+      );
+
+      setBranches((prev) =>
+        prev.filter(
+          (branch) => branch.id !== selectedBranch.id
+        )
+      );
+
+      toast.success("Branch deleted successfully!");
+
+      closeEditDialog();
+      setStatusDialogOpen(false);
+    } catch (error: any) {
+      toast.error(
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to delete branch"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ----------------------------------------------
+  // TABLE COLUMNS
+  // ----------------------------------------------
 
   const tableColumns = [
     { key: "index", label: "#" },
     { key: "name", label: "Name", className: "min-w-37.5" },
     { key: "code", label: "Code", className: "min-w-25" },
+
     ...(isSuperAdmin
-      ? [{ key: "company", label: "Company", className: "min-w-37.5" }]
+      ? [{
+        key: "company",
+        label: "Company",
+        className: "min-w-37.5",
+      }]
       : []),
-    { key: "phone", label: "Phone", className: "min-w-25" },
+
+    { key: "phone", label: "Phone", className: "min-w-32" },
     { key: "manager", label: "Manager", className: "min-w-37.5" },
     { key: "location", label: "Location", className: "min-w-40" },
-    { key: "status", label: "Status", className: "min-w-20" },
-    { key: "actions", label: "Actions", className: "sticky right-0 bg-muted" },
+    { key: "status", label: "Status", className: "min-w-24" },
+    {
+      key: "actions",
+      label: "Actions",
+      className: "sticky right-0 bg-muted",
+    },
   ];
 
-
+  // ----------------------------------------------
   // PERMISSION GUARD
+  // ----------------------------------------------
 
+  if (!canViewBranch) return null;
 
-  if (!canViewBranch) {
-    return null;
-  }
-
-
+  // ----------------------------------------------
   // UI
-
+  // ----------------------------------------------
 
   return (
     <div className="flex flex-col gap-4">
 
       {/* HEADER */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3 flex-wrap">
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
 
           {isSuperAdmin && (
             <CompanySelector
@@ -722,243 +866,179 @@ const BranchList = () => {
               onCompanyChange={(companyId) => {
                 setSelectedCompanyId(companyId);
                 setBranches([]);
+                setSearchQuery("");
               }}
             />
           )}
 
-          <div className="flex flex-wrap gap-3 sm:flex-row sm:items-center">
-            <Input
-              type="search"
-              name="branch-search"
-              autoComplete="off"
-              placeholder="Search branch name or code..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-64"
-            />
+          <Input
+            type="search"
+            placeholder="Search branch name or code..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full sm:w-64"
+            autoComplete="off"
+          />
 
-            <Select
-              value={statusFilter}
-              onValueChange={setStatusFilter}
-            >
-              <SelectTrigger className="w-36">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
+          <Select
+            value={statusFilter}
+            onValueChange={setStatusFilter}
+          >
+            <SelectTrigger className="w-36">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
 
-              <SelectContent position="popper">
-                {STATUS_OPTIONS.map((option) => (
-                  <SelectItem
-                    key={option.value}
-                    value={option.value}
-                  >
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SelectContent position="popper">
+              {STATUS_OPTIONS.map((option) => (
+                <SelectItem
+                  key={option.value}
+                  value={option.value}
+                >
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {canCreateBranch && (
-          <Button className="cursor-pointer"
+          <Button
             size="sm"
             variant="add"
-            disabled={isSuperAdmin && !selectedCompanyId}
+            className="cursor-pointer"
+            disabled={isSuperAdmin && !companyScopeId}
             onClick={() => setOpen(true)}
           >
-            <PlusIcon className="mr-2 h-4 w-4" />
+            <Plus className="mr-2 h-4 w-4" />
             Add Branch
           </Button>
         )}
-          </div>
-        </div>
-
       </div>
 
       {/* CREATE DIALOG */}
+
       {canCreateBranch && (
         <Dialog
           open={open}
-          onOpenChange={(isOpen) => {
-            if (!isOpen) {
-              handleClose();
+          onOpenChange={(value) => {
+            if (!value) {
+              closeCreateDialog();
             } else {
               setOpen(true);
             }
           }}
         >
-          <DialogContent>
+          <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+
             <DialogHeader>
               <DialogTitle>Add Branch</DialogTitle>
               <DialogDescription>
-                Fill branch details
+                Fill in the branch details below.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex flex-col gap-3">
+            <div className="space-y-4">
 
-              {/* NAME */}
-              {CREATE_BASIC_FIELDS.map((field) => (
-                <div key={field.name}>
-                  <Label>{field.label}</Label>
-                  <Input
-                    type={field.type}
-                    name={field.name}
-                    placeholder={field.placeholder}
-                    value={form[field.name]}
-                    onChange={handleChange}
-                  />
+              {/* BASIC FIELDS */}
 
-                  {errors[field.name] && (
-                    <p className="mt-1 text-sm text-red-500">
-                      {errors[field.name]}
-                    </p>
-                  )}
-                </div>
+              {BASIC_FIELDS.map((field) => (
+                <TextField
+                  key={field.name}
+                  field={field}
+                  value={form[field.name] ?? ""}
+                  error={errors[field.name]}
+                  onChange={handleCreateChange}
+                />
               ))}
 
               {/* PHONE + EMAIL */}
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <Label>Phone</Label>
 
-                  <PhoneInput
-                    value={form.phone}
-                    onChange={(value) => {
-                      const phone = value || "";
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <PhoneField
+                  value={form.phone ?? ""}
+                  error={errors.phone}
+                  onChange={handleCreatePhoneChange}
+                />
 
-                      setForm((prev) => ({
-                        ...prev,
-                        phone,
-                      }));
-
-                      if (!phone) {
-                        setPhoneError("");
-                        setIsPhoneValid(false);
-                        return;
-                      }
-
-                      const valid = isValidPhoneNumber(phone);
-
-                      setIsPhoneValid(valid);
-                      setPhoneError(
-                        valid ? "" : "Invalid phone number"
-                      );
-                    }}
-                    placeholder="Enter phone number"
-                    defaultCountry="IN"
-                    international
-                    withCountryCallingCode
-                    countrySelectProps={{
-                      className: PHONE_COUNTRY_CLASS,
-                    }}
-                    numberInputProps={{
-                      className: PHONE_NUMBER_CLASS,
-                    }}
-                  />
-
-                  {phoneError && (
-                    <p className="mt-1 flex items-center gap-2 text-sm text-red-500">
-                      <XCircle className="h-4 w-4" />
-                      {phoneError}
-                    </p>
-                  )}
-
-                  {isPhoneValid && !phoneError && (
-                    <p className="mt-1 flex items-center gap-2 text-sm text-green-600">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Valid phone number
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex-1">
-                  <Label>Email</Label>
-                  <Input
-                    type="email"
-                    name="email"
-                    placeholder="Email"
-                    value={form.email}
-                    onChange={handleChange}
-                  />
-
-                  {errors.email && (
-                    <p className="mt-1 text-sm text-red-500">
-                      {errors.email}
-                    </p>
-                  )}
-                </div>
+                <TextField
+                  field={{
+                    name: "email",
+                    label: "Email",
+                    placeholder: "Email address",
+                    type: "email",
+                  }}
+                  value={form.email ?? ""}
+                  error={errors.email}
+                  onChange={handleCreateChange}
+                />
               </div>
 
-              {/* CITY + STATE + PINCODE */}
-              <div className="flex gap-2">
-                {CREATE_ADDRESS_FIELDS.map((field) => (
-                  <div className="flex-1" key={field.name}>
-                    <Label>{field.label}</Label>
-                    <Input
-                      type={field.type}
-                      name={field.name}
-                      placeholder={field.placeholder}
-                      value={form[field.name] ?? ""}
-                      onChange={handleChange}
-                    />
+              {/* ADDRESS FIELDS */}
 
-                    {errors[field.name] && (
-                      <p className="mt-1 text-sm text-red-500">
-                        {errors[field.name]}
-                      </p>
-                    )}
-                  </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {ADDRESS_FIELDS.map((field) => (
+                  <TextField
+                    key={field.name}
+                    field={field}
+                    value={form[field.name] ?? ""}
+                    error={errors[field.name]}
+                    onChange={handleCreateChange}
+                  />
                 ))}
               </div>
 
-              {/* ADDRESS + MANAGER */}
-              {CREATE_DETAILS_FIELDS.map((field) => (
-                <div key={field.name}>
-                  <Label>{field.label}</Label>
-                  <Input
-                    type="text"
-                    name={field.name}
-                    placeholder={field.placeholder}
-                    value={form[field.name] ?? ""}
-                    onChange={handleChange}
-                  />
+              {/* DETAILS */}
 
-                  {errors[field.name] && (
-                    <p className="mt-1 text-sm text-red-500">
-                      {errors[field.name]}
-                    </p>
-                  )}
-                </div>
+              {DETAILS_FIELDS.map((field) => (
+                <TextField
+                  key={field.name}
+                  field={field}
+                  value={form[field.name] ?? ""}
+                  error={errors[field.name]}
+                  onChange={handleCreateChange}
+                />
               ))}
 
               {/* LOCATION */}
-              <div>
+
+              <div className="space-y-2">
                 <Label>Branch Location</Label>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <Button
-                    variant="outline"
-                    className="cursor-pointer"
                     type="button"
+                    variant="outline"
                     onClick={() => setCreateMapOpen(true)}
                   >
                     <MapPin className="mr-2 h-4 w-4" />
-                    {form.latitude !== undefined
+                    {form.latitude != null
                       ? "Update Location"
                       : "Set Location"}
                   </Button>
 
-                  {form.latitude !== undefined &&
-                    form.longitude !== undefined && (
+                  {form.latitude != null &&
+                    form.longitude != null && (
                       <span className="text-xs text-muted-foreground">
                         {form.latitude.toFixed(4)},{" "}
-                        {form.longitude.toFixed(4)} —{" "}
+                        {form.longitude.toFixed(4)}
+                        {" — "}
                         {form.geoRadius ?? 0} m radius
                       </span>
                     )}
                 </div>
+
+                <FieldError
+                  error={errors.latitude || errors.longitude}
+                />
               </div>
 
-              <Button variant="add" onClick={handleSubmit}>
-                Create Branch
+              <Button
+                variant="add"
+                className="w-full"
+                disabled={isSubmitting}
+                onClick={handleSubmit}
+              >
+                {isSubmitting ? "Creating..." : "Create Branch"}
               </Button>
             </div>
           </DialogContent>
@@ -966,6 +1046,7 @@ const BranchList = () => {
       )}
 
       {/* CREATE LOCATION PICKER */}
+
       {canCreateBranch && createMapOpen && (
         <React.Suspense fallback={null}>
           <LocationPicker
@@ -983,22 +1064,27 @@ const BranchList = () => {
                 geoRadius: radius,
                 locationName,
               }));
+
+              setErrors((prev) => ({
+                ...prev,
+                latitude: undefined,
+                longitude: undefined,
+              }));
             }}
           />
         </React.Suspense>
       )}
 
       {/* EDIT DIALOG */}
+
       {canEditBranch && (
         <Dialog
           open={editOpen}
           onOpenChange={(value) => {
-            setEditOpen(value);
-
             if (!value) {
-              setEditMapOpen(false);
-              setDangerOpen(false);
-              setConfirmText("");
+              closeEditDialog();
+            } else {
+              setEditOpen(true);
             }
           }}
         >
@@ -1008,148 +1094,89 @@ const BranchList = () => {
               <DialogTitle>
                 Edit Branch — {selectedBranch?.name}
               </DialogTitle>
+
               <DialogDescription>
-                Update branch details
+                Update branch details.
               </DialogDescription>
             </DialogHeader>
 
             <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
 
-              {/* NAME */}
-              <div>
-                <Label>Branch Name</Label>
-                <Input
-                  type="text"
-                  name="name"
-                  value={editForm.name ?? ""}
+              {/* BASIC FIELDS */}
+
+              {BASIC_FIELDS.map((field) => (
+                <TextField
+                  key={field.name}
+                  field={field}
+                  value={editForm[field.name] ?? ""}
+                  error={editErrors[field.name]}
                   onChange={handleEditChange}
                 />
-                {editErrors.name && (
-                  <p className="mt-1 text-sm text-red-500">
-                    {editErrors.name}
-                  </p>
-                )}
-              </div>
+              ))}
 
               {/* PHONE + EMAIL */}
+
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="min-w-0">
-                  <Label>Phone</Label>
+                <PhoneField
+                  value={editForm.phone ?? ""}
+                  error={editErrors.phone}
+                  onChange={handleEditPhoneChange}
+                />
 
-                  <PhoneInput
-                    value={editForm.phone ?? ""}
-                    onChange={(value) => {
-                      const phone = value || "";
-
-                      setEditForm((prev) => ({
-                        ...prev,
-                        phone,
-                      }));
-
-                      if (!phone) {
-                        setEditPhoneError("");
-                        setIsEditPhoneValid(false);
-                        return;
-                      }
-
-                      const valid = isValidPhoneNumber(phone);
-
-                      setIsEditPhoneValid(valid);
-                      setEditPhoneError(
-                        valid ? "" : "Invalid phone number"
-                      );
-                    }}
-                    placeholder="Enter phone number"
-                    defaultCountry="IN"
-                    international
-                    withCountryCallingCode
-                    countrySelectProps={{
-                      className: PHONE_COUNTRY_CLASS,
-                    }}
-                    numberInputProps={{
-                      className: PHONE_NUMBER_CLASS,
-                    }}
-                  />
-
-                  {editPhoneError && (
-                    <p className="mt-1 flex items-center gap-2 text-sm text-red-500">
-                      <XCircle className="h-4 w-4 shrink-0" />
-                      {editPhoneError}
-                    </p>
-                  )}
-
-                  {isEditPhoneValid && !editPhoneError && (
-                    <p className="mt-1 flex items-center gap-2 text-sm text-green-600">
-                      <CheckCircle2 className="h-4 w-4 shrink-0" />
-                      Valid phone number
-                    </p>
-                  )}
-                </div>
-
-                <div className="min-w-0">
-                  <Label>Email</Label>
-                  <Input
-                    type="email"
-                    name="email"
-                    value={editForm.email ?? ""}
-                    onChange={handleEditChange}
-                  />
-                  {editErrors.email && (
-                    <p className="mt-1 text-sm text-red-500">
-                      {editErrors.email}
-                    </p>
-                  )}
-                </div>
+                <TextField
+                  field={{
+                    name: "email",
+                    label: "Email",
+                    placeholder: "Email address",
+                    type: "email",
+                  }}
+                  value={editForm.email ?? ""}
+                  error={editErrors.email}
+                  onChange={handleEditChange}
+                />
               </div>
 
-              {/* CITY + STATE + PINCODE */}
+              {/* ADDRESS */}
+
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                {EDIT_ADDRESS_FIELDS.map((field) => (
-                  <div className="min-w-0" key={field.name}>
-                    <Label>{field.label}</Label>
-                    <Input
-                      type={field.type}
-                      name={field.name}
-                      value={editForm[field.name] ?? ""}
-                      onChange={handleEditChange}
-                    />
-                  </div>
+                {ADDRESS_FIELDS.map((field) => (
+                  <TextField
+                    key={field.name}
+                    field={field}
+                    value={editForm[field.name] ?? ""}
+                    error={editErrors[field.name]}
+                    onChange={handleEditChange}
+                  />
                 ))}
               </div>
 
-              {/* ADDRESS + MANAGER */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {EDIT_DETAILS_FIELDS.map((field) => (
-                  <div className="min-w-0" key={field.name}>
-                    <Label>{field.label}</Label>
-                    <Input
-                      type="text"
-                      name={field.name}
-                      value={editForm[field.name] ?? ""}
-                      onChange={handleEditChange}
-                    />
+              {/* DETAILS */}
 
-                    {editErrors[field.name] && (
-                      <p className="mt-1 text-sm text-red-500">
-                        {editErrors[field.name]}
-                      </p>
-                    )}
-                  </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {DETAILS_FIELDS.map((field) => (
+                  <TextField
+                    key={field.name}
+                    field={field}
+                    value={editForm[field.name] ?? ""}
+                    error={editErrors[field.name]}
+                    onChange={handleEditChange}
+                  />
                 ))}
               </div>
 
               {/* LOCATION */}
-              <div>
+
+              <div className="space-y-2">
                 <Label>Branch Location</Label>
 
-                <div className="mt-2 flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <Button
-                    variant="add"
+                    variant="outline"
                     type="button"
                     onClick={() => setEditMapOpen(true)}
                   >
                     <MapPin className="mr-2 h-4 w-4" />
-                    {editForm.latitude !== undefined
+                    {editForm.latitude != null
                       ? "Update Location"
                       : "Set Location"}
                   </Button>
@@ -1158,58 +1185,71 @@ const BranchList = () => {
                     editForm.longitude != null && (
                       <span className="text-xs text-muted-foreground">
                         {editForm.latitude.toFixed(4)},{" "}
-                        {editForm.longitude.toFixed(4)} —{" "}
+                        {editForm.longitude.toFixed(4)}
+                        {" — "}
                         {editForm.geoRadius ?? 0} m radius
                       </span>
                     )}
                 </div>
+
+                <FieldError
+                  error={
+                    editErrors.latitude ||
+                    editErrors.longitude
+                  }
+                />
               </div>
 
               {/* DANGER ZONE */}
+
               {canDeleteBranch && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-                  <h4 className="flex items-center gap-2 text-sm font-semibold text-red-700">
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/20">
+
+                  <h4 className="flex items-center gap-2 text-sm font-semibold text-red-700 dark:text-red-400">
                     <AlertTriangle className="h-4 w-4" />
                     Danger Zone
                   </h4>
 
-                  <p className="mt-1 text-xs text-red-600">
-                    Permanently delete this branch. This action is
-                    possible only if no employee/user is assigned
-                    to this branch.
+                  <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                    Permanently delete this branch. This action
+                    cannot be undone. Branches with assigned
+                    employees or categories cannot be deleted.
                   </p>
 
                   <Button
+                    type="button"
                     variant="destructive"
                     size="sm"
-                    className="mt-2"
+                    className="mt-3"
                     onClick={() => {
                       setConfirmText("");
                       setDangerOpen(true);
                     }}
                   >
-                    Delete Permanently
+                    Delete Branch
                   </Button>
                 </div>
               )}
             </div>
 
-            {/* FOOTER */}
-            <div className="shrink-0 border-t bg-background px-5 py-3">
+            {/* EDIT FOOTER */}
+
+            <div className="flex shrink-0 justify-end border-t bg-background px-5 py-3">
               <Button
                 variant="add"
-                className="w-full cursor-pointer sm:w-auto sm:ml-auto sm:flex"
+                className="w-full sm:w-auto"
+                disabled={isSubmitting}
                 onClick={handleUpdate}
               >
-                Update Branch
+                {isSubmitting ? "Updating..." : "Update Branch"}
               </Button>
             </div>
-
           </DialogContent>
         </Dialog>
       )}
 
       {/* EDIT LOCATION PICKER */}
+
       {canEditBranch && editMapOpen && (
         <React.Suspense fallback={null}>
           <LocationPicker
@@ -1227,61 +1267,83 @@ const BranchList = () => {
                 geoRadius: radius,
                 locationName,
               }));
+
+              setEditErrors((prev) => ({
+                ...prev,
+                latitude: undefined,
+                longitude: undefined,
+              }));
             }}
           />
         </React.Suspense>
       )}
 
-      {/* PERMANENT DELETE CONFIRM */}
+      {/* DELETE BRANCH CONFIRMATION DIALOG */}
+
       {canDeleteBranch && (
         <Dialog
           open={dangerOpen}
-          onOpenChange={setDangerOpen}
+          onOpenChange={(value) => {
+            setDangerOpen(value);
+
+            if (!value) {
+              setConfirmText("");
+            }
+          }}
         >
-          <DialogContent>
+          <DialogContent className="w-[calc(100vw-1rem)] max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-red-700">
-                Permanent Delete Branch
+              <DialogTitle className="flex items-center gap-2 text-red-700 dark:text-red-400">
+                <AlertTriangle className="h-5 w-5" />
+                Delete Branch
               </DialogTitle>
 
               <DialogDescription>
-                Are you sure you want to delete{" "}
-                <strong className="bg-muted font-semibold">
-                  {selectedBranch?.name}
-                </strong>
-                ? This action cannot be undone.
+                Are you sure you want to permanently delete{" "}
+                <strong>{selectedBranch?.name}</strong>?
+                This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
 
-            <div>
+            <div className="space-y-2">
               <Label>
-                Type <strong>{selectedBranch?.name}</strong> To
-                Confirm
+                Type <strong>{selectedBranch?.name}</strong>{" "}
+                to confirm.
               </Label>
 
               <Input
-                type="text"
-                name="confirm"
                 value={confirmText}
-                onChange={(e) => setConfirmText(e.target.value)}
+                onChange={(e) =>
+                  setConfirmText(e.target.value)
+                }
                 placeholder="Type branch name"
+                autoComplete="off"
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <Button
+                type="button"
                 variant="outline"
-                onClick={() => setDangerOpen(false)}
+                disabled={isSubmitting}
+                onClick={() => {
+                  setDangerOpen(false);
+                  setConfirmText("");
+                }}
               >
                 Cancel
               </Button>
 
               <Button
+                type="button"
                 variant="destructive"
-                disabled={confirmText !== selectedBranch?.name}
+                disabled={
+                  confirmText !== selectedBranch?.name ||
+                  isSubmitting
+                }
                 onClick={handlePermanentDelete}
               >
-                I understand, delete permanently
+                {isSubmitting ? "Deleting..." : "Delete Branch"}
               </Button>
             </div>
           </DialogContent>
@@ -1289,14 +1351,21 @@ const BranchList = () => {
       )}
 
       {/* STATUS DIALOG */}
+
       {canEditBranch && (
         <Dialog
           open={statusDialogOpen}
-          onOpenChange={setStatusDialogOpen}
+          onOpenChange={(value) => {
+            setStatusDialogOpen(value);
+
+            if (!value) {
+              setSelectedBranch(null);
+            }
+          }}
         >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Update Branch</DialogTitle>
+              <DialogTitle>Update Branch Status</DialogTitle>
 
               <DialogDescription>
                 You are about to{" "}
@@ -1312,26 +1381,34 @@ const BranchList = () => {
             <div className="flex justify-end gap-2">
               <Button
                 variant="outline"
-                onClick={() => setStatusDialogOpen(false)}
+                disabled={isSubmitting}
+                onClick={() => {
+                  setStatusDialogOpen(false);
+                  setSelectedBranch(null);
+                }}
               >
                 Cancel
               </Button>
 
               <Button
                 variant="destructive"
+                disabled={isSubmitting}
                 onClick={handleToggleStatus}
               >
-                {selectedBranch?.isActive
-                  ? "Deactivate"
-                  : "Activate"}
+                {isSubmitting
+                  ? "Updating..."
+                  : selectedBranch?.isActive
+                    ? "Deactivate"
+                    : "Activate"}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       )}
 
-      {/* TABLE */}
-      <div className="grid w-full grid-cols-1 overflow-x-auto rounded border bg-card">
+      {/* BRANCH TABLE */}
+
+      <div className="grid w-full grid-cols-1 overflow-x-auto rounded-lg border bg-card">
         <div className="h-full overflow-auto">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-muted">
@@ -1352,31 +1429,38 @@ const BranchList = () => {
                 const hasActions =
                   canEditBranch || canDeleteBranch;
 
-                const branchCells: React.ReactNode[] = [
+                const cells: React.ReactNode[] = [
                   index + 1,
                   branch.name,
                   branch.code,
+
                   ...(isSuperAdmin
                     ? [branch.company?.name ?? "—"]
                     : []),
+
                   branch.phone ?? "—",
                   branch.managerName ?? "—",
                   branch.locationName ?? "—",
+
                   <Badge
                     className={
                       branch.isActive
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
+                        ? "bg-green-100 text-green-700 hover:bg-green-100"
+                        : "bg-red-100 text-red-700 hover:bg-red-100"
                     }
                   >
-                    {branch.isActive ? "Active" : "Inactive"}
+                    {branch.isActive
+                      ? "Active"
+                      : "Inactive"}
                   </Badge>,
                 ];
 
                 return (
                   <TableRow key={branch.id}>
-                    {branchCells.map((cell, cellIndex) => (
-                      <TableCell key={tableColumns[cellIndex].key}>
+                    {cells.map((cell, cellIndex) => (
+                      <TableCell
+                        key={tableColumns[cellIndex].key}
+                      >
                         {cell}
                       </TableCell>
                     ))}
@@ -1388,6 +1472,7 @@ const BranchList = () => {
                             <Button
                               variant="ghost"
                               size="icon"
+                              aria-label="Branch actions"
                             >
                               <MoreVertical className="h-4 w-4" />
                             </Button>
@@ -1407,7 +1492,6 @@ const BranchList = () => {
 
                                   <DropdownMenuItem
                                     variant="destructive"
-                                    className="text-red-600"
                                     onClick={() => {
                                       setSelectedBranch(branch);
                                       setStatusDialogOpen(true);
@@ -1425,14 +1509,11 @@ const BranchList = () => {
                                   variant="destructive"
                                   onClick={() => {
                                     setSelectedBranch(branch);
-                                    setEditForm({
-                                      name: branch.name,
-                                    });
                                     setConfirmText("");
                                     setDangerOpen(true);
                                   }}
                                 >
-                                  Delete Permanently
+                                  Delete Branch
                                 </DropdownMenuItem>
                               )}
                             </DropdownMenuGroup>
@@ -1444,21 +1525,19 @@ const BranchList = () => {
                 );
               })}
 
+              {/* EMPTY / LOADING STATE */}
+
               {filteredBranches.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={isSuperAdmin ? 9 : 8}
+                    colSpan={tableColumns.length}
                     className="py-8 text-center text-muted-foreground"
                   >
-                    {isSuperAdmin && !selectedCompanyId ? (
-                      <p className="text-sm">
-                        Select a company to view branches.
-                      </p>
-                    ) : (
-                      <p className="text-sm">
-                        No branches found
-                      </p>
-                    )}
+                    {isLoading
+                      ? "Loading branches..."
+                      : isSuperAdmin && !companyScopeId
+                        ? "Select a company to view branches."
+                        : "No branches found."}
                   </TableCell>
                 </TableRow>
               )}

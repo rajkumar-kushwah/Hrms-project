@@ -313,7 +313,7 @@ const Profile = () => {
                             <div className="hidden shrink-0 items-center gap-2 border-l border-border pl-4 sm:flex">
                                 <Building2 className="h-4 w-4 text-muted-foreground" />
 
-                                <div className="max-w-[150px]">
+                                <div className="max-w-auto">
                                     <p className="text-[11px] text-muted-foreground">
                                         {getCreatedByRole(user)}
                                     </p>

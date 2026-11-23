@@ -1,14 +1,23 @@
 import { z } from "zod";
 import { isValidPhoneNumber } from "libphonenumber-js";
 
+const optionalText = (schema: z.ZodType<string>) =>
+    z.preprocess(
+        (value) =>
+            typeof value === "string" && value.trim() === ""
+                ? undefined
+                : value,
+        schema.optional()
+    );
+
 export const createBranchSchema = z.object({
     name: z
         .string()
         .trim()
         .min(3, "Name must be at least 3 characters")
         .max(64, "Name must not exceed 64 characters")
-        .regex(/^[A-Za-z]+(?: [A-Za-z]+)*$/, {
-            message: "Name can contain only letters and spaces",
+        .regex(/^[A-Za-z0-9][A-Za-z0-9 ,.&_-]*$/, {
+            message: "Name can contain only letters, numbers, spaces, commas, dots, &, _ and -",
         }),
 
     email: z
@@ -39,11 +48,9 @@ export const createBranchSchema = z.object({
         .trim()
         .optional(),
 
-    pincode: z
-        .string()
-        .trim()
-        .regex(/^\d{6}$/, "Pincode must be 6 digits")
-        .optional(),
+    pincode: optionalText(
+        z.string().trim().regex(/^\d{6}$/, "Pincode must be 6 digits")
+    ),
 
     managerName: z
         .string()
@@ -63,6 +70,12 @@ export const createBranchSchema = z.object({
         .number()
         .min(-180, "Longitude must be between -180 and 180")
         .max(180, "Longitude must be between -180 and 180"),
+
+    geoRadius: z.number().positive("Geo radius must be greater than 0").optional(),
+
+    locationName: optionalText(
+        z.string().trim()
+    ),
 });
 
 export const updateBranchSchema = z.object({
@@ -90,6 +103,8 @@ export const updateBranchSchema = z.object({
             "Invalid phone number"
         )
         .optional(),
+
+
 
     address: z
         .string()
@@ -132,10 +147,9 @@ export const updateBranchSchema = z.object({
         .regex(/^[A-Za-z]+(?: [A-Za-z]+)*$/, "State can contain only letters and spaces")
         .optional(),
 
-    pincode: z
-        .string()
-        .trim()
-        .optional(),
+    pincode: optionalText(
+        z.string().trim().regex(/^\d{6}$/, "Pincode must be 6 digits")
+    ),
 
     geoRadius: z
         .number()

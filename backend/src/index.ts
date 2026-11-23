@@ -154,6 +154,7 @@ io.use(async (socket, next) => {
     }
 });
 
+
 io.on("connection", (socket) => {
     const {
         userId,
@@ -168,10 +169,26 @@ io.on("connection", (socket) => {
         companyId,
     });
 
-    // Private user room
+    // ==========================================
+    // 1. PRIVATE USER ROOM
+    // ==========================================
+
     socket.join(`user:${userId}`);
 
-    // COMPANY scope: only own company
+    // ==========================================
+    // 2. COMPANY DATA ROOM
+    // ==========================================
+
+    // Normal users can only join their own company.
+    if (companyId) {
+        socket.join(`company:${companyId}:data`);
+        socket.data.dataCompanyId = companyId;
+    }
+
+    // ==========================================
+    // 3. ATTENDANCE COMPANY ROOM
+    // ==========================================
+
     if (
         attendancePermission?.canView &&
         attendancePermission.dataScope === "COMPANY" &&
@@ -181,7 +198,98 @@ io.on("connection", (socket) => {
         socket.data.attendanceCompanyId = companyId;
     }
 
-    // Attendance subscription
+    // ==========================================
+    // 4. SUPER ADMIN DATA SUBSCRIPTION
+    // ==========================================
+
+    socket.on(
+        "data:subscribe",
+        async (requestedCompanyId: string) => {
+            try {
+                // Only trusted platform admin can switch companies.
+                if (
+                    !trustedAdmin ||
+                    typeof requestedCompanyId !== "string" ||
+                    !requestedCompanyId.trim()
+                ) {
+                    return;
+                }
+
+                const selectedCompanyId = requestedCompanyId.trim();
+
+                const company = await prisma.company.findUnique({
+                    where: {
+                        id: selectedCompanyId,
+                    },
+                    select: {
+                        id: true,
+                    },
+                });
+
+                if (!company) return;
+
+                const previousCompanyId =
+                    socket.data.dataCompanyId as string | undefined;
+
+                // Leave previous company data room.
+                if (previousCompanyId) {
+                    await socket.leave(
+                        `company:${previousCompanyId}:data`
+                    );
+                }
+
+                // Join selected company data room.
+                await socket.join(
+                    `company:${company.id}:data`
+                );
+
+                socket.data.dataCompanyId = company.id;
+
+                console.log("Data room subscribed:", {
+                    userId,
+                    companyId: company.id,
+                });
+            } catch (error) {
+                console.error(
+                    "Data subscription failed:",
+                    error
+                );
+            }
+        }
+    );
+
+    // ==========================================
+    // 5. DATA UNSUBSCRIBE
+    // ==========================================
+
+    socket.on("data:unsubscribe", async () => {
+        try {
+            const previousCompanyId =
+                socket.data.dataCompanyId as string | undefined;
+
+            // Never leave the user's own company room.
+            if (
+                previousCompanyId &&
+                previousCompanyId !== companyId
+            ) {
+                await socket.leave(
+                    `company:${previousCompanyId}:data`
+                );
+
+                delete socket.data.dataCompanyId;
+            }
+        } catch (error) {
+            console.error(
+                "Data unsubscribe failed:",
+                error
+            );
+        }
+    });
+
+    // ==========================================
+    // 6. ATTENDANCE SUBSCRIPTION
+    // ==========================================
+
     socket.on(
         "attendance:subscribe",
         async (requestedCompanyId: string) => {
@@ -199,6 +307,7 @@ io.on("connection", (socket) => {
                 const previousCompanyId =
                     socket.data.attendanceCompanyId as string | undefined;
 
+                // Leave previous attendance room.
                 if (previousCompanyId) {
                     await socket.leave(
                         `company:${previousCompanyId}:attendance`
@@ -207,7 +316,7 @@ io.on("connection", (socket) => {
                     delete socket.data.attendanceCompanyId;
                 }
 
-                // COMPANY scope: own company only
+                // COMPANY scope: own company only.
                 if (
                     attendancePermission.dataScope === "COMPANY" &&
                     companyId === selectedCompanyId
@@ -220,14 +329,18 @@ io.on("connection", (socket) => {
                     return;
                 }
 
-                // ALL scope: trusted platform admin only
+                // ALL scope: trusted platform admin only.
                 if (
                     attendancePermission.dataScope === "ALL" &&
                     trustedAdmin
                 ) {
                     const company = await prisma.company.findUnique({
-                        where: { id: selectedCompanyId },
-                        select: { id: true },
+                        where: {
+                            id: selectedCompanyId,
+                        },
+                        select: {
+                            id: true,
+                        },
                     });
 
                     if (!company) return;
@@ -239,31 +352,53 @@ io.on("connection", (socket) => {
                     socket.data.attendanceCompanyId = company.id;
                 }
 
-                // OWN scope: user room only, no company room
+                // OWN scope: no company attendance room.
             } catch (error) {
-                console.error("Attendance subscription failed:", error);
+                console.error(
+                    "Attendance subscription failed:",
+                    error
+                );
             }
         }
     );
 
-    // Unsubscribe
+    // ==========================================
+    // 7. ATTENDANCE UNSUBSCRIBE
+    // ==========================================
+
     socket.on("attendance:unsubscribe", async () => {
-        const previousCompanyId =
-            socket.data.attendanceCompanyId as string | undefined;
+        try {
+            const previousCompanyId =
+                socket.data.attendanceCompanyId as string | undefined;
 
-        if (previousCompanyId) {
-            await socket.leave(
-                `company:${previousCompanyId}:attendance`
+            if (previousCompanyId) {
+                await socket.leave(
+                    `company:${previousCompanyId}:attendance`
+                );
+
+                delete socket.data.attendanceCompanyId;
+            }
+        } catch (error) {
+            console.error(
+                "Attendance unsubscribe failed:",
+                error
             );
-
-            delete socket.data.attendanceCompanyId;
         }
     });
 
+    // ==========================================
+    // 8. DISCONNECT
+    // ==========================================
+
     socket.on("disconnect", (reason) => {
-        console.log("Socket disconnected:", socket.id, reason);
+        console.log("Socket disconnected:", {
+            socketId: socket.id,
+            userId,
+            reason,
+        });
     });
 });
+
 
 // This will only run in development mode local machine not in production on render
 if (process.env.NODE_ENV !== "production") {
@@ -307,39 +442,6 @@ app.use("/api/overtime", overtimeRoutes);
 
 app.use('/checkin', checkInRouter)
 app.use('/monthly-attendance', monthlyRouter)
-
-
-
-
-
-// Socket.io Connection Logic (Biometric live event handler)
-// io.on("connection", (socket) => {
-//     const { userId, companyId, role } = socket.data;
-
-//     console.log("Authenticated Socket Connected:", {
-//         socketId: socket.id,
-//         userId,
-//         companyId,
-//         role,
-//     });
-
-//     // Private user room
-//     socket.join(`user:${userId}`);
-
-//     // Company-wise private room
-//     if (companyId && isAdminRole(role)) {
-//         socket.join(`company:${companyId}:attendance`);
-//     }
-
-//     socket.on("disconnect", (reason) => {
-//         console.log("Socket disconnected:", {
-//             userId,
-//             reason,
-//         });
-//     });
-// });
-
-
 
 
 
