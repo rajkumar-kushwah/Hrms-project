@@ -1,11 +1,17 @@
 import { z } from "zod";
 
+const categoryNameSchema = z
+    .string()
+    .trim()
+    .min(1, "Category name is required")
+    .max(100, "Category name must not exceed 100 characters")
+    .regex(
+        /^(?=.*[A-Za-z])[A-Za-z ]{1,100}$/,
+        "Category name must contain only letters and spaces"
+    );
+
 export const createCategorySchema = z.object({
-    name: z
-        .string()
-        .trim()
-        .min(1, "Category name is required")
-        .max(100, "Category name must not exceed 100 characters"),
+    name: categoryNameSchema,
 
     description: z
         .string()
@@ -21,12 +27,7 @@ export const createCategorySchema = z.object({
 });
 
 export const updateCategorySchema = z.object({
-    name: z
-        .string()
-        .trim()
-        .min(1, "Category name is required")
-        .max(100, "Category name must not exceed 100 characters")
-        .optional(),
+    name: categoryNameSchema.optional(),
 
     description: z
         .string()
