@@ -410,6 +410,10 @@ const BranchList = () => {
       unregister();
     };
   }, [loadBranches]);
+
+  React.useEffect(() => {
+    void loadBranches();
+  }, [loadBranches]);
   // ----------------------------------------------
   // FORM RESET
   // ----------------------------------------------
