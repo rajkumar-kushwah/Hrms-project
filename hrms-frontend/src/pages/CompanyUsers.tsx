@@ -39,6 +39,8 @@ import {
     getUserName,
     canViewModule,
     canEditInModule,
+    canDeleteInModule,
+    isSuperAdminRole,
 } from "@/utilis/roleUtils";
 import UserAvatar from "@/pages/common/UserAvatar";
 
@@ -57,9 +59,17 @@ const Users = () => {
 
     const { user: currentUser } = useAuthStore();
 
-    // Module permissions
+    const isSuperAdmin = isSuperAdminRole(currentUser);
+    
+
     const canViewUsers = canViewModule(currentUser, MODULE_NAME);
     const canEditUsers = canEditInModule(currentUser, MODULE_NAME);
+    const canDeleteUsers = canDeleteInModule(currentUser, MODULE_NAME);
+
+    // Only Super Admin can see Deactivate/Activate
+    const canToggleUserStatus = isSuperAdmin && canDeleteUsers;
+
+    const canShowActions = canEditUsers || canToggleUserStatus;
 
     React.useEffect(() => {
         if (canViewUsers) {
@@ -102,7 +112,7 @@ const Users = () => {
 
     // Toggle Active / Inactive
     const handleToggleStatus = async (user: CompanyUser) => {
-        if (!canEditUsers) {
+        if (!canDeleteUsers) {
             toast.error("You don't have permission to modify users");
             return;
         }
@@ -276,7 +286,7 @@ const Users = () => {
                             <TableHead>Role</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Created At</TableHead>
-                            {canEditUsers && (
+                            {canShowActions && (
                                 <TableHead>Actions</TableHead>
                             )}
                         </TableRow>
@@ -286,7 +296,7 @@ const Users = () => {
                         {isLoading ? (
                             <TableRow>
                                 <TableCell
-                                    colSpan={canEditUsers ? 8 : 7}
+                                    colSpan={(canEditUsers || canDeleteUsers) ? 8 : 7}
                                     className="py-8 text-center"
                                 >
                                     <div className="flex items-center justify-center gap-2 text-muted-foreground">
@@ -345,7 +355,7 @@ const Users = () => {
                                             ).toLocaleDateString()}
                                         </TableCell>
 
-                                        {canEditUsers && (
+                                        {canShowActions && (
                                             <TableCell className="sticky right-0 bg-card">
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
@@ -358,28 +368,28 @@ const Users = () => {
                                                     </DropdownMenuTrigger>
 
                                                     <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem
-                                                            variant="destructive"
-                                                            onClick={() =>
-                                                                handleToggleStatus(user)
-                                                            }
-                                                            disabled={
-                                                                user.id === currentUser?.id
-                                                            }
-                                                        >
-                                                            {user.isActive
-                                                                ? "Deactivate"
-                                                                : "Activate"}
-                                                        </DropdownMenuItem>
+                                                        {canToggleUserStatus && (
+                                                            <DropdownMenuItem
+                                                                className="cursor-pointer"
+                                                                variant="destructive"
+                                                                onClick={() => handleToggleStatus(user)}
+                                                                disabled={user.id === currentUser?.id}
+                                                            >
+                                                                {user.isActive ? "Deactivate" : "Activate"}
+                                                            </DropdownMenuItem>
+                                                        )}
 
-                                                        <DropdownMenuItem
-                                                            onClick={() => {
-                                                                setSelectedUser(user);
-                                                                setResetOpen(true);
-                                                            }}
-                                                        >
-                                                            Reset Password
-                                                        </DropdownMenuItem>
+                                                        {canEditUsers && (
+                                                            <DropdownMenuItem
+                                                                className="cursor-pointer"
+                                                                onClick={() => {
+                                                                    setSelectedUser(user);
+                                                                    setResetOpen(true);
+                                                                }}
+                                                            >
+                                                                Reset Password
+                                                            </DropdownMenuItem>
+                                                        )}
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </TableCell>
@@ -390,7 +400,7 @@ const Users = () => {
                                 {filteredCompaniesUsers.length === 0 && (
                                     <TableRow>
                                         <TableCell
-                                            colSpan={canEditUsers ? 8 : 7}
+                                            colSpan={canShowActions ? 8 : 7}
                                             className="text-center text-muted-foreground py-8"
                                         >
                                             No users found

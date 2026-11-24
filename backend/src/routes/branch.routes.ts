@@ -60,7 +60,6 @@ router.delete(
 router.delete(
     "/:id/permanent",
     protect,
-    checkSuperAdmin,
     validate(branchIdSchema, "params"),
     permanentDeleteBranch
 );

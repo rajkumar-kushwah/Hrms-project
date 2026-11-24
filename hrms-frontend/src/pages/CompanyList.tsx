@@ -879,7 +879,7 @@ function CompanyList() {
                       <Label>Phone</Label>
 
                       <PhoneInput
-                        value={form.phone}
+                        value={form.phone?.replace(/\s+/g, "") || undefined}
                         onChange={(value) => {
                           const phone = value || "";
 
@@ -1112,7 +1112,7 @@ function CompanyList() {
                   <Label>Phone</Label>
 
                   <PhoneInput
-                    value={editForm.phone || ""}
+                    value={editForm.phone?.replace(/\s+/g, "") || undefined}
                     onChange={(value) => {
                       const phone = value || "";
 
@@ -1413,9 +1413,9 @@ function CompanyList() {
                           </Button>
                         </DropdownMenuTrigger>
 
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" >
                           <DropdownMenuGroup>
-                            <DropdownMenuItem
+                            <DropdownMenuItem className="cursor-pointer"
                               onClick={() =>
                                 openEditDialog(company)
                               }
@@ -1442,22 +1442,17 @@ function CompanyList() {
                               </DropdownMenuItem>
                             )}
 
-                            <DropdownMenuItem
-                              variant={
-                                company.isActive
-                                  ? "destructive"
-                                  : "default"
-                              }
-                              onClick={() => {
-                                setSelectedCompany(company);
-                                setDeleteConfirmOpen(true);
-                              }}
-                              disabled={!isSuperAdmin}
-                            >
-                              {company.isActive
-                                ? "Deactivate"
-                                : "Activate"}
-                            </DropdownMenuItem>
+                            {isSuperAdmin && (
+                              <DropdownMenuItem
+                                variant={company.isActive ? "destructive" : "default"}
+                                onClick={() => {
+                                  setSelectedCompany(company);
+                                  setDeleteConfirmOpen(true);
+                                }}
+                              >
+                                {company.isActive ? "Deactivate" : "Activate"}
+                              </DropdownMenuItem>
+                            )}
                           </DropdownMenuGroup>
                         </DropdownMenuContent>
                       </DropdownMenu>
