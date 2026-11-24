@@ -530,7 +530,7 @@ export default function OnboardingDetail() {
           <div className="p-4">
             <p className="text-xs uppercase text-muted-foreground">Start Date</p>
             <p className="mt-2 text-lg font-semibold">
-              {new Date(data.startDate).toLocaleDateString()}
+             { new Date(data.startDate).toLocaleDateString("en-GB")}
             </p>
           </div>
 
@@ -538,7 +538,7 @@ export default function OnboardingDetail() {
             <p className="text-xs uppercase text-muted-foreground">Target Date</p>
             <p className="mt-2 text-lg font-semibold">
               {data.targetDate
-                ? new Date(data.targetDate).toLocaleDateString()
+                ? new Date(data.startDate).toLocaleDateString("en-GB")
                 : "Not set"}
             </p>
           </div>
@@ -731,7 +731,7 @@ export default function OnboardingDetail() {
                                 <p className="mt-2 text-xs text-emerald-700">
                                   <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
                                   Completed on{" "}
-                                  {new Date(item.completedAt).toLocaleDateString()}
+                                  {new Date(data.startDate).toLocaleDateString("en-GB")}
                                 </p>
                               )}
 
