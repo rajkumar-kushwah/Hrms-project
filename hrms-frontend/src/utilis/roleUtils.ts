@@ -182,35 +182,58 @@ export const getUserRole = (
 // Universal Dynamic Module Permission Check
 // ─────────────────────────────────────────────────────────────
 
+// export const getUserModulePermission = (
+//     user: RoleInput,
+//     moduleName: string,
+//     action: "canView" | "canCreate" | "canEdit" | "canDelete" = "canView"
+// ): boolean => {
+//     // 1. Agar user Super Admin hai, toh sab kuch allow karo
+//     if (isSuperAdminRole(user)) {
+//         return true;
+//     }
+
+//     const roleObj = getRoleObject(user);
+//     const permissions = roleObj?.permissions;
+
+//     if (!permissions || !Array.isArray(permissions)) {
+//         return false;
+//     }
+
+//     // 2. Database ke module name ke sath dynamic match karein (Case-insensitive)
+//     const targetModule = moduleName.trim().toLowerCase();
+//     const modulePermission = permissions.find(
+//         (permission) => permission?.module?.name?.trim().toLowerCase() === targetModule
+//     );
+
+//     if (!modulePermission) {
+//         return false;
+//     }
+
+//     // 3. Action boolean return karein
+//     return Boolean(modulePermission[action]);
+// };
+
+
 export const getUserModulePermission = (
     user: RoleInput,
     moduleName: string,
-    action: "canView" | "canCreate" | "canEdit" | "canDelete" = "canView"
+    action: "canView" | "canCreate" | "canEdit" | "canDelete"
 ): boolean => {
-    // 1. Agar user Super Admin hai, toh sab kuch allow karo
-    if (isSuperAdminRole(user)) {
-        return true;
-    }
-
     const roleObj = getRoleObject(user);
     const permissions = roleObj?.permissions;
 
-    if (!permissions || !Array.isArray(permissions)) {
+    if (!Array.isArray(permissions)) {
         return false;
     }
 
-    // 2. Database ke module name ke sath dynamic match karein (Case-insensitive)
     const targetModule = moduleName.trim().toLowerCase();
+
     const modulePermission = permissions.find(
-        (permission) => permission?.module?.name?.trim().toLowerCase() === targetModule
+        (permission) =>
+            permission?.module?.name?.trim().toLowerCase() === targetModule
     );
 
-    if (!modulePermission) {
-        return false;
-    }
-
-    // 3. Action boolean return karein
-    return Boolean(modulePermission[action]);
+    return modulePermission?.[action] === true;
 };
 
 // ============================================

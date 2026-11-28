@@ -46,7 +46,10 @@ const OnboardingChecklistSettings = lazy(() => import("@/pages/settings/Onboardi
 const OnboardingDetail = lazy(() => import("@/pages/onboarding/OnboardingDetail"));
 const OnboardingList = lazy(() => import("@/pages/onboarding/OnboardingList"));
 const ChangePassword = lazy(() => import("@/profile/ChangePassword"));
-
+const UpgradeDashboard = lazy(() => import("@/pages/employeeUpgrade/UpgradeDashboard"));
+const InitiateUpgrade = lazy(() => import("@/pages/employeeUpgrade/InitiateUpgrade"));
+const ApprovalRequests = lazy(() => import("@/pages/employeeUpgrade/ApprovalRequests"));
+const UpgradeHistory = lazy(() => import("@/pages/employeeUpgrade/UpgradeHistory"));
 // Reusable lazy page fallback
 const PageLoader = ({ children }: { children: React.ReactNode }) => (
     <Suspense
@@ -119,6 +122,16 @@ const AppRoutes = () => {
                         <Route path="/reports/overtime" element={<PageLoader><OvertimeReport /></PageLoader>}
                         />
                         <Route path="/change-password" element={<PageLoader><ChangePassword /></PageLoader>}
+                        />
+                        <Route path="/employee-upgrade/dashboard" element={<PageLoader><UpgradeDashboard /></PageLoader>}
+                        />
+                        <Route path="/employee-upgrade/initiate" element={<PageLoader> <InitiateUpgrade /></PageLoader>}
+                        />
+                        <Route path="/employee-upgrade/approvals" element={<PageLoader><ApprovalRequests /></PageLoader>}
+                        />
+                        <Route path="/employee-upgrade/:id/edit" element={<InitiateUpgrade />}
+                        />
+                        <Route path="/employee-upgrade/history" element={<PageLoader><UpgradeHistory /> </PageLoader>}
                         />
                     </Route>
                 </Route>

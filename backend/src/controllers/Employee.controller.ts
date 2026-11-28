@@ -235,12 +235,20 @@ export const updateEmployeeStatus = async (
 ) => {
     try {
         const id = req.params.id;
+        const companyId = getCompanyId(req);
         const isActive: unknown = req.body?.isActive;
 
         if (typeof id !== "string" || !id) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid employee id",
+            });
+        }
+
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Please select a company.",
             });
         }
 
@@ -253,6 +261,7 @@ export const updateEmployeeStatus = async (
 
         const employee = await EmployeeService.updateEmployeeStatus(
             id,
+            companyId,
             isActive
         );
 
@@ -267,7 +276,9 @@ export const updateEmployeeStatus = async (
                 ? error.message
                 : "Failed to update employee status";
 
-        return res.status(400).json({
+        const status = message.includes("not found") ? 404 : 400;
+
+        return res.status(status).json({
             success: false,
             message,
         });
@@ -280,6 +291,7 @@ export const deleteEmployee = async (
 ) => {
     try {
         const id = req.params.id;
+        const companyId = getCompanyId(req);
 
         if (typeof id !== "string" || !id) {
             return res.status(400).json({
@@ -288,7 +300,17 @@ export const deleteEmployee = async (
             });
         }
 
-        const result = await EmployeeService.deleteEmployee(id);
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Please select a company.",
+            });
+        }
+
+        const result = await EmployeeService.deleteEmployee(
+            id,
+            companyId
+        );
 
         return res.status(200).json({
             success: true,
@@ -300,21 +322,20 @@ export const deleteEmployee = async (
                 ? error.message
                 : "Failed to delete employee";
 
-        return res.status(400).json({
+        const status = message.includes("not found") ? 404 : 400;
+
+        return res.status(status).json({
             success: false,
             message,
         });
     }
 };
-
 // Reset employee password
 export const resetEmployeePassword = async (
     req: Request,
     res: Response
 ) => {
     try {
-        // Admin authorization check
-        
         if (!isAdminRole(req.user)) {
             return res.status(403).json({
                 success: false,
@@ -323,12 +344,20 @@ export const resetEmployeePassword = async (
         }
 
         const id = req.params.id;
+        const companyId = getCompanyId(req);
         const password: unknown = req.body?.password;
 
         if (typeof id !== "string" || !id) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid employee id",
+            });
+        }
+
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "Please select a company.",
             });
         }
 
@@ -341,6 +370,7 @@ export const resetEmployeePassword = async (
 
         const employee = await EmployeeService.resetEmployeePassword(
             id,
+            companyId,
             password
         );
 
@@ -354,7 +384,9 @@ export const resetEmployeePassword = async (
                 ? error.message
                 : "Failed to reset employee password";
 
-        return res.status(400).json({
+        const status = message.includes("not found") ? 404 : 400;
+
+        return res.status(status).json({
             success: false,
             message,
         });

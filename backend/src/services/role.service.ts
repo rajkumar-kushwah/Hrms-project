@@ -1,17 +1,45 @@
 import { prisma } from "../config/db.js";
 
 // Company ke sabhi roles
-export const getCompanyRoles = async (companyId: string | null, isSuperAdmin: boolean) => {
-    return await prisma.role.findMany({
-        where: isSuperAdmin ? {} : { companyId },
+
+export const getCompanyRoles = async (
+    companyId: string | null,
+    userRoleId: number,
+    isSuperAdmin: boolean,
+    canViewAllRoles: boolean
+) => {
+    let where;
+
+    if (isSuperAdmin) {
+        // No company selected: show global roles
+        // Company selected: show that company's roles
+        where = { companyId };
+    } else if (canViewAllRoles) {
+        where = { companyId };
+    } else {
+        where = {
+            id: userRoleId,
+            companyId,
+        };
+    }
+
+    return prisma.role.findMany({
+        where,
         include: {
-            permissions: { include: { module: true, } },
-            _count: { select: { user: true } },
-            company: { select: { id: true, name: true } }
+            permissions: {
+                include: { module: true },
+            },
+            _count: {
+                select: { user: true },
+            },
+            company: {
+                select: { id: true, name: true },
+            },
         },
         orderBy: { id: "asc" },
     });
 };
+
 
 // Naya role banao
 
@@ -208,34 +236,71 @@ export const updateRolePermissions = async (
     // Update Permissions
     // ─────────────────────────────────────────
 
+    // for (const mod of permissions) {
+    //     await prisma.permission.upsert({
+    //         where: {
+    //             roleId_moduleId_companyId: {
+    //                 roleId,
+    //                 moduleId: mod.moduleId,
+    //                 companyId: targetCompanyId!,
+    //             },
+    //         },
+
+    //         update: {
+    //             canView: mod.canView,
+    //             canCreate: mod.canCreate,
+    //             canEdit: mod.canEdit,
+    //             canDelete: mod.canDelete,
+    //         },
+
+    //         create: {
+    //             roleId,
+    //             moduleId: mod.moduleId,
+    //             companyId: targetCompanyId,
+
+    //             canView: mod.canView,
+    //             canCreate: mod.canCreate,
+    //             canEdit: mod.canEdit,
+    //             canDelete: mod.canDelete,
+    //         },
+    //     });
+    // }
+
+
+
     for (const mod of permissions) {
-        await prisma.permission.upsert({
+        const existingPermission = await prisma.permission.findFirst({
             where: {
-                roleId_moduleId_companyId: {
-                    roleId,
-                    moduleId: mod.moduleId,
-                    companyId: targetCompanyId!,
-                },
-            },
-
-            update: {
-                canView: mod.canView,
-                canCreate: mod.canCreate,
-                canEdit: mod.canEdit,
-                canDelete: mod.canDelete,
-            },
-
-            create: {
                 roleId,
                 moduleId: mod.moduleId,
                 companyId: targetCompanyId,
-
-                canView: mod.canView,
-                canCreate: mod.canCreate,
-                canEdit: mod.canEdit,
-                canDelete: mod.canDelete,
             },
         });
+
+        const permissionData = {
+            canView: mod.canView,
+            canCreate: mod.canCreate,
+            canEdit: mod.canEdit,
+            canDelete: mod.canDelete,
+        };
+
+        if (existingPermission) {
+            await prisma.permission.update({
+                where: {
+                    id: existingPermission.id,
+                },
+                data: permissionData,
+            });
+        } else {
+            await prisma.permission.create({
+                data: {
+                    roleId,
+                    moduleId: mod.moduleId,
+                    companyId: targetCompanyId,
+                    ...permissionData,
+                },
+            });
+        }
     }
 
 
@@ -272,7 +337,7 @@ export const updateRolePermissions = async (
 
 export const deleteRole = async (
     roleId: number,
-    companyId: string
+    companyId: string | null
 ) => {
     const role = await prisma.role.findFirst({
         where: {

@@ -64,6 +64,15 @@ export default function Layout() {
             case "/employee":
                 return "Employee";
 
+            case "/employee-upgrade/dashboard":
+                return "Employee-Dashboard"
+
+            case "/employee-upgrade/initiate":
+                return "employee- initiate"
+
+            case "/employee-upgrade/approvals":
+                return "Aprrove-Requests"
+
             case "/roles":
                 return "Role";
 

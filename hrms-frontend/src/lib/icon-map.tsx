@@ -7,7 +7,11 @@ import {
   FileText, FileBarChart, FileBarChart2,
   FileSpreadsheet, FileClock,
   UserRoundPlus,
-  UserCog
+  UserCog,
+  TrendingUp,
+  FilePlus,
+  ClipboardCheck,
+  History
 } from "lucide-react";
 
 export const iconMap: Record<string, React.ReactNode> = {
@@ -34,4 +38,10 @@ export const iconMap: Record<string, React.ReactNode> = {
   FileSpreadsheet: <FileSpreadsheet />,
   FileClock: <FileClock />,
   UserRoundPlus: <UserRoundPlus />,
+
+  // Employee Upgrade
+  TrendingUp: <TrendingUp />,
+  FilePlus: <FilePlus />,
+  ClipboardCheck: <ClipboardCheck />,
+  History: <History />,
 };

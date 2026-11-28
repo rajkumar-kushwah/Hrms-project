@@ -35,6 +35,10 @@ model Company {
   permission                   Permission[]
   role                         Role[]
   users                        User[]
+
+  employeeUpgrades        EmployeeUpgrade[]
+  upgradeApprovals        UpgradeApproval[]
+  employeeCareerHistories EmployeeCareerHistory[]
 }
 
 model User {
@@ -90,6 +94,15 @@ model User {
   reportingManager      User?            @relation("ReportingManager", fields: [reportingManagerId], references: [id])
   teamMembers           User[]           @relation("ReportingManager")
   role                  Role?            @relation(fields: [roleId], references: [id])
+
+  // Employee Upgrade Relations
+  employeeUpgrades EmployeeUpgrade[] @relation("UpgradeEmployee")
+  upgradeRequests  EmployeeUpgrade[] @relation("UpgradeRequester")
+  upgradeApprovals UpgradeApproval[] @relation("UpgradeApprover")
+
+  // Career History Relations
+  careerHistory        EmployeeCareerHistory[] @relation("CareerHistoryEmployee")
+  careerHistoryCreated EmployeeCareerHistory[] @relation("CareerHistoryCreator")
 
   @@unique([companyId, employeeCode])
 }
@@ -384,6 +397,125 @@ model OnboardingChecklistTemplate {
 
   @@index([companyId, stage])
 }
+
+// upgrade module 
+
+model EmployeeUpgrade {
+  id            String @id @default(uuid())
+  companyId     String
+  employeeId    String
+  requestedById String
+
+  upgradeType EmployeeUpgradeType
+  status      EmployeeUpgradeStatus @default(DRAFT)
+
+  // Current employee details snapshot
+  currentData Json
+
+  // Proposed employee details
+  proposedData Json
+
+  // Fields being changed in this request
+  changedFields String[] @default([])
+
+  effectiveDate DateTime
+  reason        String
+  remarks       String?
+
+  submittedAt DateTime?
+  approvedAt  DateTime?
+  appliedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company     Company @relation(fields: [companyId], references: [id])
+  employee    User    @relation("UpgradeEmployee", fields: [employeeId], references: [id])
+  requestedBy User    @relation("UpgradeRequester", fields: [requestedById], references: [id])
+
+  approvals     UpgradeApproval[]
+  careerHistory EmployeeCareerHistory?
+
+  @@index([companyId, status])
+  @@index([employeeId])
+  @@index([effectiveDate])
+}
+
+model UpgradeApproval {
+  id         String @id @default(uuid())
+  companyId  String
+  upgradeId  String
+  approverId String
+
+  sequence Int
+  status   UpgradeApprovalStatus @default(PENDING)
+
+  comments String?
+  actedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company  Company         @relation(fields: [companyId], references: [id])
+  upgrade  EmployeeUpgrade @relation(fields: [upgradeId], references: [id], onDelete: Cascade)
+  approver User            @relation("UpgradeApprover", fields: [approverId], references: [id])
+
+  @@unique([upgradeId, sequence])
+  @@index([companyId, approverId, status])
+}
+
+model EmployeeCareerHistory {
+  id          String  @id @default(uuid())
+  companyId   String
+  employeeId  String
+  upgradeId   String? @unique
+  createdById String
+
+  changeType    EmployeeUpgradeType
+  effectiveDate DateTime
+
+  previousData Json
+  newData      Json
+
+  createdAt DateTime @default(now())
+
+  company   Company          @relation(fields: [companyId], references: [id])
+  employee  User             @relation("CareerHistoryEmployee", fields: [employeeId], references: [id])
+  createdBy User             @relation("CareerHistoryCreator", fields: [createdById], references: [id])
+  upgrade   EmployeeUpgrade? @relation(fields: [upgradeId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, employeeId, effectiveDate])
+}
+
+
+// upgrade start 
+
+enum EmployeeUpgradeType {
+  PROMOTION
+  INCREMENT
+  TRANSFER
+  ROLE_CHANGE
+}
+
+enum EmployeeUpgradeStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  SENT_BACK
+  APPLIED
+  CANCELLED
+}
+
+enum UpgradeApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SENT_BACK
+  SKIPPED
+}
+
+// upgrade end
 
 enum PayrollStatus {
   DRAFT

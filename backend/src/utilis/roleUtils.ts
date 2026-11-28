@@ -264,73 +264,70 @@ export const getUserDisplayName = (
  * @param requiredModule E.g. "employees", "payroll", "attendance"
  * @param action E.g. "view", "create", "edit", "delete"
  */
+
 export const hasModulePermission = (
     input: RoleInput,
     requiredModule: string,
     action: "view" | "create" | "edit" | "delete" = "view"
 ): boolean => {
     const roleObj = getRoleObject(input);
-    if (!roleObj) return false;
 
-    // Global admin / Super admin has full access
-    if (roleObj.isGlobalAdmin || isSuperAdminRole(input)) return true;
-
-    const perms = roleObj.permissions;
-    if (!perms || !Array.isArray(perms)) return false;
-
-    // Check if permissions contain string wildcard
-    if ((perms as string[]).includes(SYSTEM_PERMISSIONS.ALL_ACCESS)) return true;
+    if (!roleObj?.permissions || !Array.isArray(roleObj.permissions)) {
+        return false;
+    }
 
     const normalizedTargetModule = normalizeValue(requiredModule);
 
-    // Check inside Prisma relational permission structure (e.g., role.permissions -> module & canView/canCreate etc.)
-    for (const perm of perms) {
-        if (typeof perm === "object" && perm !== null && "module" in perm) {
-            const modPerm = perm as ModulePermissionObject;
-            const dbModuleName = normalizeValue(modPerm.module?.name);
-
-            if (dbModuleName === normalizedTargetModule) {
-                switch (action) {
-                    case "view":
-                        return Boolean(modPerm.canView);
-                    case "create":
-                        return Boolean(modPerm.canCreate);
-                    case "edit":
-                        return Boolean(modPerm.canEdit);
-                    case "delete":
-                        return Boolean(modPerm.canDelete);
-                    default:
-                        return false;
-                }
-            }
+    return roleObj.permissions.some((permission) => {
+        if (
+            typeof permission !== "object" ||
+            permission === null ||
+            !permission.module
+        ) {
+            return false;
         }
-    }
 
-    return false;
+        const moduleName = normalizeValue(permission.module.name);
+
+        if (moduleName !== normalizedTargetModule) {
+            return false;
+        }
+
+        switch (action) {
+            case "view":
+                return Boolean(permission.canView);
+            case "create":
+                return Boolean(permission.canCreate);
+            case "edit":
+                return Boolean(permission.canEdit);
+            case "delete":
+                return Boolean(permission.canDelete);
+            default:
+                return false;
+        }
+    });
 };
 
+
 // Legacy permission check wrapper for string-based checks
+
 export const hasPermission = (
     input: RoleInput,
     requiredPermission: string
 ): boolean => {
     const roleObj = getRoleObject(input);
-    if (!roleObj) return false;
 
-    if (roleObj.isGlobalAdmin) return true;
-
-    const perms = roleObj.permissions || [];
-    if (Array.isArray(perms) && perms.includes(SYSTEM_PERMISSIONS.ALL_ACCESS)) {
-        return true;
+    if (!roleObj?.permissions || !Array.isArray(roleObj.permissions)) {
+        return false;
     }
 
-    // Agar string array hai toh direct check karo
-    if (Array.isArray(perms) && typeof perms[0] === "string") {
-        return (perms as string[]).includes(requiredPermission);
-    }
-
-    return false;
+    return roleObj.permissions.some(
+        (permission) =>
+            typeof permission === "string" &&
+            permission === requiredPermission
+    );
 };
+
 
 // Super Admin Check
 export const isSuperAdminRole = (input: RoleInput): boolean => {
@@ -385,16 +382,39 @@ export const hasRole = (input: RoleInput, targetRole: string): boolean => {
 // ============================================
 // 6. Dynamic Get Company ID
 // ============================================
-export const getCompanyId = (req: Request): string | null => {
-    const canSwitchCompany = isSuperAdminRole(req.user);
+// export const getCompanyId = (req: Request): string | null => {
+//     const canSwitchCompany = isSuperAdminRole(req.user);
 
-    if (canSwitchCompany) {
+//     if (canSwitchCompany) {
+//         const headerCompanyId = req.headers["x-company-id"];
+//         if (typeof headerCompanyId === "string" && headerCompanyId.trim()) {
+//             return headerCompanyId.trim();
+//         }
+
+//         const queryCompanyId = req.query.companyId;
+//         if (typeof queryCompanyId === "string" && queryCompanyId.trim()) {
+//             return queryCompanyId.trim();
+//         }
+
+//         return null;
+//     }
+
+//     return req.user?.companyId ?? null;
+// };
+
+
+
+export const getCompanyId = (req: Request): string | null => {
+    // Super Admin can access the company selected in the frontend
+    if (isSuperAdminRole(req.user)) {
         const headerCompanyId = req.headers["x-company-id"];
+
         if (typeof headerCompanyId === "string" && headerCompanyId.trim()) {
             return headerCompanyId.trim();
         }
 
         const queryCompanyId = req.query.companyId;
+
         if (typeof queryCompanyId === "string" && queryCompanyId.trim()) {
             return queryCompanyId.trim();
         }
@@ -402,5 +422,6 @@ export const getCompanyId = (req: Request): string | null => {
         return null;
     }
 
+    // Other users must use their assigned company
     return req.user?.companyId ?? null;
 };

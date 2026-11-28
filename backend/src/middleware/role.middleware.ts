@@ -1,58 +1,55 @@
-// Check Permissions
+
+
 
 // import type { NextFunction, Request, Response } from "express";
-// import { prisma } from "../config/db.js";
-// import {
-//   isSuperAdminRole,
+// import { 
+//   isSuperAdminRole, 
+//   hasModulePermission 
 // } from "../utilis/roleUtils.js";
 
 // // ─────────────────────────────────────────────────────────────
-// // Role + Permission Check
+// // Role + Permission Check (Optimized - No Extra DB Hits)
 // // ─────────────────────────────────────────────────────────────
 
 // export const authorize = (
 //   moduleName: string,
 //   action: "canView" | "canCreate" | "canEdit" | "canDelete"
 // ) => {
-//   return async (req: Request, res: Response, next: NextFunction) => {
+//   return (req: Request, res: Response, next: NextFunction) => {
 //     try {
 //       const user = req.user;
-//       const roleId = user?.role?.id;
 
-//       if (!roleId) {
+//       if (!user || !user.roleId) {
 //         return res.status(403).json({
 //           success: false,
-//           message: "No role assigned",
+//           message: "Unauthorized or no role assigned",
 //         });
 //       }
 
-//       // Super Admin ko direct allow karo
+//       // 1. Super Admin bypasses all checks
 //       if (isSuperAdminRole(user)) {
 //         return next();
 //       }
 
-//       // Baaki roles ke liye permission check
-//       const permission = await prisma.permission.findFirst({
-//         where: {
-//           roleId,
-//           module: {
-//             name: moduleName,
-//           },
-//         },
-//       });
+//       // 2. Map action ("canView" -> "view", "canCreate" -> "create", etc.)
+//       const actionType = action.replace("can", "").toLowerCase() as "view" | "create" | "edit" | "delete";
 
-//       if (!permission || !permission[action]) {
+//       // 3. Check permissions directly from pre-fetched req.user (In-Memory, Zero DB queries)
+//       const allowed = hasModulePermission(user, moduleName, actionType);
+
+//       if (!allowed) {
 //         return res.status(403).json({
 //           success: false,
-//           message: `Access denied for ${moduleName} ${action}`,
+//           message: `Access denied for ${moduleName} (${action})`,
 //         });
 //       }
 
 //       return next();
 //     } catch (err) {
+//       console.error("Authorization Error:", err);
 //       return res.status(500).json({
 //         success: false,
-//         message: "Permission error",
+//         message: "Permission check error",
 //       });
 //     }
 //   };
@@ -81,15 +78,12 @@
 
 
 import type { NextFunction, Request, Response } from "express";
-import { 
-  isSuperAdminRole, 
-  hasModulePermission 
+import {
+  isSuperAdminRole,
+  hasModulePermission,
 } from "../utilis/roleUtils.js";
 
-// ─────────────────────────────────────────────────────────────
-// Role + Permission Check (Optimized - No Extra DB Hits)
-// ─────────────────────────────────────────────────────────────
-
+// Module permission check
 export const authorize = (
   moduleName: string,
   action: "canView" | "canCreate" | "canEdit" | "canDelete"
@@ -98,22 +92,20 @@ export const authorize = (
     try {
       const user = req.user;
 
-      if (!user || !user.roleId) {
+      if (!user || !user.roleId || !user.role) {
         return res.status(403).json({
           success: false,
           message: "Unauthorized or no role assigned",
         });
       }
 
-      // 1. Super Admin bypasses all checks
-      if (isSuperAdminRole(user)) {
-        return next();
-      }
+      const actionType = action.replace("can", "").toLowerCase() as
+        | "view"
+        | "create"
+        | "edit"
+        | "delete";
 
-      // 2. Map action ("canView" -> "view", "canCreate" -> "create", etc.)
-      const actionType = action.replace("can", "").toLowerCase() as "view" | "create" | "edit" | "delete";
-
-      // 3. Check permissions directly from pre-fetched req.user (In-Memory, Zero DB queries)
+      // Every role, including Super Admin, must have module permission.
       const allowed = hasModulePermission(user, moduleName, actionType);
 
       if (!allowed) {
@@ -124,8 +116,9 @@ export const authorize = (
       }
 
       return next();
-    } catch (err) {
-      console.error("Authorization Error:", err);
+    } catch (error) {
+      console.error("Authorization Error:", error);
+
       return res.status(500).json({
         success: false,
         message: "Permission check error",
@@ -134,10 +127,9 @@ export const authorize = (
   };
 };
 
-// ─────────────────────────────────────────────────────────────
-// Only Super Admin
-// ─────────────────────────────────────────────────────────────
-
+// Identity-specific check.
+// Use only for operations that must be restricted to Super Admin identity,
+// not for ordinary module access.
 export const checkSuperAdmin = (
   req: Request,
   res: Response,

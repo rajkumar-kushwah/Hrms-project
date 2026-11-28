@@ -870,30 +870,32 @@ export const updateEmployee = async (
 
 export const updateEmployeeStatus = async (
     id: string,
+    companyId: string,
     isActive: boolean
 ) => {
-    const existing = await prisma.user.findUnique({
-        where: {
-            id,
-        },
-        select: {
-            id: true,
-        },
-    });
-
-    if (!existing) {
-        throw new Error("Employee not found");
+    if (!companyId) {
+        throw new Error("Company selection is required");
     }
 
-    const employee = await prisma.user.update({
+    const result = await prisma.user.updateMany({
         where: {
             id,
+            companyId,
         },
-
         data: {
             isActive,
         },
+    });
 
+    if (result.count === 0) {
+        throw new Error("Employee not found in selected company");
+    }
+
+    const employee = await prisma.user.findFirst({
+        where: {
+            id,
+            companyId,
+        },
         select: {
             id: true,
             name: true,
@@ -913,26 +915,24 @@ export const updateEmployeeStatus = async (
 // Permanently Delete Employee
 // ─────────────────────────────────────────────
 
-export const deleteEmployee = async (id: string) => {
-    const existing = await prisma.user.findUnique({
-        where: {
-            id,
-        },
-        select: {
-            id: true,
-            name: true,
-        },
-    });
-
-    if (!existing) {
-        throw new Error("Employee not found");
+export const deleteEmployee = async (
+    id: string,
+    companyId: string
+) => {
+    if (!companyId) {
+        throw new Error("Company selection is required");
     }
 
-    await prisma.user.delete({
+    const result = await prisma.user.deleteMany({
         where: {
             id,
+            companyId,
         },
     });
+
+    if (result.count === 0) {
+        throw new Error("Employee not found in selected company");
+    }
 
     return {
         message: "Employee deleted successfully",
@@ -945,32 +945,28 @@ export const deleteEmployee = async (id: string) => {
 
 export const resetEmployeePassword = async (
     id: string,
+    companyId: string,
     password: string
 ) => {
-    const employee = await prisma.user.findUnique({
-        where: {
-            id,
-        },
-        select: {
-            id: true,
-        },
-    });
-
-    if (!employee) {
-        throw new Error("Employee not found");
+    if (!companyId) {
+        throw new Error("Company selection is required");
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await prisma.user.update({
+    const result = await prisma.user.updateMany({
         where: {
             id,
+            companyId,
         },
-
         data: {
             password: hashedPassword,
         },
     });
+
+    if (result.count === 0) {
+        throw new Error("Employee not found in selected company");
+    }
 
     return {
         message: "Password reset successfully",

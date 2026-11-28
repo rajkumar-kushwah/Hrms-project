@@ -4,6 +4,7 @@ import { prisma } from "../config/db.js";
 import {
     isSuperAdminRole,
     getCompanyId,
+    isCompanyAdminRole,
 } from "../utilis/roleUtils.js";
 import {
     isDatabaseUnavailable,
@@ -13,12 +14,23 @@ import {
 // Sabhi roles
 export const getCompanyRoles = async (req: Request, res: Response) => {
     try {
+
+        if (!req.user?.roleId) {
+            return res.status(403).json({
+                success: false,
+                message: "User role not found",
+            });
+        }
+
         const superAdmin = isSuperAdminRole(req.user);
+        const companyadmin = isCompanyAdminRole(req.user);
         const companyId = getCompanyId(req);
 
         const roles = await RoleService.getCompanyRoles(
             companyId,
-            superAdmin
+            req.user.roleId,
+            superAdmin,
+            companyadmin
         );
 
         return res.status(200).json({
@@ -78,7 +90,7 @@ export const createRole = async (req: Request, res: Response) => {
 // Role permissions dekho
 export const getRolePermissions = async (req: Request, res: Response) => {
     try {
-        const companyId = req.user?.companyId!;
+        const companyId = getCompanyId(req);
         const id = (req.params.id as string);
         const roleId = parseInt(id);
         const role = await RoleService.getRolePermissions(roleId, companyId);
@@ -139,7 +151,7 @@ export const updateRolePermissions = async (req: Request, res: Response) => {
 // Role delete
 export const deleteRole = async (req: Request, res: Response) => {
     try {
-        const companyId = req.user?.companyId!;
+        const companyId = getCompanyId(req);
         const id = (req.params.id as string);
         const roleId = parseInt(id);
         const result = await RoleService.deleteRole(roleId, companyId);

@@ -1,5 +1,6 @@
 export const MODULES = {
     EMPLOYEE: "employee",
+    EMPLOYEE_UPGRADE: "employee_upgrade",
     COMPANY_USERS: "company-users",
     ATTENDANCE: "attendance",
     ATTENDANCE_LIVE: "attendance_live",

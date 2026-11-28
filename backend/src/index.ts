@@ -35,6 +35,7 @@ import { setIO } from "./config/socket.js";
 // import { getRoleName, isAdminRole, isSuperAdminRole } from "./utilis/roleUtils.js";
 import { MODULES } from "./utilis/moduleUtils.js";
 import { isTrustedPlatformAdmin } from "./utilis/platformAdminUtils.js";
+import employeeUpgradeRoutes from "./routes/employeeUpgrade.routes.js";
 
 // dotenv.config();
 const app = express();
@@ -439,6 +440,7 @@ app.get("/api/health", healthCheck)
 app.use("/api/attendance-report", attendanceReportRoutes);
 app.use("/api/leave-report", leaveReportRoutes);
 app.use("/api/overtime", overtimeRoutes);
+app.use("/api/employee-upgrades", employeeUpgradeRoutes);
 
 app.use('/checkin', checkInRouter)
 app.use('/monthly-attendance', monthlyRouter)
